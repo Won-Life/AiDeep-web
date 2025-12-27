@@ -1,65 +1,114 @@
-import Image from "next/image";
+'use client';
+import { useState, useCallback, useEffect } from 'react';
+import {
+  ReactFlow,
+  applyNodeChanges,
+  applyEdgeChanges,
+  addEdge,
+  type NodeChange,
+  type EdgeChange,
+  type Connection,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { nodeTypes } from '@/types/nodeTypes';
 
-export default function Home() {
+// DB 저장 함수 (예시 - 실제 API로 교체)
+async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
+  // 실제로는 API 호출
+  // await fetch('/api/nodes', { method: 'POST', body: JSON.stringify({ nodes, edges }) });
+  console.log('Saving to DB:', { nodes, edges });
+}
+
+const initialNodes = [
+  { id: 'n1', type: 'textUpdater', position: { x: 0, y: 0 }, data: { label: 'Node 1', color: '#ff6b6b' } },
+  { id: 'n2', type: 'textUpdater', position: { x: 0, y: 100 }, data: { label: 'Node 2', color: '#4ecdc4' } },
+  // { id: 'n3', type: 'textUpdater', position: { x: 0, y: 200 }, data: { label: 'Node 3' } },
+  // { id: 'n4', type: 'textUpdater', position: { x: 0, y: 300 }, data: { label: 'Node 4' } },
+  // { id: 'n5', type: 'textUpdater', position: { x: 0, y: 400 }, data: { label: 'Node 5' } },
+  // { id: 'n6', type: 'textUpdater', position: { x: 0, y: 500 }, data: { label: 'Node 6' } },
+  // { id: 'n7', type: 'textUpdater', position: { x: 0, y: 600 }, data: { label: 'Node 7' } },
+  // { id: 'n8', type: 'textUpdater', position: { x: 0, y: 700 }, data: { label: 'Node 8' } },
+  // { id: 'n9', type: 'textUpdater', position: { x: 0, y: 800 }, data: { label: 'Node 9' } },
+  // { id: 'n10', type: 'textUpdater', position: { x: 0, y: 900 }, data: { label: 'Node 10' } },
+  // { id: 'n11', type: 'textUpdater', position: { x: 0, y: 1000 }, data: { label: 'Node 11' } },
+  // { id: 'n12', type: 'textUpdater', position: { x: 0, y: 1100 }, data: { label: 'Node 12' } },
+  // { id: 'n13', type: 'textUpdater', position: { x: 0, y: 1200 }, data: { label: 'Node 13' } },
+  // { id: 'n14', type: 'textUpdater', position: { x: 0, y: 1300 }, data: { label: 'Node 14' } },
+  // { id: 'n15', type: 'textUpdater', position: { x: 0, y: 1400 }, data: { label: 'Node 15' } },
+  // { id: 'n16', type: 'textUpdater', position: { x: 0, y: 1500 }, data: { label: 'Node 16' } },
+  // { id: 'n17', type: 'textUpdater', position: { x: 0, y: 1600 }, data: { label: 'Node 17' } },
+  // { id: 'n18', type: 'textUpdater', position: { x: 0, y: 1700 }, data: { label: 'Node 18' } },
+  // { id: 'n19', type: 'textUpdater', position: { x: 0, y: 1800 }, data: { label: 'Node 19' } },
+  // { id: 'n20', type: 'textUpdater', position: { x: 0, y: 1900 }, data: { label: 'Node 20' } },
+];
+const initialEdges = [
+  { id: 'n1-n2', source: 'n1', target: 'n2' },
+  { id: 'n1-n3', source: 'n1', target: 'n3' },
+  { id: 'n1-n4', source: 'n1', target: 'n4' },
+  { id: 'n1-n5', source: 'n1', target: 'n5' },
+  { id: 'n1-n6', source: 'n1', target: 'n6' },
+  { id: 'n1-n7', source: 'n1', target: 'n7' },
+  { id: 'n1-n8', source: 'n1', target: 'n8' },
+];
+
+export default function App() {
+  const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  const [edges, setEdges] = useState<Edge[]>(initialEdges);
+
+  // 노드 데이터 업데이트 핸들러 (TextUpdaterNode에서 호출)
+  const handleNodeDataChange = useCallback((nodeId: string, newData: Record<string, unknown>) => {
+    setNodes((nodesSnapshot) =>
+      nodesSnapshot.map((node) =>
+        node.id === nodeId ? { ...node, data: { ...node.data, ...newData } } : node,
+      ),
+    );
+  }, []);
+
+  // nodes를 업데이트하여 각 노드에 onChange 콜백 추가
+  const nodesWithCallbacks = nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      onChange: (nodeId: string, value: string) => {
+        handleNodeDataChange(nodeId, { text: value });
+      },
+    },
+  }));
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot));
+    },
+    [],
+  );
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => setEdges((edgesSnapshot) => applyEdgeChanges(changes, edgesSnapshot)),
+    [],
+  );
+  const onConnect = useCallback(
+    (params: Connection) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
+    [],
+  );
+
+  // DB 저장 로직: nodes나 edges가 변경될 때마다 저장
+  useEffect(() => {
+    saveNodesToDB(nodes, edges);
+  }, [nodes, edges]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div style={{ width: '100vw', height: '100vh' }}>
+      
+      <ReactFlow
+        nodes={nodesWithCallbacks}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        fitView
+      />
     </div>
   );
 }
