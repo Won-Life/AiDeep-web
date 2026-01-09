@@ -1,26 +1,244 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+/* =========================
+   Design Tokens (Light)
+   ========================= */
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* ---------- Gray Scale ---------- */
+    --ds-gray-100: 64 64 64;     /* #404040 */
+    --ds-gray-200: 83 83 83;     /* #535353 */
+    --ds-gray-300: 108 108 108;  /* #6C6C6C */
+    --ds-gray-400: 133 133 133;  /* #858585 */
+    --ds-gray-500: 160 160 160;  /* #A0A0A0 */
+    --ds-gray-600: 184 184 184;  /* #B8B8B8 */
+    --ds-gray-700: 207 207 207;  /* #CFCFCF */
+    --ds-gray-800: 229 229 229;  /* #E5E5E5 */
+    --ds-gray-900: 245 245 245;  /* #F5F5F5 */
+
+    /* ---------- Black & White ---------- */
+    --ds-black: 44 44 44;        /* #2C2C2C */
+    --ds-white: 255 255 255;     /* #FFFFFF */
+
+    /* ---------- Main ---------- */
+    --ds-main: 136 230 26;       /* #88E61A */
+    --ds-main-10: 245 253 236;   /* #F5FDEC */
+    --ds-main-5: 249 253 243;    /* #F9FDF3 */
+
+    /* ---------- Sub (Pastel) ---------- */
+    --ds-sub-gray: 239 239 239;   /* #EFEFEF */
+    --ds-sub-red: 254 215 217;    /* #FED7D9 */
+    --ds-sub-orange: 253 229 205; /* #FDE5CD */
+    --ds-sub-yellow: 251 240 188; /* #FBF0BC */
+    --ds-sub-green: 228 249 200;  /* #E4F9C8 */
+    --ds-sub-mint: 208 241 227;   /* #D0F1E3 */
+    --ds-sub-blue: 208 238 251;   /* #D0EEFB */
+    --ds-sub-purple: 238 219 250; /* #EEDBFA */
+    --ds-sub-pink: 251 218 235;   /* #FBDAEB */
+
+    /* ---------- Text (Dark accents) ---------- */
+    --ds-text-gray: 44 44 44;     /* #2C2C2C */
+    --ds-text-red: 109 53 55;     /* #6D3537 */
+    --ds-text-orange: 89 67 44;   /* #59432C */
+    --ds-text-yellow: 93 84 40;   /* #5D5428 */
+    --ds-text-green: 64 81 42;    /* #40512A */
+    --ds-text-mint: 31 76 58;     /* #1F4C3A */
+    --ds-text-blue: 37 71 86;     /* #254756 */
+    --ds-text-purple: 86 59 104;  /* #563B68 */
+    --ds-text-pink: 104 59 82;    /* #683B52 */
+
+    /* ---------- Semantic (what components should use) ---------- */
+    --background: var(--ds-white);
+    --foreground: var(--ds-text-gray);
+    --surface: var(--ds-gray-900);
+    --border: var(--ds-gray-800);
+    --muted: var(--ds-gray-400);
+
+    /* ---------- Typography Tokens ---------- */
+    /* (폰트는 Next.js font variable을 그대로 사용) */
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
+
+    /* sizes / line-heights */
+    --typo-h1-size: 16px;
+    --typo-h1-leading: 26px;
+    --typo-h1-weight: 700;
+
+    --typo-sub1-size: 12px;
+    --typo-sub1-leading: 20px;
+    --typo-sub1-weight: 600;
+
+    --typo-body1-size: 14px;
+    --typo-body1-leading: 24px;
+    --typo-body1-weight: 400;
+
+    --typo-body2-size: 14px;
+    --typo-body2-leading: 24px;
+    --typo-body2-weight: 400;
+
+    --typo-cap1-size: 12px;
+    --typo-cap1-leading: 20px;
+    --typo-cap1-weight: 700;
+
+    --typo-cap2-size: 12px;
+    --typo-cap2-leading: 20px;
+    --typo-cap2-weight: 400;
+
+    --typo-cap3-size: 10px;
+    --typo-cap3-leading: 18px;
+    --typo-cap3-weight: 400;
+  }
+
+  /* =========================
+     Dark (token swap only)
+     ========================= */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: var(--ds-black);
+      --foreground: var(--ds-white);
+      --surface: var(--ds-gray-100);
+      --border: var(--ds-gray-200);
+      --muted: var(--ds-gray-600);
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* =========================
+   Tailwind Theme Bridge
+   - These create utilities like:
+     bg-background, text-foreground, border-border, bg-ds-gray-100, etc.
+   ========================= */
+@theme inline {
+  /* =========================
+     Semantic (components use these)
+     ========================= */
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-surface: rgb(var(--surface));
+  --color-border: rgb(var(--border));
+  --color-muted: rgb(var(--muted));
+
+  /* =========================
+     Gray Scale
+     ========================= */
+  --color-gray-100: rgb(var(--ds-gray-100));
+  --color-gray-200: rgb(var(--ds-gray-200));
+  --color-gray-300: rgb(var(--ds-gray-300));
+  --color-gray-400: rgb(var(--ds-gray-400));
+  --color-gray-500: rgb(var(--ds-gray-500));
+  --color-gray-600: rgb(var(--ds-gray-600));
+  --color-gray-700: rgb(var(--ds-gray-700));
+  --color-gray-800: rgb(var(--ds-gray-800));
+  --color-gray-900: rgb(var(--ds-gray-900));
+
+  /* =========================
+     Black & White
+     ========================= */
+  --color-black: rgb(var(--ds-black));
+  --color-white: rgb(var(--ds-white));
+
+  /* =========================
+     Main
+     ========================= */
+  --color-main: rgb(var(--ds-main));
+  --color-main-10: rgb(var(--ds-main-10));
+  --color-main-5: rgb(var(--ds-main-5));
+
+  /* =========================
+     Sub (Pastel)
+     ========================= */
+  --color-sub-gray: rgb(var(--ds-sub-gray));
+  --color-sub-red: rgb(var(--ds-sub-red));
+  --color-sub-orange: rgb(var(--ds-sub-orange));
+  --color-sub-yellow: rgb(var(--ds-sub-yellow));
+  --color-sub-green: rgb(var(--ds-sub-green));
+  --color-sub-mint: rgb(var(--ds-sub-mint));
+  --color-sub-blue: rgb(var(--ds-sub-blue));
+  --color-sub-purple: rgb(var(--ds-sub-purple));
+  --color-sub-pink: rgb(var(--ds-sub-pink));
+
+  /* =========================
+     Text (Dark accents)
+     ========================= */
+  --color-text-gray: rgb(var(--ds-text-gray));
+  --color-text-red: rgb(var(--ds-text-red));
+  --color-text-orange: rgb(var(--ds-text-orange));
+  --color-text-yellow: rgb(var(--ds-text-yellow));
+  --color-text-green: rgb(var(--ds-text-green));
+  --color-text-mint: rgb(var(--ds-text-mint));
+  --color-text-blue: rgb(var(--ds-text-blue));
+  --color-text-purple: rgb(var(--ds-text-purple));
+  --color-text-pink: rgb(var(--ds-text-pink));
+
+  /* =========================
+     Fonts (optional)
+     ========================= */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+/* =========================
+   Base application defaults
+   ========================= */
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: rgb(var(--background));
+    color: rgb(var(--foreground));
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
+      "Apple Color Emoji", "Segoe UI Emoji";
+  }
+}
+
+/* =========================
+   Typography utility classes
+   (Design system text styles)
+   ========================= */
+@layer utilities {
+  .typo-h1 {
+    font-size: var(--typo-h1-size);
+    line-height: var(--typo-h1-leading);
+    font-weight: var(--typo-h1-weight);
+  }
+
+  .typo-sub1 {
+    font-size: var(--typo-sub1-size);
+    line-height: var(--typo-sub1-leading);
+    font-weight: var(--typo-sub1-weight);
+  }
+
+  .typo-body1 {
+    font-size: var(--typo-body1-size);
+    line-height: var(--typo-body1-leading);
+    font-weight: var(--typo-body1-weight);
+  }
+
+  .typo-body2 {
+    font-size: var(--typo-body2-size);
+    line-height: var(--typo-body2-leading);
+    font-weight: var(--typo-body2-weight);
+  }
+
+  .typo-cap1 {
+    font-size: var(--typo-cap1-size);
+    line-height: var(--typo-cap1-leading);
+    font-weight: var(--typo-cap1-weight);
+  }
+
+  .typo-cap2 {
+    font-size: var(--typo-cap2-size);
+    line-height: var(--typo-cap2-leading);
+    font-weight: var(--typo-cap2-weight);
+  }
+
+  .typo-cap3 {
+    font-size: var(--typo-cap3-size);
+    line-height: var(--typo-cap3-leading);
+    font-weight: var(--typo-cap3-weight);
+  }
 }
