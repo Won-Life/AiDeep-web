@@ -19,28 +19,43 @@ import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
 import { initialEdges, initialNodes } from '@/mock/mindmap';
 
-// DB 저장 함수 (예시 - 실제 API로 교체)
+// DB 저장 함수 (예시)
 async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
-  // 실제로는 API 호출
-  // await fetch('/api/nodes', { method: 'POST', body: JSON.stringify({ nodes, edges }) });
   console.log('Saving to DB:', { nodes, edges });
 }
 
-// 색상 정의
-const COLOR_SCHOOL_MAIN = '#ffffff'; // 메인 노드 테두리 색상 (학교 공부)
-const COLOR_SCHOOL_SUB = '#e3f2fd'; // 서브 노드 배경 (학교 공부)
-const COLOR_SCHOOL_SUB2 = '#bbdefb'; // 하위 서브 노드 배경 (학교 공부)
-
-const COLOR_AIDEEP_MAIN = '#ffffff'; // 메인 노드 테두리 색상 (AiDeep)
-const COLOR_AIDEEP_SUB = '#e8f5e9'; // 서브 노드 배경 (AiDeep)
-const COLOR_AIDEEP_SUB2 = '#c8e6c9'; // 하위 서브 노드 배경 (AiDeep)
-
-const COLOR_DESIGN_MAIN = '#ffe6e6'; // 메인 노드 테두리 색상 (디자인)
-const COLOR_DESIGN_SUB = '#ffebee'; // 서브 노드 배경 (디자인)
-
 // TODO: uuid로 변경
-function makeNodeId() { 
+function makeNodeId() {
   return `node_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+}
+
+/* =========================
+   Snap / Auto-connect utils
+   ========================= */
+
+const SNAP_RADIUS = 120;
+
+function getDistance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function findSnapTarget(dragged: Node, nodes: Node[]): Node | null {
+  let closest: Node | null = null;
+  let min = Infinity;
+
+  for (const node of nodes) {
+    if (node.id === dragged.id) continue;
+
+    const dist = getDistance(dragged.position, node.position);
+    if (dist < SNAP_RADIUS && dist < min) {
+      min = dist;
+      closest = node;
+    }
+  }
+
+  return closest;
 }
 
 function GraphCanvasInner() {
@@ -49,42 +64,53 @@ function GraphCanvasInner() {
 
   const { screenToFlowPosition } = useReactFlow();
 
+  /* =========================
+     Node data update
+     ========================= */
+  const handleNodeDataChange = useCallback(
+    (nodeId: string, newData: Record<string, unknown>) => {
+      setNodes((snapshot) =>
+        snapshot.map((node) =>
+          node.id === nodeId ? { ...node, data: { ...node.data, ...newData } } : node,
+        ),
+      );
+    },
+    [],
+  );
 
-  // 노드 데이터 업데이트 핸들러 (TextUpdaterNode에서 호출)
-  const handleNodeDataChange = useCallback((nodeId: string, newData: Record<string, unknown>) => {
-    setNodes((nodesSnapshot) =>
-      nodesSnapshot.map((node) =>
-        node.id === nodeId ? { ...node, data: { ...node.data, ...newData } } : node,
-      ),
-    );
-  }, []);
-
-  // nodes를 업데이트하여 각 노드에 onChange 콜백 추가
   const nodesWithCallbacks = nodes.map((node) => ({
     ...node,
     data: {
       ...node.data,
-      onChange: (nodeId: string, value: string) => {
-        handleNodeDataChange(nodeId, { text: value });
-      },
+      onChange: (nodeId: string, value: string) =>
+        handleNodeDataChange(nodeId, { text: value }),
     },
   }));
 
+  /* =========================
+     React Flow handlers
+     ========================= */
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot));
-    },
-    [],
-  );
-  const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((edgesSnapshot) => applyEdgeChanges(changes, edgesSnapshot)),
-    [],
-  );
-  const onConnect = useCallback(
-    (params: Connection) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
+    (changes: NodeChange[]) =>
+      setNodes((snapshot) => applyNodeChanges(changes, snapshot)),
     [],
   );
 
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) =>
+      setEdges((snapshot) => applyEdgeChanges(changes, snapshot)),
+    [],
+  );
+
+  const onConnect = useCallback(
+    (params: Connection) =>
+      setEdges((snapshot) => addEdge(params, snapshot)),
+    [],
+  );
+
+  /* =========================
+     Empty pane click → create node
+     ========================= */
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
       // (선택) 우클릭은 제외
@@ -101,10 +127,10 @@ function GraphCanvasInner() {
 
       const newNode: Node = {
         id: makeNodeId(),
-        type: "textUpdater", // 기존 노드 타입 그대로
+        type: 'textUpdater',
         position,
         data: {
-          text: "새 노드",
+          text: '새 노드',
           isMain: false,
           // color는 DS 토큰으로 가는 게 좋지만 일단 기존 패턴 유지
           color: "#EFEFEF",
@@ -116,7 +142,58 @@ function GraphCanvasInner() {
     [screenToFlowPosition]
   );
 
-  // DB 저장 로직: nodes나 edges가 변경될 때마다 저장
+  function getParentId(nodeId: string, edges: Edge[]): string | null {
+    // 첫 번째 incoming edge의 source를 부모로 본다.
+    // (나중에 다중 부모를 허용하면 여기 로직을 바꿔야 함)
+    const incoming = edges.find((e) => e.target === nodeId);
+    return incoming?.source ?? null;
+  }
+
+  /* =========================
+     Drag stop → auto connect
+     ========================= */
+  const onNodeDragStop = useCallback(
+  (_: React.MouseEvent, draggedNode: Node) => {
+    const target = findSnapTarget(draggedNode, nodes);
+    if (!target) return;
+
+    // 형제 노드면 연결 금지
+    const draggedParentId = getParentId(draggedNode.id, edges);
+    const targetParentId = getParentId(target.id, edges);
+
+    const areSiblings =
+      draggedParentId !== null &&
+      targetParentId !== null &&
+      draggedParentId === targetParentId;
+
+    if (areSiblings) return;
+
+    // 이미 연결돼 있으면 무시 (양방향 포함)
+    const alreadyConnected = edges.some(
+      (e) =>
+        (e.source === target.id && e.target === draggedNode.id) ||
+        (e.source === draggedNode.id && e.target === target.id),
+    );
+    if (alreadyConnected) return;
+
+    const newEdge: Edge = {
+      id: `e-${target.id}-${draggedNode.id}-${Date.now()}`,
+      source: target.id,
+      target: draggedNode.id,
+      type: "smoothstep",
+      sourceHandle: "source-right",
+      targetHandle: "target-left",
+    };
+
+    setEdges((prev) => [...prev, newEdge]);
+  },
+  [nodes, edges],
+);
+
+
+  /* =========================
+     Persist
+     ========================= */
   useEffect(() => {
     saveNodesToDB(nodes, edges);
   }, [nodes, edges]);
@@ -131,6 +208,7 @@ function GraphCanvasInner() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeDragStop={onNodeDragStop}
         onPaneClick={onPaneClick}
         fitView
         connectionMode={ConnectionMode.Loose}
@@ -144,5 +222,5 @@ export default function GraphCanvas() {
     <ReactFlowProvider>
       <GraphCanvasInner />
     </ReactFlowProvider>
-  )
+  );
 }
