@@ -157,6 +157,7 @@ function GraphCanvasInner() {
     const target = findSnapTarget(draggedNode, nodes);
     if (!target) return;
 
+    // TODO: 모든 자식 노드 연결 금지
     // 형제 노드면 연결 금지
     const draggedParentId = getParentId(draggedNode.id, edges);
     const targetParentId = getParentId(target.id, edges);
