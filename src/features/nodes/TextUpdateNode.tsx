@@ -6,12 +6,15 @@ type TextUpdaterNodeData = {
   label?: string;
   color?: string;
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
+  handleSide?: "left" | "right";
   onChange?: (nodeId: string, value: string) => void;
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {
   const nodeData = data as TextUpdaterNodeData;
   const isMain = nodeData.isMain ?? false;
+  const handleSide = nodeData.handleSide ?? "right";
+  const handlePosition = handleSide === "left" ? Position.Left : Position.Right;
   
   // 로컬 state로 입력값 관리 (타이핑할 때마다 업데이트)
   const [localValue, setLocalValue] = useState(nodeData.text || '');
@@ -56,10 +59,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
       };
 
   return (
-    <div
-      className={containerClasses}
-      style={containerStyle}
-    >
+    <div className={containerClasses} style={containerStyle}>
       <div>
         <input
           id="text"
@@ -71,8 +71,19 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           placeholder={isMain ? "중심 노드 입력" : "서브 노드 입력"}
         />
       </div>
-      <Handle type="target" position={Position.Left} id="target-left" />
-      <Handle type="source" position={Position.Right} id="source-right" />
+      {isMain ? (
+        <>
+          <Handle type="target" position={Position.Left} id="target-left" />
+          <Handle type="target" position={Position.Right} id="target-right" />
+          <Handle type="source" position={Position.Left} id="source-left" />
+          <Handle type="source" position={Position.Right} id="source-right" />
+        </>
+      ) : (
+        <>
+          <Handle type="target" position={handlePosition} id="target-side" />
+          <Handle type="source" position={handlePosition} id="source-side" />
+        </>
+      )}
     </div>
   );
 }
