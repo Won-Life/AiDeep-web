@@ -1,44 +1,49 @@
-export interface NodeResponse {
+export type Timestamp = string | number;
+export type NodeType = string;
+export type ContentType = string;
+export type ReferenceType = string;
+
+export interface WhiteboardResponse {
   whiteboardId: string;
-  graphs: Graph[];
+  graphs: GraphDto[];
   meta: {
-    name: string;
+    updatedAt: Timestamp;
     version: number;
-    updatedAt: string;
+    name?: string | null;
   };
 }
 
-export interface Graph {
+export interface GraphDto {
   graphId: string;
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  nodes: NodeDto[];
+  edges: EdgeDto[];
   meta: {
     updatedAt: string;
   };
 }
 
-export interface GraphNode {
+export interface NodeDto {
   nodeId: string;
-  nodeType: "PROJECT";
-  contentType: "CONTENTCARD";
+  nodeType: NodeType;
+  contentType: ContentType;
   position: { x: number; y: number };
   color: string;
   meta: {
-    starred: boolean;
-    createdAt: string;
     updatedAt: string;
+    createdAt: string;
+    starred: boolean;
   };
   title: string;
-  body: string;
-  referenceType: "PDF";
-  referenceid: string;
+  body?: string | null;
+  referenceType?: ReferenceType | null;
+  referenceid?: string | null;
 }
 
-export interface GraphEdge {
+export interface EdgeDto {
   edgeId: string;
   source: string;
   target: string;
-  type: string;
-  sourceHandle: string;
-  targetHandle: string;
+  type?: string | null;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
 }
