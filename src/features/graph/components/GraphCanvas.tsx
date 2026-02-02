@@ -33,9 +33,9 @@ function makeNodeId() {
 }
 
 // TODO: 실제 노드 너비로 변경
-const NODE_WIDTH = 160;
+const NODE_WIDTH = 200;
 const NODE_HEIGHT = 48;
-const NODE_PADDING = 8;
+const NODE_PADDING = 0; // 완전히 부딪힐 때만 충돌
 const HUB_OFFSET = 50;
 
 function getParentId(nodeId: string, edges: Edge[]): string | null {
@@ -85,16 +85,12 @@ function isInvalidConnection(
   edges: Edge[],
 ): boolean {
   if (sourceId === targetId) return true;
-  // TODO: 이것들을 막는대신 기존 연결 끊고 새 연결 만들도록 할 것
-  if (areSiblings(sourceId, targetId, edges)) return true;
-  if (getAncestorIds(targetId, edges).has(sourceId)) return true;
-  if (getAncestorIds(sourceId, edges).has(targetId)) return true;
-  const alreadyConnected = edges.some(
-    (edge) =>
-      (edge.source === sourceId && edge.target === targetId) ||
-      (edge.source === targetId && edge.target === sourceId),
-  );
-  return alreadyConnected;
+
+  // 자신의 직계부모인지 확인 (이미 연결된 부모에게 다시 연결 방지)
+  const currentParent = getParentId(targetId, edges);
+  if (currentParent === sourceId) return true;
+
+  return false;
 }
 
 function rectForNode(node: Node) {
