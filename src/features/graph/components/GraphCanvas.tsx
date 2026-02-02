@@ -246,10 +246,7 @@ function mirrorSubtree(
   parentAxisX: number,
   movedTo: "left" | "right",
 ): Node[] {
-  const subtreeIds = new Set<string>([
-    rootId,
-    ...getDescendantIds(rootId, edges),
-  ]);
+  const subtreeIds = getDescendantIds(rootId, edges); // rootId 제외, 자식들만
 
   return nodes.map((node) =>
     subtreeIds.has(node.id)
@@ -292,6 +289,7 @@ function GraphCanvasInner() {
   const simulationRef = useRef<d3.Simulation<D3Node, undefined> | null>(null);
   const d3NodesRef = useRef<D3Node[]>([]);
   const isDraggingRef = useRef(false);
+  const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
 
   /* =========================
      D3 Force Simulation 초기화
@@ -360,7 +358,7 @@ function GraphCanvasInner() {
     [],
   );
 
-  // Main 노드가 여러개일 때는 어떻게 되는거지
+  // Main 노드가 여러개일 때 대비해서 처리하기
   const mainNode = nodes.find((node) => node.data?.isMain);
 
   const nodesWithCallbacks = nodes.map((node) => {
@@ -418,7 +416,7 @@ function GraphCanvasInner() {
 
             if (beforeSide !== afterSide) {
               //'자식 노드가 있는 경우'를 조건에 추가.
-              return mirrorSubtree(next, node.id, edges, mainAxisX, afterSide); // 해당 노드를 좌우 대칭 이동?? 그게 무슨 말이지
+              return mirrorSubtree(next, node.id, edges, mainAxisX, afterSide); // 잡고 움직이는 노드 자체는 대칭 이동에 포함 안되도록
             } // 반대편으로 대칭 이동하는 경우는 여기서 끝
           }
           const subtreeIds = new Set<string>([
@@ -428,8 +426,39 @@ function GraphCanvasInner() {
 
           if (!canApplyMove(next, subtreeIds, delta)) continue;
 
+          // Delta와 자식 노드 위치 변경 추적
+          // console.log("=== 노드 이동 감지 ===");
+          // console.log("Delta:", delta);
+          // console.log("이동 노드:", node.id);
+
+          // const childrenIds = Array.from(subtreeIds).filter(id => id !== node.id);
+          // if (childrenIds.length > 0) {
+          //   console.log("자식 노드들:", childrenIds);
+          //   console.log("자식 노드 위치 변경 전:");
+          //   childrenIds.forEach(childId => {
+          //     const child = next.find(n => n.id === childId);
+          //     if (child) {
+          //       console.log(`  ${childId}: (${child.position.x.toFixed(1)}, ${child.position.y.toFixed(1)})`);
+          //     }
+          //   });
+          // }
+
+          // 자식 위치 변경 주석 처리
+          // next = next.map((item) =>
+          //   subtreeIds.has(item.id)
+          //     ? {
+          //         ...item,
+          //         position: {
+          //           x: item.position.x + delta.x,
+          //           y: item.position.y + delta.y,
+          //         },
+          //       }
+          //     : item,
+          // );
+
+          // 부모 노드만 이동
           next = next.map((item) =>
-            subtreeIds.has(item.id)
+            item.id === node.id
               ? {
                   ...item,
                   position: {
@@ -439,6 +468,18 @@ function GraphCanvasInner() {
                 }
               : item,
           );
+
+          // 변경 후 위치 출력
+          // if (childrenIds.length > 0) {
+          //   console.log("자식 노드 위치 변경 후:");
+          //   childrenIds.forEach(childId => {
+          //     const child = next.find(n => n.id === childId);
+          //     if (child) {
+          //       console.log(`  ${childId}: (${child.position.x.toFixed(1)}, ${child.position.y.toFixed(1)})`);
+          //     }
+          //   });
+          // }
+          // console.log("==================\n");
         }
 
         return next;
@@ -541,7 +582,7 @@ function GraphCanvasInner() {
       // hover 상태 초기화
       setHoveredNodeId(null);
 
-      // Alt 키를 누르면 연결 해제
+      // Alt/Opt 키를 누르면 연결 해제
       if (event.altKey) {
         setEdges((snapshot) => {
           const incoming = snapshot.find(
@@ -555,6 +596,10 @@ function GraphCanvasInner() {
       // D3 force simulation 시작
       isDraggingRef.current = true;
 
+      // 드래그 노드와 자식들을 함께 고정
+      const childrenIds = getDescendantIds(draggedNode.id, edges);
+      const fixedNodeIds = new Set([draggedNode.id, ...childrenIds]);
+
       // React Flow nodes에서 d3 노드 데이터 추출
       const d3Nodes: D3Node[] = nodes.map((n) => ({
         id: n.id,
@@ -562,14 +607,13 @@ function GraphCanvasInner() {
         y: n.position.y + (n.height ?? NODE_HEIGHT) / 2,
         width: n.width ?? NODE_WIDTH,
         height: n.height ?? NODE_HEIGHT,
-        fx:
-          n.id === draggedNode.id
-            ? n.position.x + (n.width ?? NODE_WIDTH) / 2
-            : null,
-        fy:
-          n.id === draggedNode.id
-            ? n.position.y + (n.height ?? NODE_HEIGHT) / 2
-            : null,
+        // 드래그 노드와 그 자식들은 모두 고정
+        fx: fixedNodeIds.has(n.id)
+          ? n.position.x + (n.width ?? NODE_WIDTH) / 2
+          : null,
+        fy: fixedNodeIds.has(n.id)
+          ? n.position.y + (n.height ?? NODE_HEIGHT) / 2
+          : null,
       }));
 
       d3NodesRef.current = d3Nodes;
@@ -580,8 +624,14 @@ function GraphCanvasInner() {
         simulation.nodes(d3Nodes);
         simulation.alpha(1).alphaTarget(0.3).restart();
       }
+
+      // 드래그 시작 시 현재 위치 저장 (delta 계산용)
+      previousDragPositionRef.current = {
+        x: draggedNode.position.x,
+        y: draggedNode.position.y,
+      };
     },
-    [nodes],
+    [nodes, edges],
   );
 
   const onNodeDrag = useCallback(
@@ -589,6 +639,20 @@ function GraphCanvasInner() {
       // 드래그 중에 가까운 노드 찾기
       const closestNode = findClosestNodeInRange(draggedNode, nodes, edges);
       setHoveredNodeId(closestNode?.id ?? null);
+
+      // 부모가 움직인 거리(delta) 계산
+      const delta = previousDragPositionRef.current
+        ? {
+            x: draggedNode.position.x - previousDragPositionRef.current.x,
+            y: draggedNode.position.y - previousDragPositionRef.current.y,
+          }
+        : { x: 0, y: 0 };
+
+      // 현재 위치를 다음 계산을 위해 저장
+      previousDragPositionRef.current = {
+        x: draggedNode.position.x,
+        y: draggedNode.position.y,
+      };
 
       // D3 시뮬레이션에서 드래그 중인 노드의 고정 위치 업데이트
       const d3Node = d3NodesRef.current.find((n) => n.id === draggedNode.id);
@@ -598,6 +662,18 @@ function GraphCanvasInner() {
         d3Node.fy =
           draggedNode.position.y + (draggedNode.height ?? NODE_HEIGHT) / 2;
       }
+
+      // 자식 노드들도 delta만큼 이동
+      const childrenIds = getDescendantIds(draggedNode.id, edges);
+
+      childrenIds.forEach((childId) => {
+        const d3ChildNode = d3NodesRef.current.find((n) => n.id === childId);
+        if (d3ChildNode && d3ChildNode.fx != null && d3ChildNode.fy != null) {
+          // 기존 fx/fy에 delta를 더해서 부모와 함께 이동
+          d3ChildNode.fx += delta.x;
+          d3ChildNode.fy += delta.y;
+        }
+      });
     },
     [nodes, edges],
   );
@@ -623,8 +699,10 @@ function GraphCanvasInner() {
 
           if (mainNode) {
             const mainAxisX = mainNode.position.x + NODE_WIDTH / 2;
-            const draggedNodeSide = draggedNode.position.x < mainAxisX ? "left" : "right";
-            const newParentSide = newParent.position.x < mainAxisX ? "left" : "right";
+            const draggedNodeSide =
+              draggedNode.position.x < mainAxisX ? "left" : "right";
+            const newParentSide =
+              newParent.position.x < mainAxisX ? "left" : "right";
 
             // 새 부모가 반대편에 있으면 대칭 이동 필요
             if (draggedNodeSide !== newParentSide) {
@@ -685,11 +763,18 @@ function GraphCanvasInner() {
 
       // D3 시뮬레이션 종료: fx, fy 해제 및 alphaTarget(0) 설정
       isDraggingRef.current = false;
-      const d3Node = d3NodesRef.current.find((n) => n.id === draggedNode.id);
-      if (d3Node) {
-        d3Node.fx = null;
-        d3Node.fy = null;
-      }
+
+      // 드래그 노드와 자식들의 fx, fy 모두 해제
+      const childrenIds = getDescendantIds(draggedNode.id, edges);
+      const allNodesToRelease = [draggedNode.id, ...childrenIds];
+
+      allNodesToRelease.forEach((nodeId) => {
+        const d3Node = d3NodesRef.current.find((n) => n.id === nodeId);
+        if (d3Node) {
+          d3Node.fx = null;
+          d3Node.fy = null;
+        }
+      });
 
       const simulation = simulationRef.current;
       if (simulation) {
@@ -698,6 +783,9 @@ function GraphCanvasInner() {
 
       // hover 상태 초기화
       setHoveredNodeId(null);
+
+      // 드래그 위치 초기화
+      previousDragPositionRef.current = null;
     },
     [nodes, edges, hoveredNodeId],
   );
