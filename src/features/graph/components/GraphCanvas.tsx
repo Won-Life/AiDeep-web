@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ReactFlow,
   applyNodeChanges,
@@ -14,11 +14,13 @@ import {
   ReactFlowProvider,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import * as d3 from "d3";
 import { nodeTypes } from "@/types/nodeTypes";
 import { edgeTypes } from "@/types/edgeTypes";
 import { initialEdges, initialNodes } from "@/mock/mindmap";
 import { getNodes } from "../api/getNodes";
 import type { EdgeDto, NodeDto } from "../types";
+import { rectCollide } from "../layout/rectCollide";
 
 // DB 저장 함수 (예시)
 async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
@@ -76,12 +78,14 @@ function areSiblings(aId: string, bId: string, edges: Edge[]): boolean {
   return parentA !== null && parentA === parentB;
 }
 
+// TODO: 동일 프로젝트 노드에서는 부모를 하나만 가질 수 있음 -> 그럼 이게 필요한가
 function isInvalidConnection(
   sourceId: string,
   targetId: string,
   edges: Edge[],
 ): boolean {
   if (sourceId === targetId) return true;
+  // TODO: 이것들을 막는대신 기존 연결 끊고 새 연결 만들도록 할 것
   if (areSiblings(sourceId, targetId, edges)) return true;
   if (getAncestorIds(targetId, edges).has(sourceId)) return true;
   if (getAncestorIds(sourceId, edges).has(targetId)) return true;
@@ -141,6 +145,43 @@ function findOverlapTarget(dragged: Node, nodes: Node[]): Node | null {
     if (isOverlapping(dragged, node)) return node;
   }
   return null;
+}
+
+// 거리 기반으로 가장 가까운 유효한 노드 찾기
+function findClosestNodeInRange(
+  draggedNode: Node,
+  nodes: Node[],
+  edges: Edge[],
+  threshold: number = 150, // 픽셀 단위 임계값
+): Node | null {
+  let closestNode: Node | null = null;
+  let minDistance = threshold;
+
+  for (const node of nodes) {
+    if (node.id === draggedNode.id) continue;
+    if (node.data?.isMain) continue; // 메인 노드는 타겟이 될 수 없음
+
+    // 연결 유효성 체크
+    if (isInvalidConnection(node.id, draggedNode.id, edges)) continue;
+
+    // 중심점 간 거리 계산
+    const dx =
+      node.position.x +
+      NODE_WIDTH / 2 -
+      (draggedNode.position.x + NODE_WIDTH / 2);
+    const dy =
+      node.position.y +
+      NODE_HEIGHT / 2 -
+      (draggedNode.position.y + NODE_HEIGHT / 2);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestNode = node;
+    }
+  }
+
+  return closestNode;
 }
 
 function getHandleSide(node: Node, referenceX: number): "left" | "right" {
@@ -213,11 +254,80 @@ function mirrorSubtree(
   );
 }
 
+// D3 force simulation용 노드 타입
+interface D3Node extends d3.SimulationNodeDatum {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fx?: number | null;
+  fy?: number | null;
+}
+
 function GraphCanvasInner() {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
   const { screenToFlowPosition } = useReactFlow();
+
+  // D3 force simulation 관리
+  const simulationRef = useRef<d3.Simulation<D3Node, undefined> | null>(null);
+  const d3NodesRef = useRef<D3Node[]>([]);
+  const isDraggingRef = useRef(false);
+
+  /* =========================
+     D3 Force Simulation 초기화
+     ========================= */
+  useEffect(() => {
+    const simulation = d3
+      .forceSimulation<D3Node>()
+      .force("collide", rectCollide<D3Node>(NODE_PADDING))
+      .alphaDecay(0.02) // 더 빠른 안정화
+      .velocityDecay(0.4); // 움직임의 감쇠
+
+    // tick 이벤트: d3의 계산 결과를 React Flow nodes에 반영
+    simulation.on("tick", () => {
+      if (!isDraggingRef.current) return;
+
+      const d3Nodes = d3NodesRef.current;
+      if (d3Nodes.length === 0) return;
+
+      setNodes((currentNodes) => {
+        return currentNodes.map((node) => {
+          const d3Node = d3Nodes.find((d) => d.id === node.id);
+          if (!d3Node) return node;
+
+          // D3는 중심점 기준, React Flow는 왼쪽 상단 기준이므로 변환
+          const nodeWidth = node.width ?? NODE_WIDTH;
+          const nodeHeight = node.height ?? NODE_HEIGHT;
+
+          return {
+            ...node,
+            position: {
+              x: (d3Node.x ?? node.position.x + nodeWidth / 2) - nodeWidth / 2,
+              y:
+                (d3Node.y ?? node.position.y + nodeHeight / 2) - nodeHeight / 2,
+            },
+          };
+        });
+      });
+    });
+
+    // alpha가 충분히 작아지면 시뮬레이션 멈춤
+    simulation.on("end", () => {
+      console.log("Simulation ended");
+    });
+
+    simulationRef.current = simulation;
+
+    // cleanup
+    return () => {
+      simulation.stop();
+    };
+  }, []);
 
   /* =========================
      Node data update
@@ -235,6 +345,7 @@ function GraphCanvasInner() {
     [],
   );
 
+  // Main 노드가 여러개일 때는 어떻게 되는거지
   const mainNode = nodes.find((node) => node.data?.isMain);
 
   const nodesWithCallbacks = nodes.map((node) => {
@@ -251,6 +362,8 @@ function GraphCanvasInner() {
         handleSide: node.data?.isMain
           ? undefined
           : getHandleSide(node, referenceX),
+        showInputBox: selectedNodeId === node.id, // 선택된 노드에만 입력박스 표시
+        isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         onChange: (nodeId: string, value: string) =>
           handleNodeDataChange(nodeId, { text: value }),
       },
@@ -281,31 +394,18 @@ function GraphCanvasInner() {
             y: change.position.y - node.position.y,
           };
 
-          const parentId = getParentId(node.id, edges);
-          const parentNode = parentId
-            ? next.find((item) => item.id === parentId)
-            : undefined;
-          if (parentNode) {
-            const side = getEdgeSide(parentNode, node);
-            // const sourceHandleX =
-            //   parentNode.position.x + (side === "right" ? NODE_WIDTH : 0);
-
-            const parentAxisX = parentNode.position.x + NODE_WIDTH / 2;
-            const beforeSide = node.position.x < parentAxisX ? "left" : "right";
-            const afterSide =
-              change.position.x < parentAxisX ? "left" : "right";
+          // 프로젝트 노드(메인 노드) 기준으로 좌우 이동 체크
+          const currentMainNode = next.find((n) => n.data?.isMain);
+          if (currentMainNode && !node.data?.isMain) {
+            const mainAxisX = currentMainNode.position.x + NODE_WIDTH / 2;
+            const beforeSide = node.position.x < mainAxisX ? "left" : "right";
+            const afterSide = change.position.x < mainAxisX ? "left" : "right";
 
             if (beforeSide !== afterSide) {
-              return mirrorSubtree(
-                next,
-                node.id,
-                edges,
-                parentAxisX,
-                afterSide,
-              );
-            }
+              //'자식 노드가 있는 경우'를 조건에 추가.
+              return mirrorSubtree(next, node.id, edges, mainAxisX, afterSide); // 해당 노드를 좌우 대칭 이동?? 그게 무슨 말이지
+            } // 반대편으로 대칭 이동하는 경우는 여기서 끝
           }
-
           const subtreeIds = new Set<string>([
             change.id,
             ...getDescendantIds(change.id, edges),
@@ -380,6 +480,14 @@ function GraphCanvasInner() {
   );
 
   /* =========================
+     Node click → toggle input box
+     ========================= */
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    // 같은 노드를 다시 클릭하면 닫기 (토글)
+    setSelectedNodeId((prev) => (prev === node.id ? null : node.id));
+  }, []);
+
+  /* =========================
      Empty pane click → create node
      ========================= */
   const onPaneClick = useCallback(
@@ -413,34 +521,170 @@ function GraphCanvasInner() {
     [screenToFlowPosition],
   );
 
-  const onNodeDragStart = useCallback((event: React.MouseEvent, node: Node) => {
-    if (!event.altKey) return;
+  const onNodeDragStart = useCallback(
+    (event: React.MouseEvent, draggedNode: Node) => {
+      // hover 상태 초기화
+      setHoveredNodeId(null);
 
-    setEdges((snapshot) => {
-      const incoming = snapshot.find((edge) => edge.target === node.id);
-      if (!incoming) return snapshot;
-      return snapshot.filter((edge) => edge.id !== incoming.id);
-    });
-  }, []);
+      // Alt 키를 누르면 연결 해제
+      if (event.altKey) {
+        setEdges((snapshot) => {
+          const incoming = snapshot.find(
+            (edge) => edge.target === draggedNode.id,
+          );
+          if (!incoming) return snapshot;
+          return snapshot.filter((edge) => edge.id !== incoming.id);
+        });
+      }
+
+      // D3 force simulation 시작
+      isDraggingRef.current = true;
+
+      // React Flow nodes에서 d3 노드 데이터 추출
+      const d3Nodes: D3Node[] = nodes.map((n) => ({
+        id: n.id,
+        x: n.position.x + (n.width ?? NODE_WIDTH) / 2, // 중심점으로 변환
+        y: n.position.y + (n.height ?? NODE_HEIGHT) / 2,
+        width: n.width ?? NODE_WIDTH,
+        height: n.height ?? NODE_HEIGHT,
+        fx:
+          n.id === draggedNode.id
+            ? n.position.x + (n.width ?? NODE_WIDTH) / 2
+            : null,
+        fy:
+          n.id === draggedNode.id
+            ? n.position.y + (n.height ?? NODE_HEIGHT) / 2
+            : null,
+      }));
+
+      d3NodesRef.current = d3Nodes;
+
+      // 시뮬레이션에 노드 데이터 주입 및 reheat
+      const simulation = simulationRef.current;
+      if (simulation) {
+        simulation.nodes(d3Nodes);
+        simulation.alpha(1).alphaTarget(0.3).restart();
+      }
+    },
+    [nodes],
+  );
+
+  const onNodeDrag = useCallback(
+    (_: React.MouseEvent, draggedNode: Node) => {
+      // 드래그 중에 가까운 노드 찾기
+      const closestNode = findClosestNodeInRange(draggedNode, nodes, edges);
+      setHoveredNodeId(closestNode?.id ?? null);
+
+      // D3 시뮬레이션에서 드래그 중인 노드의 고정 위치 업데이트
+      const d3Node = d3NodesRef.current.find((n) => n.id === draggedNode.id);
+      if (d3Node) {
+        d3Node.fx =
+          draggedNode.position.x + (draggedNode.width ?? NODE_WIDTH) / 2;
+        d3Node.fy =
+          draggedNode.position.y + (draggedNode.height ?? NODE_HEIGHT) / 2;
+      }
+    },
+    [nodes, edges],
+  );
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, draggedNode: Node) => {
-      const target = findOverlapTarget(draggedNode, nodes);
-      if (!target) return;
+      // hover된 노드가 있으면 연결 생성
+      if (hoveredNodeId) {
+        const newParent = nodes.find((n) => n.id === hoveredNodeId);
+        if (newParent && !isInvalidConnection(newParent.id, draggedNode.id, edges)) {
+          // 1. 기존 부모와의 연결 끊기
+          const existingParentEdge = edges.find(
+            (edge) => edge.target === draggedNode.id,
+          );
 
-      if (isInvalidConnection(target.id, draggedNode.id, edges)) return;
-      const newEdge = buildEdgePresentation(
-        {
-          id: `e-${target.id}-${draggedNode.id}-${Date.now()}`,
-          source: target.id,
-          target: draggedNode.id,
-        },
-        nodes,
-      );
+          // 2. 메인 노드 찾기
+          const mainNode = nodes.find((n) => n.data?.isMain);
 
-      setEdges((prev) => [...prev, newEdge]);
+          // 3. 방향 체크 (드래그 노드가 새 부모 기준으로 어느 쪽에 있는지)
+          let needsMirror = false;
+          let mirrorAxisX = 0;
+          let movedTo: "left" | "right" = "right";
+
+          if (mainNode) {
+            const mainAxisX = mainNode.position.x + NODE_WIDTH / 2;
+            const draggedNodeSide = draggedNode.position.x < mainAxisX ? "left" : "right";
+            const newParentSide = newParent.position.x < mainAxisX ? "left" : "right";
+
+            // 새 부모가 반대편에 있으면 대칭 이동 필요
+            if (draggedNodeSide !== newParentSide) {
+              needsMirror = true;
+              mirrorAxisX = mainAxisX;
+              movedTo = newParentSide;
+            }
+          }
+
+          // 4. 자식 노드들만 대칭 이동 (드래그 노드는 제외)
+          if (needsMirror) {
+            const childrenIds = getDescendantIds(draggedNode.id, edges);
+            if (childrenIds.size > 0) {
+              setNodes((currentNodes) => {
+                return currentNodes.map((node) => {
+                  // 드래그 중인 노드는 제외, 자식들만 대칭 이동
+                  if (childrenIds.has(node.id)) {
+                    return {
+                      ...node,
+                      position: {
+                        x:
+                          mirrorAxisX * 2 -
+                          node.position.x +
+                          (movedTo === "right"
+                            ? (node.width ?? NODE_WIDTH)
+                            : -(node.width ?? NODE_WIDTH)),
+                        y: node.position.y,
+                      },
+                    };
+                  }
+                  return node;
+                });
+              });
+            }
+          }
+
+          // 5. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
+          setEdges((prev) => {
+            // 기존 부모 연결 제거
+            const filtered = existingParentEdge
+              ? prev.filter((edge) => edge.id !== existingParentEdge.id)
+              : prev;
+
+            // 새 부모 연결 추가
+            const newEdge = buildEdgePresentation(
+              {
+                id: `e-${newParent.id}-${draggedNode.id}-${Date.now()}`,
+                source: newParent.id,
+                target: draggedNode.id,
+              },
+              nodes,
+            );
+
+            return [...filtered, newEdge];
+          });
+        }
+      }
+
+      // D3 시뮬레이션 종료: fx, fy 해제 및 alphaTarget(0) 설정
+      isDraggingRef.current = false;
+      const d3Node = d3NodesRef.current.find((n) => n.id === draggedNode.id);
+      if (d3Node) {
+        d3Node.fx = null;
+        d3Node.fy = null;
+      }
+
+      const simulation = simulationRef.current;
+      if (simulation) {
+        simulation.alphaTarget(0);
+      }
+
+      // hover 상태 초기화
+      setHoveredNodeId(null);
     },
-    [nodes, edges],
+    [nodes, edges, hoveredNodeId],
   );
 
   /* =========================
@@ -520,7 +764,9 @@ function GraphCanvasInner() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeClick={onNodeClick}
         onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onPaneClick={onPaneClick}
         fitView
