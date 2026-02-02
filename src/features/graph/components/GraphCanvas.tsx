@@ -143,33 +143,52 @@ function findOverlapTarget(dragged: Node, nodes: Node[]): Node | null {
   return null;
 }
 
-// 거리 기반으로 가장 가까운 유효한 노드 찾기
+// AABB 테두리 간 최단 거리 기반으로 가장 가까운 유효한 노드 찾기
 function findClosestNodeInRange(
   draggedNode: Node,
   nodes: Node[],
   edges: Edge[],
-  threshold: number = 150, // 픽셀 단위 임계값
+  threshold: number = 50, // 픽셀 단위 임계값
 ): Node | null {
   let closestNode: Node | null = null;
   let minDistance = threshold;
 
+  // 드래그 중인 노드의 실제 크기
+  const draggedWidth = draggedNode.width ?? NODE_WIDTH;
+  const draggedHeight = draggedNode.height ?? NODE_HEIGHT;
+
+  // 드래그 중인 노드의 AABB 경계 계산 (중심점 기준)
+  const draggedCenterX = draggedNode.position.x + draggedWidth / 2;
+  const draggedCenterY = draggedNode.position.y + draggedHeight / 2;
+  const ax1 = draggedCenterX - draggedWidth / 2;
+  const ay1 = draggedCenterY - draggedHeight / 2;
+  const ax2 = draggedCenterX + draggedWidth / 2;
+  const ay2 = draggedCenterY + draggedHeight / 2;
+
   for (const node of nodes) {
     if (node.id === draggedNode.id) continue;
-    if (node.data?.isMain) continue; // 메인 노드는 타겟이 될 수 없음
 
     // 연결 유효성 체크
     if (isInvalidConnection(node.id, draggedNode.id, edges)) continue;
 
-    // 중심점 간 거리 계산
-    const dx =
-      node.position.x +
-      NODE_WIDTH / 2 -
-      (draggedNode.position.x + NODE_WIDTH / 2);
-    const dy =
-      node.position.y +
-      NODE_HEIGHT / 2 -
-      (draggedNode.position.y + NODE_HEIGHT / 2);
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    // 대상 노드의 실제 크기
+    const nodeWidth = node.width ?? NODE_WIDTH;
+    const nodeHeight = node.height ?? NODE_HEIGHT;
+
+    // 대상 노드의 AABB 경계 계산 (중심점 기준)
+    const nodeCenterX = node.position.x + nodeWidth / 2;
+    const nodeCenterY = node.position.y + nodeHeight / 2;
+    const bx1 = nodeCenterX - nodeWidth / 2;
+    const by1 = nodeCenterY - nodeHeight / 2;
+    const bx2 = nodeCenterX + nodeWidth / 2;
+    const by2 = nodeCenterY + nodeHeight / 2;
+
+    // y축 범위가 겹치지 않으면 제외 (위아래로는 감지 안 함)
+    if (ay2 < by1 || ay1 > by2) continue;
+
+    // x축 방향 거리만 계산 (좌우 방향으로만 감지)
+    const dx = Math.max(0, Math.max(ax1, bx1) - Math.min(ax2, bx2));
+    const distance = dx;
 
     if (distance < minDistance) {
       minDistance = distance;
