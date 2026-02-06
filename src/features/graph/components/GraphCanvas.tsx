@@ -247,8 +247,13 @@ function mirrorSubtree(
   movedTo: "left" | "right",
 ): Node[] {
   const subtreeIds = getDescendantIds(rootId, edges); // rootId 제외, 자식들만
+  const beforePositions = new Map(
+    nodes
+      .filter((node) => subtreeIds.has(node.id))
+      .map((node) => [node.id, { x: node.position.x, y: node.position.y }]),
+  );
 
-  return nodes.map((node) =>
+  const next = nodes.map((node) =>
     subtreeIds.has(node.id)
       ? {
           ...node,
@@ -264,6 +269,24 @@ function mirrorSubtree(
         }
       : node,
   );
+
+  if (subtreeIds.size > 0) {
+    const diffs = next
+      .filter((node) => subtreeIds.has(node.id))
+      .map((node) => {
+        const before = beforePositions.get(node.id);
+        return {
+          id: node.id,
+          beforeX: before?.x,
+          beforeY: before?.y,
+          afterX: node.position.x,
+          afterY: node.position.y,
+        };
+      });
+    console.log("[mirrorSubtree] before/after", diffs);
+  }
+
+  return next;
 }
 
 // D3 force simulation용 노드 타입
@@ -386,106 +409,11 @@ function GraphCanvasInner() {
   /* =========================
      React Flow handlers
      ========================= */
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) =>
-      setNodes((snapshot) => {
-        const positionChanges = changes.filter(
-          (change) => change.type === "position" && change.position,
-        );
-        const otherChanges = changes.filter(
-          (change) => change.type !== "position",
-        );
-
-        let next = applyNodeChanges(otherChanges, snapshot);
-
-        for (const change of positionChanges) {
-          const node = next.find((item) => item.id === change.id);
-          if (!node || !change.position) continue;
-
-          const delta = {
-            x: change.position.x - node.position.x,
-            y: change.position.y - node.position.y,
-          };
-
-          // 프로젝트 노드(메인 노드) 기준으로 좌우 이동 체크
-          const currentMainNode = next.find((n) => n.data?.isMain);
-          if (currentMainNode && !node.data?.isMain) {
-            const mainAxisX = currentMainNode.position.x + NODE_WIDTH / 2;
-            const beforeSide = node.position.x < mainAxisX ? "left" : "right";
-            const afterSide = change.position.x < mainAxisX ? "left" : "right";
-
-            if (beforeSide !== afterSide) {
-              //'자식 노드가 있는 경우'를 조건에 추가.
-              return mirrorSubtree(next, node.id, edges, mainAxisX, afterSide); // 잡고 움직이는 노드 자체는 대칭 이동에 포함 안되도록
-            } // 반대편으로 대칭 이동하는 경우는 여기서 끝
-          }
-          const subtreeIds = new Set<string>([
-            change.id,
-            ...getDescendantIds(change.id, edges),
-          ]);
-
-          if (!canApplyMove(next, subtreeIds, delta)) continue;
-
-          // Delta와 자식 노드 위치 변경 추적
-          // console.log("=== 노드 이동 감지 ===");
-          // console.log("Delta:", delta);
-          // console.log("이동 노드:", node.id);
-
-          // const childrenIds = Array.from(subtreeIds).filter(id => id !== node.id);
-          // if (childrenIds.length > 0) {
-          //   console.log("자식 노드들:", childrenIds);
-          //   console.log("자식 노드 위치 변경 전:");
-          //   childrenIds.forEach(childId => {
-          //     const child = next.find(n => n.id === childId);
-          //     if (child) {
-          //       console.log(`  ${childId}: (${child.position.x.toFixed(1)}, ${child.position.y.toFixed(1)})`);
-          //     }
-          //   });
-          // }
-
-          // 자식 위치 변경 주석 처리
-          // next = next.map((item) =>
-          //   subtreeIds.has(item.id)
-          //     ? {
-          //         ...item,
-          //         position: {
-          //           x: item.position.x + delta.x,
-          //           y: item.position.y + delta.y,
-          //         },
-          //       }
-          //     : item,
-          // );
-
-          // 부모 노드만 이동
-          next = next.map((item) =>
-            item.id === node.id
-              ? {
-                  ...item,
-                  position: {
-                    x: item.position.x + delta.x,
-                    y: item.position.y + delta.y,
-                  },
-                }
-              : item,
-          );
-
-          // 변경 후 위치 출력
-          // if (childrenIds.length > 0) {
-          //   console.log("자식 노드 위치 변경 후:");
-          //   childrenIds.forEach(childId => {
-          //     const child = next.find(n => n.id === childId);
-          //     if (child) {
-          //       console.log(`  ${childId}: (${child.position.x.toFixed(1)}, ${child.position.y.toFixed(1)})`);
-          //     }
-          //   });
-          // }
-          // console.log("==================\n");
-        }
-
-        return next;
-      }),
-    [edges],
-  );
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    return setNodes((snapshot) => {
+      return applyNodeChanges(changes, snapshot);
+    });
+  }, []);
 
   useEffect(() => {
     setEdges((snapshot) => {
@@ -640,6 +568,51 @@ function GraphCanvasInner() {
       const closestNode = findClosestNodeInRange(draggedNode, nodes, edges);
       setHoveredNodeId(closestNode?.id ?? null);
 
+      // 좌우 전환 시 서브트리 대칭 이동 (드래그 노드 기준, 반대편 핸들 방향)
+      let didMirrorSubtree = false;
+      const previousPosition = previousDragPositionRef.current; //드래그 노드
+      if (previousPosition && !draggedNode.data?.isMain) {
+        const mainNode = nodes.find((n) => n.data?.isMain);
+        if (mainNode) {
+          const mainAxisX = mainNode.position.x + NODE_WIDTH / 2;
+          const nodeWidth = draggedNode.width ?? NODE_WIDTH;
+          const beforeCenterX = previousPosition.x + nodeWidth / 2; //드래그 노드의 중앙값
+          const afterCenterX = draggedNode.position.x + nodeWidth / 2;
+          const beforeSide = beforeCenterX < mainAxisX ? "left" : "right";
+          const afterSide = afterCenterX < mainAxisX ? "left" : "right";
+
+          if (beforeSide !== afterSide) {
+            const subtreeIds = getDescendantIds(draggedNode.id, edges);
+
+            // 이전 프레임 드래그 노드의 중심점 (D3 좌표)
+            const beforeDraggedCenterX = beforeCenterX;
+
+            // 현재 프레임 드래그 노드의 중심점 (D3 좌표)
+            const afterDraggedCenterX = afterCenterX;
+
+            d3NodesRef.current.forEach((d3Node) => {
+              if (!subtreeIds.has(d3Node.id)) return;
+
+              // 이전 프레임에서 드래그 노드와 자식 노드 사이의 x축 거리
+              const distanceX = (d3Node.x ?? 0) - beforeDraggedCenterX;
+
+              // 현재 프레임 드래그 노드 기준으로 반대편에 같은 거리로 배치 (대칭)
+              const mirroredCenterX = afterDraggedCenterX - distanceX;
+
+              d3Node.x = mirroredCenterX;
+              if (d3Node.fx != null) {
+                d3Node.fx = mirroredCenterX;
+              }
+              // y는 그대로 유지
+              if (d3Node.fy != null) {
+                d3Node.fy = d3Node.y ?? d3Node.fy;
+              }
+            });
+            didMirrorSubtree = true;
+          }
+        }
+      }
+
       // 부모가 움직인 거리(delta) 계산
       const delta = previousDragPositionRef.current
         ? {
@@ -663,17 +636,19 @@ function GraphCanvasInner() {
           draggedNode.position.y + (draggedNode.height ?? NODE_HEIGHT) / 2;
       }
 
-      // 자식 노드들도 delta만큼 이동
-      const childrenIds = getDescendantIds(draggedNode.id, edges);
+      // 자식 노드들도 delta만큼 이동 (대칭 이동한 프레임은 제외)
+      if (!didMirrorSubtree) {
+        const childrenIds = getDescendantIds(draggedNode.id, edges);
 
-      childrenIds.forEach((childId) => {
-        const d3ChildNode = d3NodesRef.current.find((n) => n.id === childId);
-        if (d3ChildNode && d3ChildNode.fx != null && d3ChildNode.fy != null) {
-          // 기존 fx/fy에 delta를 더해서 부모와 함께 이동
-          d3ChildNode.fx += delta.x;
-          d3ChildNode.fy += delta.y;
-        }
-      });
+        childrenIds.forEach((childId) => {
+          const d3ChildNode = d3NodesRef.current.find((n) => n.id === childId);
+          if (d3ChildNode && d3ChildNode.fx != null && d3ChildNode.fy != null) {
+            // 기존 fx/fy에 delta를 더해서 부모와 함께 이동
+            d3ChildNode.fx += delta.x;
+            d3ChildNode.fy += delta.y;
+          }
+        });
+      }
     },
     [nodes, edges],
   );
@@ -683,63 +658,18 @@ function GraphCanvasInner() {
       // hover된 노드가 있으면 연결 생성
       if (hoveredNodeId) {
         const newParent = nodes.find((n) => n.id === hoveredNodeId);
-        if (newParent && !isInvalidConnection(newParent.id, draggedNode.id, edges)) {
+        if (
+          newParent &&
+          !isInvalidConnection(newParent.id, draggedNode.id, edges)
+        ) {
           // 1. 기존 부모와의 연결 끊기
           const existingParentEdge = edges.find(
             (edge) => edge.target === draggedNode.id,
           );
 
-          // 2. 메인 노드 찾기
-          const mainNode = nodes.find((n) => n.data?.isMain);
+          // 2. 드래그 중 대칭 이동을 사용하므로 드롭 시 대칭 이동은 스킵
 
-          // 3. 방향 체크 (드래그 노드가 새 부모 기준으로 어느 쪽에 있는지)
-          let needsMirror = false;
-          let mirrorAxisX = 0;
-          let movedTo: "left" | "right" = "right";
-
-          if (mainNode) {
-            const mainAxisX = mainNode.position.x + NODE_WIDTH / 2;
-            const draggedNodeSide =
-              draggedNode.position.x < mainAxisX ? "left" : "right";
-            const newParentSide =
-              newParent.position.x < mainAxisX ? "left" : "right";
-
-            // 새 부모가 반대편에 있으면 대칭 이동 필요
-            if (draggedNodeSide !== newParentSide) {
-              needsMirror = true;
-              mirrorAxisX = mainAxisX;
-              movedTo = newParentSide;
-            }
-          }
-
-          // 4. 자식 노드들만 대칭 이동 (드래그 노드는 제외)
-          if (needsMirror) {
-            const childrenIds = getDescendantIds(draggedNode.id, edges);
-            if (childrenIds.size > 0) {
-              setNodes((currentNodes) => {
-                return currentNodes.map((node) => {
-                  // 드래그 중인 노드는 제외, 자식들만 대칭 이동
-                  if (childrenIds.has(node.id)) {
-                    return {
-                      ...node,
-                      position: {
-                        x:
-                          mirrorAxisX * 2 -
-                          node.position.x +
-                          (movedTo === "right"
-                            ? (node.width ?? NODE_WIDTH)
-                            : -(node.width ?? NODE_WIDTH)),
-                        y: node.position.y,
-                      },
-                    };
-                  }
-                  return node;
-                });
-              });
-            }
-          }
-
-          // 5. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
+          // 3. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
           setEdges((prev) => {
             // 기존 부모 연결 제거
             const filtered = existingParentEdge
