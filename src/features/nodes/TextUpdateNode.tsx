@@ -5,6 +5,7 @@ type TextUpdaterNodeData = {
   text?: string;
   label?: string;
   color?: string;
+  textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
   handleSide?: "left" | "right";
   showInputBox?: boolean; // 입력박스 표시 여부
@@ -58,7 +59,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
 
   const containerStyle = isMain
     ? {
-        backgroundColor: "transparent",
+        backgroundColor: nodeData.color || "#ffffff",
         borderColor: isHovered ? "#93C5FD" : EDGE_COLOR, // hover 시 연한 파란색
         borderWidth: isHovered ? "3px" : "2px", // hover 시 두께 증가
       }
@@ -91,8 +92,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
             zIndex: 0, // 노드보다 뒤, 다른 노드들보다는 위
           }}
         >
-          <p className="text-sm text-gray-500">입력칸 (임시)</p>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-sm text-muted">입력칸 (임시)</p>
+          <p className="text-xs text-muted mt-2">
             Node ID: {id}
             <br />
             Side: {handleSide}
@@ -112,7 +113,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
             value={localValue}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
-            className="nodrag bg-transparent border-none outline-none w-full text-black placeholder-gray-400 text-center"
+            className="nodrag bg-transparent border-none outline-none w-full placeholder-muted text-center"
+            style={{ color: nodeData.textColor || "rgb(var(--foreground))" }}
             placeholder={isMain ? "중심 노드 입력" : "서브 노드 입력"}
           />
         </div>

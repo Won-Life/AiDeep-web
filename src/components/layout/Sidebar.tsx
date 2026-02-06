@@ -24,7 +24,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full bg-gray-100 shadow-lg transition-transform duration-300 z-50 text-black ${
+      className={`fixed left-0 top-0 h-full bg-surface shadow-lg transition-transform duration-300 z-50 text-foreground ${
         isOpen ? 'translate-x-0 overflow-y-auto' : 'overflow-visible'
       }`}
       style={{
@@ -33,13 +33,13 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
       }}
     >
       {/* 헤더 - 항상 보이도록 분리 */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className={`text-lg font-semibold text-black ${!isOpen ? 'opacity-0' : ''}`}>
+      <div className="flex items-center justify-between p-4 border-b border-border">
+        <h2 className={`text-lg font-semibold text-foreground ${!isOpen ? 'opacity-0' : ''}`}>
           Resource +
         </h2>
         <button
           onClick={onToggle}
-          className="text-black hover:text-gray-700 text-xl font-semibold"
+          className="text-foreground hover:text-muted text-xl font-semibold"
         >
           {isOpen ? '<<' : '>>'}
         </button>
@@ -57,22 +57,22 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             { id: 5, name: '학습 자료', subItems: ['React', 'TypeScript', 'Next.js', 'GraphQL', '데이터베이스'] },
           ].map((resource) => (
             <div key={resource.id} className="flex items-start gap-2">
-              <div className="border border-gray-200 rounded-lg inline-block overflow-hidden">
+              <div className="border border-border rounded-lg inline-block overflow-hidden">
                 <button
                   onClick={() => toggleResource(resource.id)}
-                  className="px-3 py-2 flex items-center hover:bg-gray-50 gap-3"
+                  className="px-3 py-2 flex items-center hover:bg-surface-hover gap-3"
                 >
-                  <span className="text-black">{resource.name}</span>
-                  <span className="text-black text-xs">
+                  <span className="text-foreground">{resource.name}</span>
+                  <span className="text-foreground text-xs">
                     {expandedResources.has(resource.id) ? '^' : 'v'}
                   </span>
                 </button>
                 {expandedResources.has(resource.id) && (
-                  <div className="bg-gray-50 border-t border-gray-200 overflow-hidden">
+                  <div className="bg-surface-active border-t border-border overflow-hidden">
                     {resource.subItems.map((subItem, index) => (
                       <div
                         key={index}
-                        className={`px-6 py-2 text-sm text-black hover:bg-gray-100 ${
+                        className={`px-6 py-2 text-sm text-foreground hover:bg-surface-hover ${
                           index === resource.subItems.length - 1 ? 'rounded-b-lg' : ''
                         }`}
                       >
@@ -88,7 +88,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                   // + 버튼 클릭 핸들러 (추후 구현)
                   console.log('Add button clicked for resource:', resource.id);
                 }}
-                className="px-2 py-2 text-black hover:bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center"
+                className="px-2 py-2 text-foreground hover:bg-surface-hover rounded-lg border border-border flex items-center justify-center"
               >
                 +
               </button>
