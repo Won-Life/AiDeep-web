@@ -1,32 +1,47 @@
-'use client';
-import { useState } from 'react';
+"use client";
+import { useState, useMemo } from "react";
+import { initialNodes } from "@/mock/mindmap";
+import { type Node } from "@xyflow/react";
+import { type NodeData } from "@/features/nodes/TextUpdateNode";
 
 interface CheapHeaderProps {
   sidebarWidth: number;
+  onNodeFocus?: (nodeId: string) => void;
 }
 
-export default function CheapHeader({ sidebarWidth }: CheapHeaderProps) {
-  const [activeProject, setActiveProject] = useState('Project 1');
-  const projects = ['Project 1', 'Project 2', 'Project 3', 'Project 4'];
+export default function CheapHeader({
+  sidebarWidth,
+  onNodeFocus,
+}: CheapHeaderProps) {
+  const mainNodes: Node<NodeData>[] = useMemo(
+    () => initialNodes.filter((node) => node.data.isMain),
+    [],
+  );
+
+  const [activeProjectId, setActiveProjectId] = useState(
+    mainNodes[0]?.id || "",
+  );
 
   return (
     <header
       className="fixed top-0 right-0 h-16 bg-background border-b border-border z-30 flex items-center justify-between px-4 transition-all duration-300"
       style={{ left: `${sidebarWidth}px` }}
     >
-      {/* 중앙: Project 탭들 */}
       <div className="flex gap-2">
-        {projects.map((project) => (
+        {mainNodes.map((node: Node<NodeData>) => (
           <button
-            key={project}
-            onClick={() => setActiveProject(project)}
+            key={node.id}
+            onClick={() => {
+              setActiveProjectId(node.id);
+              onNodeFocus?.(node.id);
+            }}
             className={`px-4 py-2 rounded text-sm transition-colors ${
-              activeProject === project
-                ? 'bg-surface-active text-foreground font-medium'
-                : 'bg-background text-muted hover:bg-surface-hover'
+              activeProjectId === node.id
+                ? "bg-surface-active text-foreground font-medium"
+                : "bg-background text-muted hover:bg-surface-hover"
             }`}
           >
-            {project}
+            {node.data?.text}
           </button>
         ))}
       </div>
@@ -40,4 +55,3 @@ export default function CheapHeader({ sidebarWidth }: CheapHeaderProps) {
     </header>
   );
 }
-

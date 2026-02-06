@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 
-type TextUpdaterNodeData = {
+export type NodeData = {
   text?: string;
   label?: string;
   color?: string;
@@ -14,7 +14,7 @@ type TextUpdaterNodeData = {
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {
-  const nodeData = data as TextUpdaterNodeData;
+  const nodeData = data as NodeData;
   const isMain = nodeData.isMain ?? false;
   const handleSide = nodeData.handleSide ?? "right";
   const handlePosition = handleSide === "left" ? Position.Left : Position.Right;

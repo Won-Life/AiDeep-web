@@ -317,13 +317,17 @@ interface D3Node extends d3.SimulationNodeDatum {
   fy?: number | null;
 }
 
-function GraphCanvasInner() {
+interface GraphCanvasInnerProps {
+  focusedNodeId: string | null;
+}
+
+function GraphCanvasInner({ focusedNodeId }: GraphCanvasInnerProps) {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, setCenter } = useReactFlow();
 
   // D3 force simulation 관리
   const simulationRef = useRef<d3.Simulation<D3Node, undefined> | null>(null);
@@ -801,6 +805,17 @@ function GraphCanvasInner() {
   //   saveNodesToDB(nodes, edges);
   // }, [nodes, edges]);
 
+  useEffect(() => {
+    if (focusedNodeId) {
+      const node = nodes.find((n) => n.id === focusedNodeId);
+      if (node) {
+        const x = node.position.x + (node.width ?? NODE_WIDTH) / 2;
+        const y = node.position.y + (node.height ?? NODE_HEIGHT) / 2;
+        setCenter(x, y, { zoom: 1, duration: 800 });
+      }
+    }
+  }, [focusedNodeId, nodes, setCenter]);
+
   return (
     <div className="w-full h-full bg-background">
       <ReactFlow
@@ -823,10 +838,16 @@ function GraphCanvasInner() {
   );
 }
 
-export default function GraphCanvas() {
+interface GraphCanvasProps {
+  focusedNodeId?: string | null;
+}
+
+export default function GraphCanvas({
+  focusedNodeId = null,
+}: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
-      <GraphCanvasInner />
+      <GraphCanvasInner focusedNodeId={focusedNodeId} />
     </ReactFlowProvider>
   );
 }
