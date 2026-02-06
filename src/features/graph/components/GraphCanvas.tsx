@@ -78,7 +78,6 @@ function areSiblings(aId: string, bId: string, edges: Edge[]): boolean {
   return parentA !== null && parentA === parentB;
 }
 
-// TODO: 동일 프로젝트 노드에서는 부모를 하나만 가질 수 있음 -> 그럼 이게 필요한가
 function isInvalidConnection(
   sourceId: string,
   targetId: string,
@@ -86,9 +85,10 @@ function isInvalidConnection(
 ): boolean {
   if (sourceId === targetId) return true;
 
-  // 자신의 직계부모인지 확인 (이미 연결된 부모에게 다시 연결 방지)
-  const currentParent = getParentId(targetId, edges);
-  if (currentParent === sourceId) return true;
+  // 둘이 서로 연결되어 있는지 확인
+  const targetParent = getParentId(targetId, edges);
+  const sourceParent = getParentId(sourceId, edges);
+  if (targetParent === sourceId || sourceParent === targetId) return true;
 
   return false;
 }
@@ -555,7 +555,11 @@ function GraphCanvasInner() {
     (event: React.MouseEvent, draggedNode: Node) => {
       // 드래그 중에 가까운 노드 찾기
       const closestNode = findClosestNodeInRange(draggedNode, nodes, edges);
-      setHoveredNodeId(closestNode?.id ?? null);
+      // 이미 연결된 노드는 hover 효과 제외
+      const isInvalid =
+        closestNode &&
+        isInvalidConnection(closestNode.id, draggedNode.id, edges);
+      setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
 
       // 좌우 전환 시 서브트리 대칭 이동 (드래그 노드 기준, 반대편 핸들 방향)
       let didMirrorSubtree = false;
