@@ -576,6 +576,7 @@ function GraphCanvasInner() {
         if (mainNode) {
           const mainAxisX = mainNode.position.x + NODE_WIDTH / 2;
           const nodeWidth = draggedNode.width ?? NODE_WIDTH;
+          const nodeHeight = draggedNode.height ?? NODE_HEIGHT;
           const beforeCenterX = previousPosition.x + nodeWidth / 2; //드래그 노드의 중앙값
           const afterCenterX = draggedNode.position.x + nodeWidth / 2;
           const beforeSide = beforeCenterX < mainAxisX ? "left" : "right";
@@ -586,26 +587,30 @@ function GraphCanvasInner() {
 
             // 이전 프레임 드래그 노드의 중심점 (D3 좌표)
             const beforeDraggedCenterX = beforeCenterX;
+            const beforeDraggedCenterY = previousPosition.y + nodeHeight / 2;
 
             // 현재 프레임 드래그 노드의 중심점 (D3 좌표)
             const afterDraggedCenterX = afterCenterX;
+            const afterDraggedCenterY = draggedNode.position.y + nodeHeight / 2;
 
             d3NodesRef.current.forEach((d3Node) => {
               if (!subtreeIds.has(d3Node.id)) return;
 
-              // 이전 프레임에서 드래그 노드와 자식 노드 사이의 x축 거리
+              // 이전 프레임에서 드래그 노드와 자식 노드 사이의 거리
               const distanceX = (d3Node.x ?? 0) - beforeDraggedCenterX;
+              const distanceY = (d3Node.y ?? 0) - beforeDraggedCenterY;
 
-              // 현재 프레임 드래그 노드 기준으로 반대편에 같은 거리로 배치 (대칭)
+              // 현재 프레임 드래그 노드 기준으로 거리 유지 (x는 대칭, y는 동일)
               const mirroredCenterX = afterDraggedCenterX - distanceX;
+              const mirroredCenterY = afterDraggedCenterY + distanceY;
 
               d3Node.x = mirroredCenterX;
+              d3Node.y = mirroredCenterY;
               if (d3Node.fx != null) {
                 d3Node.fx = mirroredCenterX;
               }
-              // y는 그대로 유지
               if (d3Node.fy != null) {
-                d3Node.fy = d3Node.y ?? d3Node.fy;
+                d3Node.fy = mirroredCenterY;
               }
             });
             didMirrorSubtree = true;
