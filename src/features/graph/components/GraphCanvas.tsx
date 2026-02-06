@@ -53,6 +53,23 @@ function getAncestorIds(nodeId: string, edges: Edge[]): Set<string> {
   return ancestors;
 }
 
+function getMainNodeForSubtree(
+  nodeId: string,
+  nodes: Node[],
+  edges: Edge[],
+): Node | undefined {
+  const currentNode = nodes.find((n) => n.id === nodeId);
+  if (currentNode?.data?.isMain) return currentNode;
+
+  const ancestors = getAncestorIds(nodeId, edges);
+  for (const ancestorId of ancestors) {
+    const ancestor = nodes.find((n) => n.id === ancestorId);
+    if (ancestor?.data?.isMain) return ancestor;
+  }
+
+  return undefined;
+}
+
 function getDescendantIds(nodeId: string, edges: Edge[]): Set<string> {
   const descendants = new Set<string>();
   const queue: string[] = [nodeId];
@@ -380,15 +397,14 @@ function GraphCanvasInner() {
     },
     [],
   );
-
-  // Main 노드가 여러개일 때 대비해서 처리하기
-  const mainNode = nodes.find((node) => node.data?.isMain);
-
   const nodesWithCallbacks = nodes.map((node) => {
     const parentId = getParentId(node.id, edges);
     const parentNode = parentId
       ? nodes.find((item) => item.id === parentId)
       : undefined;
+
+    const mainNode = getMainNodeForSubtree(node.id, nodes, edges);
+    // 자신이 속한 그래프의 main 노드 찾기
     const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
 
     return {
@@ -565,7 +581,7 @@ function GraphCanvasInner() {
       let didMirrorSubtree = false;
       const previousPosition = previousDragPositionRef.current; //드래그 노드
       if (previousPosition && !draggedNode.data?.isMain) {
-        const mainNode = nodes.find((n) => n.data?.isMain);
+        const mainNode = getMainNodeForSubtree(draggedNode.id, nodes, edges);
         if (mainNode) {
           const mainAxisX = mainNode.position.x + NODE_WIDTH / 2;
           const nodeWidth = draggedNode.width ?? NODE_WIDTH;
