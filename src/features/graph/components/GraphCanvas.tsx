@@ -510,17 +510,6 @@ function GraphCanvasInner() {
       // hover 상태 초기화
       setHoveredNodeId(null);
 
-      // Alt/Opt 키를 누르면 연결 해제
-      if (event.altKey) {
-        setEdges((snapshot) => {
-          const incoming = snapshot.find(
-            (edge) => edge.target === draggedNode.id,
-          );
-          if (!incoming) return snapshot;
-          return snapshot.filter((edge) => edge.id !== incoming.id);
-        });
-      }
-
       // D3 force simulation 시작
       isDraggingRef.current = true;
 
@@ -563,7 +552,7 @@ function GraphCanvasInner() {
   );
 
   const onNodeDrag = useCallback(
-    (_: React.MouseEvent, draggedNode: Node) => {
+    (event: React.MouseEvent, draggedNode: Node) => {
       // 드래그 중에 가까운 노드 찾기
       const closestNode = findClosestNodeInRange(draggedNode, nodes, edges);
       setHoveredNodeId(closestNode?.id ?? null);
@@ -641,8 +630,8 @@ function GraphCanvasInner() {
           draggedNode.position.y + (draggedNode.height ?? NODE_HEIGHT) / 2;
       }
 
-      // 자식 노드들도 delta만큼 이동 (대칭 이동한 프레임은 제외)
-      if (!didMirrorSubtree) {
+      // 자식 노드들도 delta만큼 이동 (대칭 이동한 프레임은 제외, Alt 키 누르면 단독 이동)
+      if (!didMirrorSubtree && !event.altKey) {
         const childrenIds = getDescendantIds(draggedNode.id, edges);
 
         childrenIds.forEach((childId) => {
