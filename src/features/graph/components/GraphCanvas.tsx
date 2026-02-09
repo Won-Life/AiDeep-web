@@ -555,6 +555,10 @@ function GraphCanvasInner({
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [pendingArchiveNodeIds, setPendingArchiveNodeIds] = useState<string[]>(
+    [],
+  );
 
   const { screenToFlowPosition, setCenter } = useReactFlow();
 
@@ -663,11 +667,75 @@ function GraphCanvasInner({
   /* =========================
      React Flow handlers
      ========================= */
+  const requestArchiveForNodes = useCallback(
+    (rootNodeIds: string[]) => {
+      const subtreeNodeIds = new Set<string>();
+
+      rootNodeIds.forEach((rootId) => {
+        subtreeNodeIds.add(rootId);
+        const descendants = getDescendantIds(rootId, edges);
+        descendants.forEach((id) => subtreeNodeIds.add(id));
+      });
+
+      setPendingArchiveNodeIds(Array.from(subtreeNodeIds));
+      setIsArchiveModalOpen(true);
+      setSelectedNodeId(null);
+    },
+    [edges],
+  );
+
   const onNodesChange = useCallback((changes: NodeChange[]) => {
-    return setNodes((snapshot) => {
-      return applyNodeChanges(changes, snapshot);
-    });
+    const removedNodeIds = changes
+      .filter((change) => change.type === "remove")
+      .map((change) => change.id);
+
+    if (removedNodeIds.length > 0) {
+      requestArchiveForNodes(removedNodeIds);
+    }
+
+    const nonRemoveChanges = changes.filter((change) => change.type !== "remove");
+    if (nonRemoveChanges.length === 0) return;
+
+    setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
+  }, [requestArchiveForNodes]);
+
+  const onBeforeDelete = useCallback(
+    ({ nodes: nodesToDelete }: { nodes: Node[]; edges: Edge[] }) => {
+      if (nodesToDelete.length > 0) {
+        requestArchiveForNodes(nodesToDelete.map((node) => node.id));
+        return false;
+      }
+
+      return true;
+    },
+    [requestArchiveForNodes],
+  );
+
+  const handleCancelArchive = useCallback(() => {
+    setIsArchiveModalOpen(false);
+    setPendingArchiveNodeIds([]);
   }, []);
+
+  const handleConfirmArchive = useCallback(() => {
+    if (pendingArchiveNodeIds.length === 0) {
+      setIsArchiveModalOpen(false);
+      return;
+    }
+
+    const idsToArchive = new Set(pendingArchiveNodeIds);
+
+    // TODO: Implement archive persistence here (e.g. API call to archive these nodes and edges).
+    setEdges((snapshot) =>
+      snapshot.filter(
+        (edge) => !idsToArchive.has(edge.source) && !idsToArchive.has(edge.target),
+      ),
+    );
+    setNodes((snapshot) => snapshot.filter((node) => !idsToArchive.has(node.id)));
+    setHoveredNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
+    setSelectedNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
+    setPendingArchiveNodeIds([]);
+    setIsArchiveModalOpen(false);
+  }, [pendingArchiveNodeIds]);
 
   useEffect(() => {
     setEdges((snapshot) => {
@@ -691,6 +759,13 @@ function GraphCanvasInner({
   }, [nodes]);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    if (isArchiveModalOpen) {
+      const nonRemoveChanges = changes.filter((change) => change.type !== "remove");
+      if (nonRemoveChanges.length === 0) return;
+      setEdges((snapshot) => applyEdgeChanges(nonRemoveChanges, snapshot));
+      return;
+    }
+
     setEdges((snapshot) => {
       const removedEdges = changes
         .filter((change) => change.type === "remove")
@@ -718,7 +793,7 @@ function GraphCanvasInner({
 
       return updatedEdges;
     });
-  }, []);
+  }, [isArchiveModalOpen]);
 
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
@@ -1403,7 +1478,7 @@ function GraphCanvasInner({
   }, [focusedNodeId, nodes, setCenter]);
 
   return (
-    <div className="w-full h-full bg-background">
+    <div className="relative w-full h-full bg-background">
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
@@ -1411,6 +1486,7 @@ function GraphCanvasInner({
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onBeforeDelete={onBeforeDelete}
         onConnect={onConnect}
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
@@ -1424,6 +1500,33 @@ function GraphCanvasInner({
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
+      {isArchiveModalOpen && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-[360px] rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
+            <p className="text-base font-semibold">보관하시겠습니까?</p>
+            <p className="mt-2 text-sm text-muted">
+              선택한 노드와 하위 서브 노드가 함께 보관 처리됩니다. (총{" "}
+              {pendingArchiveNodeIds.length}개)
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCancelArchive}
+                className="rounded-md border border-border px-3 py-1.5 text-sm"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmArchive}
+                className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background"
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
