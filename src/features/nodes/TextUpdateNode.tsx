@@ -1,5 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import {
+  Handle,
+  Position,
+  type NodeProps,
+  useUpdateNodeInternals,
+} from "@xyflow/react";
 
 export type NodeData = {
   text?: string;
@@ -8,18 +13,24 @@ export type NodeData = {
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
   handleSide?: "left" | "right";
+  hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
   isHovered?: boolean; // 드래그 중 hover 상태
   onChange?: (nodeId: string, value: string) => void;
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {
+  const updateNodeInternals = useUpdateNodeInternals();
   const nodeData = data as NodeData;
   const isMain = nodeData.isMain ?? false;
+  const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
   const handleSide = nodeData.handleSide ?? "right";
   const handlePosition = handleSide === "left" ? Position.Left : Position.Right;
   const showInputBox = nodeData.showInputBox ?? false;
   const isHovered = nodeData.isHovered ?? false;
+
+  // 부모가 없는 서브 노드는 양쪽에 핸들 표시
+  const showBothHandles = isMain || !hasParent;
 
   // 로컬 state로 입력값 관리 (타이핑할 때마다 업데이트)
   const [localValue, setLocalValue] = useState(nodeData.text || "");
@@ -28,6 +39,13 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   useEffect(() => {
     setLocalValue(nodeData.text || "");
   }, [nodeData.text]);
+
+  // 핸들 구성이 바뀌면 React Flow 내부 핸들 bounds를 즉시 갱신
+  useEffect(() => {
+    if (id) {
+      updateNodeInternals(id);
+    }
+  }, [id, handleSide, showBothHandles, updateNodeInternals]);
 
   // 타이핑할 때는 로컬 state만 업데이트 (DB 저장 안 함)
   const handleChange = useCallback(
@@ -118,7 +136,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
             placeholder={isMain ? "중심 노드 입력" : "서브 노드 입력"}
           />
         </div>
-        {isMain ? (
+        {showBothHandles ? (
           <>
             <Handle type="target" position={Position.Left} id="target-left" />
             <Handle type="target" position={Position.Right} id="target-right" />

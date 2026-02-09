@@ -309,24 +309,29 @@ function adjustPositionRelativeToSource(
   };
 }
 
-function buildEdgePresentation(edge: Edge, nodes: Node[]): Edge {
+function resolveHandleId(
+  node: Node,
+  role: "source" | "target",
+  side: "left" | "right",
+  edges: Edge[],
+): string {
+  const hasParent = getParentId(node.id, edges) !== null;
+  const shouldUseBothHandles = node.data?.isMain || !hasParent;
+
+  return shouldUseBothHandles ? `${role}-${side}` : `${role}-side`;
+}
+
+function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
   const source = nodes.find((node) => node.id === edge.source);
   const target = nodes.find((node) => node.id === edge.target);
   if (!source || !target) return edge;
 
   const side = getEdgeSide(source, target);
-  const sourceHandle = source.data?.isMain
-    ? side === "left"
-      ? "source-left"
-      : "source-right"
-    : "source-side";
-  const targetHandle = target.data?.isMain
-    ? side === "left"
-      ? "target-left"
-      : "target-right"
-    : "target-side";
+  const sourceHandle = resolveHandleId(source, "source", side, edges);
+  const targetHandle = resolveHandleId(target, "target", side, edges);
   const sourceHandleX =
-    source.position.x + (side === "right" ? source.measured?.width : 0);
+    source.position.x +
+    (side === "right" ? (source.measured?.width ?? source.width ?? NODE_WIDTH) : 0);
 
   return {
     ...edge,
@@ -495,6 +500,9 @@ function GraphCanvasInner({
     // 자신이 속한 그래프의 main 노드 찾기
     const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
 
+    // 부모가 없는 서브 노드는 양쪽에 핸들 표시
+    const hasParent = parentId !== null;
+
     return {
       ...node,
       data: {
@@ -502,6 +510,7 @@ function GraphCanvasInner({
         handleSide: node.data?.isMain
           ? undefined
           : getHandleSide(node, referenceX),
+        hasParent, // 부모 노드 존재 여부 전달
         showInputBox: selectedNodeId === node.id, // 선택된 노드에만 입력박스 표시
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         onChange: (nodeId: string, value: string) =>
@@ -522,7 +531,7 @@ function GraphCanvasInner({
   useEffect(() => {
     setEdges((snapshot) => {
       const updated = snapshot.map((edge) =>
-        buildEdgePresentation(edge, nodes),
+        buildEdgePresentation(edge, nodes, snapshot),
       );
       const isSame =
         updated.length === snapshot.length &&
@@ -570,6 +579,43 @@ function GraphCanvasInner({
     });
   }, []);
 
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      if (!connection.source || !connection.target) return false;
+
+      const sourceNode = nodes.find((n) => n.id === connection.source);
+      const targetNode = nodes.find((n) => n.id === connection.target);
+
+      if (!sourceNode || !targetNode) return false;
+
+      // 기존 유효성 체크
+      if (isInvalidConnection(connection.source, connection.target, edges)) {
+        return false;
+      }
+
+      // Source 노드가 부모가 있는 서브 노드인 경우, source-side 핸들만 허용
+      const sourceParentId = getParentId(sourceNode.id, edges);
+      if (!sourceNode.data?.isMain && sourceParentId !== null) {
+        const sourceHandle = connection.sourceHandle;
+        if (sourceHandle !== "source-side") {
+          return false;
+        }
+      }
+
+      // Target 노드가 부모가 있는 서브 노드인 경우, target-side 핸들만 허용
+      const targetParentId = getParentId(targetNode.id, edges);
+      if (!targetNode.data?.isMain && targetParentId !== null) {
+        const targetHandle = connection.targetHandle;
+        if (targetHandle !== "target-side") {
+          return false;
+        }
+      }
+
+      return true;
+    },
+    [nodes, edges],
+  );
+
   const onConnect = useCallback(
     (params: Connection) => {
       if (!params.source || !params.target) return;
@@ -578,13 +624,15 @@ function GraphCanvasInner({
         if (isInvalidConnection(params.source, params.target, snapshot)) {
           return snapshot;
         }
+        const rawEdge: Edge = {
+          id: `e-${params.source}-${params.target}-${Date.now()}`,
+          source: params.source,
+          target: params.target,
+        };
         const nextEdge = buildEdgePresentation(
-          {
-            id: `e-${params.source}-${params.target}-${Date.now()}`,
-            source: params.source,
-            target: params.target,
-          },
+          rawEdge,
           nodes,
+          [...snapshot, rawEdge],
         );
 
         return [...snapshot, nextEdge];
@@ -685,13 +733,15 @@ function GraphCanvasInner({
         // 노드와 엣지 동시 추가
         setNodes((nds) => [...nds, newNode]);
         setEdges((eds) => {
+          const rawEdge: Edge = {
+            id: `e-${connectionState.fromNode.id}-${newNodeId}-${Date.now()}`,
+            source: connectionState.fromNode.id,
+            target: newNodeId,
+          };
           const newEdge = buildEdgePresentation(
-            {
-              id: `e-${connectionState.fromNode.id}-${newNodeId}-${Date.now()}`,
-              source: connectionState.fromNode.id,
-              target: newNodeId,
-            },
+            rawEdge,
             [...nodes, newNode],
+            [...eds, rawEdge],
           );
           return [...eds, newEdge];
         });
@@ -972,13 +1022,15 @@ function GraphCanvasInner({
               : prev;
 
             // 새 부모 연결 추가
+            const rawEdge: Edge = {
+              id: `e-${newParent.id}-${draggedNode.id}-${Date.now()}`,
+              source: newParent.id,
+              target: draggedNode.id,
+            };
             const newEdge = buildEdgePresentation(
-              {
-                id: `e-${newParent.id}-${draggedNode.id}-${Date.now()}`,
-                source: newParent.id,
-                target: draggedNode.id,
-              },
+              rawEdge,
               nodes,
+              [...filtered, rawEdge],
             );
 
             return [...filtered, newEdge];
@@ -1049,19 +1101,18 @@ function GraphCanvasInner({
       },
     }));
 
-    const edges: Edge[] = graphEdges.map((e) =>
-      buildEdgePresentation(
-        {
-          id: e.edgeId,
-          source: e.source,
-          target: e.target,
-          type: e.type ?? "branch",
-          sourceHandle: e.sourceHandle ?? "source-side",
-          targetHandle: e.targetHandle ?? "target-side",
-          data: {},
-        },
-        nodes,
-      ),
+    const rawEdges: Edge[] = graphEdges.map((e) => ({
+      id: e.edgeId,
+      source: e.source,
+      target: e.target,
+      type: e.type ?? "branch",
+      sourceHandle: e.sourceHandle ?? "source-side",
+      targetHandle: e.targetHandle ?? "target-side",
+      data: {},
+    }));
+
+    const edges: Edge[] = rawEdges.map((edge) =>
+      buildEdgePresentation(edge, nodes, rawEdges),
     );
 
     return { nodes, edges };
@@ -1123,6 +1174,7 @@ function GraphCanvasInner({
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onPaneClick={onPaneClick}
+        isValidConnection={isValidConnection}
         fitView
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
