@@ -284,16 +284,22 @@ function getEdgeSide(source: Node, target: Node): "left" | "right" {
 }
 
 /**
- * Source 노드 기준으로 target 노드의 X 좌표를 적절한 거리로 조정
- * Y 좌표는 originalY를 그대로 유지
+ * Source 노드 기준으로 target 노드의 X/Y 좌표를 적절히 조정
+ * X는 연결 방향 기준 고정 거리, Y는 같은 방향 형제 노드와 간격을 유지하도록 보정
  * @param sourceNode - 부모(source) 노드
  * @param originalY - 생성/드롭된 Y 좌표
  * @param side - 연결 방향 ("left" 또는 "right")
+ * @param nodes - 현재 노드 목록
+ * @param edges - 현재 엣지 목록
+ * @param excludeNodeId - Y 충돌 검사에서 제외할 노드 ID (재연결 시 자기 자신 제외)
  */
 function adjustPositionRelativeToSource(
   sourceNode: Node,
   originalY: number,
   side: "left" | "right",
+  nodes: Node[],
+  edges: Edge[],
+  excludeNodeId?: string,
 ): { x: number; y: number } {
   const sourceWidth = sourceNode.width ?? NODE_WIDTH;
 
@@ -303,9 +309,40 @@ function adjustPositionRelativeToSource(
       ? sourceNode.position.x + sourceWidth + DEFAULT_NODE_DISTANCE
       : sourceNode.position.x - NODE_WIDTH - DEFAULT_NODE_DISTANCE;
 
+  const siblingYs = edges
+    .filter((edge) => edge.source === sourceNode.id && edge.target !== excludeNodeId)
+    .map((edge) => nodes.find((node) => node.id === edge.target))
+    .filter((node): node is Node => node !== undefined)
+    .filter((node) => {
+      const siblingSide = getEdgeSide(sourceNode, node);
+      return siblingSide === side;
+    })
+    .map((node) => node.position.y);
+
+  const verticalGap = NODE_HEIGHT + 24;
+  const isYAvailable = (y: number) =>
+    siblingYs.every((siblingY) => Math.abs(siblingY - y) >= verticalGap);
+
+  let targetY = originalY;
+  if (!isYAvailable(targetY)) {
+    for (let i = 1; i <= 20; i++) {
+      const upperY = originalY - i * verticalGap;
+      if (isYAvailable(upperY)) {
+        targetY = upperY;
+        break;
+      }
+
+      const lowerY = originalY + i * verticalGap;
+      if (isYAvailable(lowerY)) {
+        targetY = lowerY;
+        break;
+      }
+    }
+  }
+
   return {
     x: targetX,
-    y: originalY,
+    y: targetY,
   };
 }
 
@@ -705,6 +742,8 @@ function GraphCanvasInner({
           sourceNode,
           originalPosition.y,
           side,
+          nodes,
+          edges,
         );
 
         // 새 노드 ID 생성
@@ -973,6 +1012,9 @@ function GraphCanvasInner({
             newParent,
             draggedNode.position.y,
             side,
+            nodes,
+            edges,
+            draggedNode.id,
           );
 
           // 4. 드래그된 노드와 서브트리의 위치를 조정된 위치로 이동
