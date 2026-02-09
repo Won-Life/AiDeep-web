@@ -319,7 +319,6 @@ function mirrorSubtree(
   rootId: string,
   edges: Edge[],
   parentAxisX: number,
-  movedTo: "left" | "right",
 ): Node[] {
   const subtreeIds = getDescendantIds(rootId, edges); // rootId 제외, 자식들만
   const beforePositions = new Map(
@@ -333,12 +332,7 @@ function mirrorSubtree(
       ? {
           ...node,
           position: {
-            x:
-              parentAxisX * 2 -
-              node.position.x +
-              (movedTo === "right"
-                ? (node.width ?? NODE_WIDTH)
-                : -(node.width ?? NODE_WIDTH)),
+            x: parentAxisX * 2 - node.position.x - (node.width ?? NODE_WIDTH),
             y: node.position.y,
           },
         }
@@ -855,7 +849,22 @@ function GraphCanvasInner({
             (edge) => edge.target === draggedNode.id,
           );
 
-          // 2. 드래그 중 대칭 이동을 사용하므로 드롭 시 대칭 이동은 스킵
+          // 2. 독립 노드(부모 없음)를 연결할 때는 서브트리 대칭 이동 필요
+          if (!existingParentEdge) {
+            // 드래그된 노드의 중심점을 기준으로 서브트리 대칭 이동
+            const draggedCenterX =
+              draggedNode.position.x + (draggedNode.width ?? NODE_WIDTH) / 2;
+
+            // 서브트리 대칭 이동 (자식들만 이동, 드래그된 노드는 이미 위치 확정)
+            setNodes((currentNodes) => {
+              return mirrorSubtree(
+                currentNodes,
+                draggedNode.id,
+                edges,
+                draggedCenterX,
+              );
+            });
+          }
 
           // 3. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
           setEdges((prev) => {
