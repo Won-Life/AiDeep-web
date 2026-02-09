@@ -319,9 +319,13 @@ interface D3Node extends d3.SimulationNodeDatum {
 
 interface GraphCanvasInnerProps {
   focusedNodeId: string | null;
+  onFocusComplete?: () => void;
 }
 
-function GraphCanvasInner({ focusedNodeId }: GraphCanvasInnerProps) {
+function GraphCanvasInner({
+  focusedNodeId,
+  onFocusComplete,
+}: GraphCanvasInnerProps) {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -812,9 +816,14 @@ function GraphCanvasInner({ focusedNodeId }: GraphCanvasInnerProps) {
         const x = node.position.x + (node.width ?? NODE_WIDTH) / 2;
         const y = node.position.y + (node.height ?? NODE_HEIGHT) / 2;
         setCenter(x, y, { zoom: 1, duration: 800 });
+
+        // 포커스 애니메이션이 끝나면 선택 해제
+        setTimeout(() => {
+          onFocusComplete?.();
+        }, 800); // duration과 동일
       }
     }
-  }, [focusedNodeId, nodes, setCenter]);
+  }, [focusedNodeId, nodes, setCenter, onFocusComplete]);
 
   return (
     <div className="w-full h-full bg-background">
@@ -840,14 +849,19 @@ function GraphCanvasInner({ focusedNodeId }: GraphCanvasInnerProps) {
 
 interface GraphCanvasProps {
   focusedNodeId?: string | null;
+  onFocusComplete?: () => void;
 }
 
 export default function GraphCanvas({
   focusedNodeId = null,
+  onFocusComplete,
 }: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
-      <GraphCanvasInner focusedNodeId={focusedNodeId} />
+      <GraphCanvasInner
+        focusedNodeId={focusedNodeId}
+        onFocusComplete={onFocusComplete}
+      />
     </ReactFlowProvider>
   );
 }

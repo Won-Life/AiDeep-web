@@ -17,7 +17,10 @@ export default function GraphPage() {
   return (
     <div className="relative w-full h-screen overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <GraphCanvas focusedNodeId={focusedNodeId} />
+        <GraphCanvas
+          focusedNodeId={focusedNodeId}
+          onFocusComplete={() => setFocusedNodeId(null)}
+        />
       </div>
 
       <Sidebar
@@ -25,7 +28,11 @@ export default function GraphPage() {
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
       />
 
-      <ChipHeader sidebarWidth={sidebarWidth} onNodeFocus={setFocusedNodeId} />
+      <ChipHeader
+        sidebarWidth={sidebarWidth}
+        onNodeFocus={setFocusedNodeId}
+        activeProjectId={focusedNodeId}
+      />
 
       <DropDown sidebarWidth={sidebarWidth} />
     </div>

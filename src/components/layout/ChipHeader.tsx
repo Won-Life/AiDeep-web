@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { initialNodes } from "@/mock/mindmap";
 import { type Node } from "@xyflow/react";
 import { type NodeData } from "@/features/nodes/TextUpdateNode";
@@ -7,19 +7,17 @@ import { type NodeData } from "@/features/nodes/TextUpdateNode";
 interface ChipHeaderProps {
   sidebarWidth: number;
   onNodeFocus?: (nodeId: string) => void;
+  activeProjectId?: string | null;
 }
 
 export default function ChipHeader({
   sidebarWidth,
   onNodeFocus,
+  activeProjectId = null,
 }: ChipHeaderProps) {
   const mainNodes: Node<NodeData>[] = useMemo(
     () => initialNodes.filter((node) => node.data.isMain),
     [],
-  );
-
-  const [activeProjectId, setActiveProjectId] = useState(
-    mainNodes[0]?.id || "",
   );
 
   return (
@@ -32,7 +30,6 @@ export default function ChipHeader({
           <button
             key={node.id}
             onClick={() => {
-              setActiveProjectId(node.id);
               onNodeFocus?.(node.id);
             }}
             className={`px-4 py-2 rounded text-sm transition-colors ${
