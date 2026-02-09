@@ -106,6 +106,21 @@ function getGraphColor(
   return getRandomColorPair();
 }
 
+function isStandaloneNode(nodeId: string, nodes: Node[], edges: Edge[]): boolean {
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node || node.data?.isMain) return false;
+
+  const hasParent = getParentId(nodeId, edges) !== null;
+  const hasChildren = edges.some((edge) => edge.source === nodeId);
+  return !hasParent && !hasChildren;
+}
+
+function isCustomColorNode(nodeId: string, nodes: Node[]): boolean {
+  const node = nodes.find((n) => n.id === nodeId);
+  const color = node?.data?.color as string | undefined;
+  return Boolean(color && color !== DEFAULT_NODE_COLOR.bg);
+}
+
 function updateSubtreeColors(
   rootId: string,
   nodes: Node[],
@@ -657,14 +672,30 @@ function GraphCanvasInner({
     (params: Connection) => {
       if (!params.source || !params.target) return;
 
+      const sourceStandalone = isStandaloneNode(params.source, nodes, edges);
+      const targetStandalone = isStandaloneNode(params.target, nodes, edges);
+      const shouldAttachStandaloneToGraph =
+        sourceStandalone !== targetStandalone;
+
+      const sourceId = shouldAttachStandaloneToGraph
+        ? sourceStandalone
+          ? params.target
+          : params.source
+        : params.source;
+      const targetId = shouldAttachStandaloneToGraph
+        ? sourceStandalone
+          ? params.source
+          : params.target
+        : params.target;
+
       setEdges((snapshot) => {
-        if (isInvalidConnection(params.source, params.target, snapshot)) {
+        if (isInvalidConnection(sourceId, targetId, snapshot)) {
           return snapshot;
         }
         const rawEdge: Edge = {
-          id: `e-${params.source}-${params.target}-${Date.now()}`,
-          source: params.source,
-          target: params.target,
+          id: `e-${sourceId}-${targetId}-${Date.now()}`,
+          source: sourceId,
+          target: targetId,
         };
         const nextEdge = buildEdgePresentation(
           rawEdge,
@@ -677,9 +708,20 @@ function GraphCanvasInner({
 
       // 연결된 target 노드와 그 subtree의 색상을 source 노드 색상으로 업데이트
       setNodes((currentNodes) => {
-        const graphColor = getGraphColor(params.source, currentNodes, edges);
+        const sourceHasCustomColor = isCustomColorNode(sourceId, currentNodes);
+        const targetHasCustomColor = isCustomColorNode(targetId, currentNodes);
+
+        if (
+          !shouldAttachStandaloneToGraph &&
+          sourceHasCustomColor &&
+          targetHasCustomColor
+        ) {
+          return currentNodes;
+        }
+
+        const graphColor = getGraphColor(sourceId, currentNodes, edges);
         return updateSubtreeColors(
-          params.target!,
+          targetId,
           currentNodes,
           edges,
           graphColor,
