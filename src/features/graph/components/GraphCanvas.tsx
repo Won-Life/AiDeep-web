@@ -852,6 +852,12 @@ function GraphCanvasInner({
       // 연결 드래그 중이면 노드 생성하지 않음
       if (isConnectingRef.current) return;
 
+      // 입력박스가 열려 있으면 우선 닫고, 같은 클릭으로 노드 생성은 하지 않음
+      if (selectedNodeId !== null) {
+        setSelectedNodeId(null);
+        return;
+      }
+
       // (선택) 우클릭은 제외
       if (event.button !== 0) return;
 
@@ -878,7 +884,7 @@ function GraphCanvasInner({
 
       setNodes((prev) => [...prev, newNode]);
     },
-    [screenToFlowPosition],
+    [screenToFlowPosition, selectedNodeId],
   );
 
   const onNodeDragStart = useCallback(
