@@ -4,15 +4,15 @@ import { initialNodes } from "@/mock/mindmap";
 import { type Node } from "@xyflow/react";
 import { type NodeData } from "@/features/nodes/TextUpdateNode";
 
-interface CheapHeaderProps {
+interface ChipHeaderProps {
   sidebarWidth: number;
   onNodeFocus?: (nodeId: string) => void;
 }
 
-export default function CheapHeader({
+export default function ChipHeader({
   sidebarWidth,
   onNodeFocus,
-}: CheapHeaderProps) {
+}: ChipHeaderProps) {
   const mainNodes: Node<NodeData>[] = useMemo(
     () => initialNodes.filter((node) => node.data.isMain),
     [],

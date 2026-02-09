@@ -5,8 +5,8 @@ import Sidebar, {
   SIDEBAR_WIDTH,
   VISIBLE_BUTTON_WIDTH,
 } from "@/components/layout/Sidebar";
-import CheapHeader from "@/components/layout/CheapHeader";
 import DropDown from "@/components/ui/DropDown";
+import ChipHeader from "@/components/layout/ChipHeader";
 
 export default function GraphPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // 기본적으로 열림
@@ -25,7 +25,7 @@ export default function GraphPage() {
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
       />
 
-      <CheapHeader sidebarWidth={sidebarWidth} onNodeFocus={setFocusedNodeId} />
+      <ChipHeader sidebarWidth={sidebarWidth} onNodeFocus={setFocusedNodeId} />
 
       <DropDown sidebarWidth={sidebarWidth} />
     </div>
