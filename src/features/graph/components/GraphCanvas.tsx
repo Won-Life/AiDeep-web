@@ -812,18 +812,15 @@ function GraphCanvasInner({
   useEffect(() => {
     if (focusedNodeId) {
       const node = nodes.find((n) => n.id === focusedNodeId);
+      onFocusComplete?.();
+
       if (node) {
         const x = node.position.x + (node.width ?? NODE_WIDTH) / 2;
         const y = node.position.y + (node.height ?? NODE_HEIGHT) / 2;
         setCenter(x, y, { zoom: 1, duration: 800 });
-
-        // 포커스 애니메이션이 끝나면 선택 해제
-        setTimeout(() => {
-          onFocusComplete?.();
-        }, 800); // duration과 동일
       }
     }
-  }, [focusedNodeId, nodes, setCenter, onFocusComplete]);
+  }, [focusedNodeId, nodes, setCenter]);
 
   return (
     <div className="w-full h-full bg-background">
