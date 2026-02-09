@@ -10,6 +10,7 @@ import {
   type Node,
   type Edge,
   ConnectionMode,
+  ConnectionLineType,
   useReactFlow,
   ReactFlowProvider,
 } from "@xyflow/react";
@@ -338,6 +339,7 @@ function GraphCanvasInner({
   const d3NodesRef = useRef<D3Node[]>([]);
   const isDraggingRef = useRef(false);
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const isConnectingRef = useRef(false);
 
   /* =========================
      D3 Force Simulation 초기화
@@ -488,6 +490,65 @@ function GraphCanvasInner({
   );
 
   /* =========================
+     핸들 드래그로 빈 공간에 새 노드 생성
+     ========================= */
+  const onConnectStart = useCallback(() => {
+    isConnectingRef.current = true;
+  }, []);
+
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: any) => {
+      // 기존 노드에 연결되지 않았을 때 (빈 공간에 드롭)
+      if (!connectionState.isValid) {
+        // 마우스 위치 가져오기
+        const { clientX, clientY } =
+          "changedTouches" in event ? event.changedTouches[0] : event;
+
+        // flow 좌표로 변환
+        const position = screenToFlowPosition({
+          x: clientX,
+          y: clientY,
+        });
+
+        // 새 노드 ID 생성
+        const newNodeId = makeNodeId();
+
+        // 새 노드 생성
+        const newNode: Node = {
+          id: newNodeId,
+          type: "textUpdater",
+          position,
+          data: {
+            text: "새 노드",
+            isMain: false,
+            color: "#EFEFEF",
+          },
+        };
+
+        // 노드와 엣지 동시 추가
+        setNodes((nds) => [...nds, newNode]);
+        setEdges((eds) => {
+          const newEdge = buildEdgePresentation(
+            {
+              id: `e-${connectionState.fromNode.id}-${newNodeId}-${Date.now()}`,
+              source: connectionState.fromNode.id,
+              target: newNodeId,
+            },
+            [...nodes, newNode],
+          );
+          return [...eds, newEdge];
+        });
+      }
+
+      // onPaneClick이 실행되지 않도록 약간의 딜레이 후 플래그 해제
+      setTimeout(() => {
+        isConnectingRef.current = false;
+      }, 0);
+    },
+    [screenToFlowPosition, nodes],
+  );
+
+  /* =========================
      Node click → toggle input box
      ========================= */
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
@@ -500,6 +561,9 @@ function GraphCanvasInner({
      ========================= */
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
+      // 연결 드래그 중이면 노드 생성하지 않음
+      if (isConnectingRef.current) return;
+
       // (선택) 우클릭은 제외
       if (event.button !== 0) return;
 
@@ -832,6 +896,8 @@ function GraphCanvasInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
         onNodeClick={onNodeClick}
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
@@ -839,6 +905,7 @@ function GraphCanvasInner({
         onPaneClick={onPaneClick}
         fitView
         connectionMode={ConnectionMode.Loose}
+        connectionLineType={ConnectionLineType.SmoothStep}
       />
     </div>
   );
