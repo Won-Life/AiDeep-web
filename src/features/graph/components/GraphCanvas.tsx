@@ -22,6 +22,7 @@ import { initialEdges, initialNodes } from "@/mock/mindmap";
 import { getNodes } from "../api/getNodes";
 import type { EdgeDto, NodeDto } from "../types";
 import { rectCollide } from "../layout/rectCollide";
+import { getRandomColorPair, DEFAULT_NODE_COLOR } from "../constants/colors";
 
 // DB 저장 함수 (예시)
 async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
@@ -69,6 +70,62 @@ function getMainNodeForSubtree(
   }
 
   return undefined;
+}
+
+function getGraphColor(
+  parentNodeId: string,
+  nodes: Node[],
+  edges: Edge[],
+): { bg: string; text: string } {
+  const parentNode = nodes.find((n) => n.id === parentNodeId);
+
+  if (parentNode?.data?.isMain) {
+    const children = edges
+      .filter((e) => e.source === parentNodeId)
+      .map((e) => nodes.find((n) => n.id === e.target))
+      .filter((n): n is Node => n !== undefined);
+
+    if (children.length > 0 && children[0].data?.color) {
+      return {
+        bg: children[0].data.color as string,
+        text: (children[0].data.textColor as string) || DEFAULT_NODE_COLOR.text,
+      };
+    }
+
+    return getRandomColorPair();
+  }
+
+  if (parentNode?.data?.color) {
+    return {
+      bg: parentNode.data.color as string,
+      text: (parentNode.data.textColor as string) || DEFAULT_NODE_COLOR.text,
+    };
+  }
+
+  return getRandomColorPair();
+}
+
+function updateSubtreeColors(
+  rootId: string,
+  nodes: Node[],
+  edges: Edge[],
+  colorPair: { bg: string; text: string },
+): Node[] {
+  const descendantIds = getDescendantIds(rootId, edges);
+  const idsToUpdate = new Set([rootId, ...descendantIds]);
+
+  return nodes.map((node) =>
+    idsToUpdate.has(node.id) && !node.data?.isMain
+      ? {
+          ...node,
+          data: {
+            ...node.data,
+            color: colorPair.bg,
+            textColor: colorPair.text,
+          },
+        }
+      : node,
+  );
 }
 
 function getDescendantIds(nodeId: string, edges: Edge[]): Set<string> {
@@ -462,16 +519,41 @@ function GraphCanvasInner({
     });
   }, [nodes]);
 
-  const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) =>
-      setEdges((snapshot) => applyEdgeChanges(changes, snapshot)),
-    [],
-  );
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    setEdges((snapshot) => {
+      const removedEdges = changes
+        .filter((change) => change.type === "remove")
+        .map((change) => snapshot.find((edge) => edge.id === change.id))
+        .filter((edge): edge is Edge => edge !== undefined);
+
+      const updatedEdges = applyEdgeChanges(changes, snapshot);
+
+      if (removedEdges.length > 0) {
+        setNodes((currentNodes) => {
+          let updatedNodes = currentNodes;
+
+          removedEdges.forEach((edge) => {
+            updatedNodes = updateSubtreeColors(
+              edge.target,
+              updatedNodes,
+              updatedEdges,
+              DEFAULT_NODE_COLOR,
+            );
+          });
+
+          return updatedNodes;
+        });
+      }
+
+      return updatedEdges;
+    });
+  }, []);
 
   const onConnect = useCallback(
-    (params: Connection) =>
+    (params: Connection) => {
+      if (!params.source || !params.target) return;
+
       setEdges((snapshot) => {
-        if (!params.source || !params.target) return snapshot;
         if (isInvalidConnection(params.source, params.target, snapshot)) {
           return snapshot;
         }
@@ -485,8 +567,20 @@ function GraphCanvasInner({
         );
 
         return [...snapshot, nextEdge];
-      }),
-    [nodes],
+      });
+
+      // 연결된 target 노드와 그 subtree의 색상을 source 노드 색상으로 업데이트
+      setNodes((currentNodes) => {
+        const graphColor = getGraphColor(params.source, currentNodes, edges);
+        return updateSubtreeColors(
+          params.target!,
+          currentNodes,
+          edges,
+          graphColor,
+        );
+      });
+    },
+    [nodes, edges],
   );
 
   /* =========================
@@ -513,6 +607,13 @@ function GraphCanvasInner({
         // 새 노드 ID 생성
         const newNodeId = makeNodeId();
 
+        // source 노드의 색상 가져오기
+        const colorPair = getGraphColor(
+          connectionState.fromNode.id,
+          nodes,
+          edges,
+        );
+
         // 새 노드 생성
         const newNode: Node = {
           id: newNodeId,
@@ -521,7 +622,8 @@ function GraphCanvasInner({
           data: {
             text: "새 노드",
             isMain: false,
-            color: "#EFEFEF",
+            color: colorPair.bg,
+            textColor: colorPair.text,
           },
         };
 
@@ -545,7 +647,7 @@ function GraphCanvasInner({
         isConnectingRef.current = false;
       }, 0);
     },
-    [screenToFlowPosition, nodes],
+    [screenToFlowPosition, nodes, edges],
   );
 
   /* =========================
@@ -583,8 +685,8 @@ function GraphCanvasInner({
         data: {
           text: "새 노드",
           isMain: false,
-          // color는 DS 토큰으로 가는 게 좋지만 일단 기존 패턴 유지
-          color: "#EFEFEF",
+          color: DEFAULT_NODE_COLOR.bg,
+          textColor: DEFAULT_NODE_COLOR.text,
         },
       };
 
@@ -773,6 +875,17 @@ function GraphCanvasInner({
             );
 
             return [...filtered, newEdge];
+          });
+
+          // 4. 드래그된 노드와 그 subtree의 색상을 새 부모 노드 색상으로 업데이트
+          setNodes((currentNodes) => {
+            const graphColor = getGraphColor(newParent.id, currentNodes, edges);
+            return updateSubtreeColors(
+              draggedNode.id,
+              currentNodes,
+              edges,
+              graphColor,
+            );
           });
         }
       }
