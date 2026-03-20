@@ -660,6 +660,8 @@ function GraphCanvasInner({
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         onChange: (nodeId: string, value: string) =>
           handleNodeDataChange(nodeId, { text: value }),
+        onContentChange: (nodeId: string, content: string) =>
+          handleNodeDataChange(nodeId, { content }),
       },
     };
   });

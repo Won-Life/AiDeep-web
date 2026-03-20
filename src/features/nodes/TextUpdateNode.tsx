@@ -5,9 +5,11 @@ import {
   type NodeProps,
   useUpdateNodeInternals,
 } from "@xyflow/react";
+import { NotionEditor } from "@/features/editor/NotionEditor";
 
 export type NodeData = {
   text?: string;
+  content?: string; // 에디터 JSON 내용
   label?: string;
   color?: string;
   textColor?: string; // 텍스트 색상
@@ -17,6 +19,7 @@ export type NodeData = {
   showInputBox?: boolean; // 입력박스 표시 여부
   isHovered?: boolean; // 드래그 중 hover 상태
   onChange?: (nodeId: string, value: string) => void;
+  onContentChange?: (nodeId: string, content: string) => void; // 에디터 내용 저장 콜백
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {
@@ -88,34 +91,30 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
 
   return (
     <div className="relative">
-      {/* 입력박스 - 노드 뒤에 배치 */}
-      {/* TODO: 새 노드 생성될 때 숨김 처리 / 입력 박스 클릭 시 숨김 처리 X -> 숨김 처리 조건: 입력 박스 외부 클릭 시로 설정*/}
+      {/* 노션 에디터 패널 - 노드 뒤에 배치 */}
       {showInputBox && (
         <div
-          className="absolute bg-white border rounded-lg shadow-md p-4"
+          className="absolute bg-white border rounded-lg shadow-lg overflow-hidden flex flex-col"
           style={{
-            width: "300px",
-            height: "200px",
-            top: "50%", // 노드 높이의 중간부터 시작
-            borderColor: EDGE_COLOR, // 엣지와 같은 색상
+            width: "360px",
+            minHeight: "220px",
+            maxHeight: "480px",
+            top: "100%",
+            marginTop: "4px",
+            borderColor: EDGE_COLOR,
             ...(handleSide === "left"
-              ? {
-                  // 좌측 노드: 입력박스의 우측이 노드의 우측 끝과 맞닿음
-                  right: 0,
-                }
-              : {
-                  // 우측 노드: 입력박스의 좌측이 노드의 좌측 끝과 맞닿음
-                  left: 0,
-                }),
-            zIndex: 0, // 노드보다 뒤, 다른 노드들보다는 위
+              ? { right: 0 }
+              : { left: 0 }),
+            zIndex: 0,
           }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
-          <p className="text-sm text-muted">입력칸 (임시)</p>
-          <p className="text-xs text-muted mt-2">
-            Node ID: {id}
-            <br />
-            Side: {handleSide}
-          </p>
+          <NotionEditor
+            nodeId={id}
+            initialContent={nodeData.content}
+            onSave={nodeData.onContentChange}
+          />
         </div>
       )}
 
