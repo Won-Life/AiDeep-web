@@ -96,14 +96,22 @@ function ProjectList({
               autoFocus
               placeholder="이름 입력..."
               defaultValue={project.name}
-              className="sidebar-new-input bg-transparent border-none outline-none flex-1"
-              style={{ fontSize: 14, color: "rgb(var(--foreground))" }}
+              className="sidebar-new-input bg-transparent border-none outline-none"
+              style={{ fontSize: 14, color: "rgb(var(--foreground))", flex: 1, minWidth: 0 }}
               onBlur={(e) => onSaveName(project.id, e.target.value.trim())}
               onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
             />
           ) : (
             <span
-              style={{ fontSize: 14, color: "rgb(var(--foreground))", cursor: "text" }}
+              style={{
+                fontSize: 14,
+                color: "rgb(var(--foreground))",
+                cursor: "text",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                minWidth: 0,
+              }}
               onClick={() => onStartEdit(project.id)}
             >
               {project.name || <span style={{ color: "rgb(var(--ds-gray-500))" }}>이름 입력...</span>}
@@ -158,15 +166,15 @@ function ResourceTree({
             {item.isEditing ? (
               <input
                 autoFocus
-                placeholder="이름 입력..."
+                placeholder="내용을 입력하세요"
                 defaultValue={item.name}
                 className="sidebar-new-input rounded-full px-3 py-1 border-none outline-none"
                 style={{
                   fontSize: 13,
                   background: "rgb(var(--ds-gray-800))",
                   color: "rgb(var(--foreground))",
-                  minWidth: 0,
-                  width: 110,
+                  width: "90%",
+                  display: "inline-block",
                 }}
                 onBlur={(e) => onSaveName(item.id, e.target.value.trim())}
                 onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
@@ -174,10 +182,20 @@ function ResourceTree({
             ) : (
               <span
                 className="rounded-full px-3 py-1"
-                style={{ fontSize: 13, background: "rgb(var(--ds-gray-800))", color: "rgb(var(--foreground))", cursor: "text" }}
+                style={{
+                  fontSize: 13,
+                  background: "rgb(var(--ds-gray-800))",
+                  color: "rgb(var(--foreground))",
+                  cursor: "text",
+                  maxWidth: "90%",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  display: "inline-block",
+                }}
                 onClick={() => onStartEdit(item.id)}
               >
-                {item.name || <span style={{ color: "rgb(var(--ds-gray-500))" }}>이름 입력...</span>}
+                {item.name || <span style={{ color: "rgb(var(--ds-gray-500))" }}>내용을 입력하세요</span>}
               </span>
             )}
           </div>
@@ -230,6 +248,9 @@ function ResourceList({
                   color: "rgb(var(--foreground))",
                   borderColor: "rgb(var(--ds-black))",
                   background: "transparent",
+                  maxWidth: "90%",
+                  minWidth: 0,
+                  width: resource.isEditing ? "90%" : undefined,
                 }}
               >
                 {resource.isEditing ? (
@@ -238,22 +259,28 @@ function ResourceList({
                     placeholder="이름 입력..."
                     defaultValue={resource.name}
                     className="sidebar-new-input bg-transparent border-none outline-none"
-                    style={{ fontSize: 13, color: "rgb(var(--foreground))", width: 80 }}
+                    style={{ fontSize: 13, color: "rgb(var(--foreground))", flex: 1, minWidth: 0 }}
                     onBlur={(e) => onSaveResourceName(resource.id, e.target.value.trim())}
                     onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   />
                 ) : (
                   <span
-                    style={{ cursor: "text" }}
+                    style={{
+                      cursor: "text",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
                     onClick={(e) => { e.stopPropagation(); onStartEditResource(resource.id); }}
                   >
                     {resource.name || <span style={{ color: "rgb(var(--ds-gray-500))" }}>이름 입력...</span>}
                   </span>
                 )}
-                {hasSubItems && !resource.isEditing && (
+                {hasSubItems && (
                   <svg
                     width="10" height="10" viewBox="0 0 10 10"
                     fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round"
+                    style={{ flexShrink: 0 }}
                   >
                     {isExpanded
                       ? <path d="M2 6.5L5 3.5L8 6.5" />
