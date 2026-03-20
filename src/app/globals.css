@@ -204,6 +204,19 @@
 /* =========================
    Notion Editor – Lexical theme classes
    ========================= */
+/* ── Scrollbar hide ── */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Sidebar new item input placeholder ── */
+.sidebar-new-input::placeholder {
+  color: rgb(var(--ds-gray-500));
+}
+
 @layer components {
   /* ── Headings ── */
   .ne-h1 {
