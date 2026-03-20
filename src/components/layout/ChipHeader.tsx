@@ -32,11 +32,18 @@ export default function ChipHeader({
             onClick={() => {
               onNodeFocus?.(node.id);
             }}
-            className={`px-4 py-2 rounded text-sm transition-colors ${
-              activeProjectId === node.id
-                ? "bg-surface-active text-foreground font-medium"
-                : "bg-background text-muted hover:bg-surface-hover"
-            }`}
+            className="text-sm transition-colors hover:bg-surface"
+            style={{
+              border: "1px solid rgb(var(--ds-gray-700))",
+              borderRadius: 50,
+              paddingLeft: 15,
+              paddingRight: 15,
+              paddingTop: 10,
+              paddingBottom: 10,
+              backgroundColor: activeProjectId === node.id ? "rgb(var(--surface-hover))" : undefined,
+              color: activeProjectId === node.id ? "rgb(var(--foreground))" : "rgb(var(--muted))",
+              fontWeight: activeProjectId === node.id ? 500 : 400,
+            }}
           >
             {node.data?.text}
           </button>

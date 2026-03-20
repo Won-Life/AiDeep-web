@@ -29,7 +29,7 @@ export function BranchEdge(props: EdgeProps) {
 
   return (
     <>
-      <BaseEdge id={id} path={mergedPath} markerEnd={markerEnd} />
+      <BaseEdge id={id} path={mergedPath} markerEnd={markerEnd} style={{ stroke: "rgb(var(--ds-gray-700))", strokeWidth: 1 }} />
     </>
   );
 }
