@@ -202,6 +202,107 @@
 }
 
 /* =========================
+   Notion Editor – Lexical theme classes
+   ========================= */
+@layer components {
+  /* ── Headings ── */
+  .ne-h1 {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.35;
+    margin: 12px 0 3px;
+    color: inherit;
+  }
+  .ne-h2 {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin: 10px 0 2px;
+    color: inherit;
+  }
+  .ne-h3 {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin: 8px 0 2px;
+    color: inherit;
+  }
+
+  /* ── Lists ── */
+  .ne-ul {
+    list-style-type: disc;
+    padding-left: 20px;
+    margin: 4px 0;
+  }
+  .ne-ol {
+    list-style-type: decimal;
+    padding-left: 20px;
+    margin: 4px 0;
+  }
+  .ne-li {
+    font-size: 13px;
+    line-height: 1.7;
+    margin: 2px 0;
+  }
+  .ne-nested-li {
+    margin-left: 16px;
+  }
+
+  /* ── Quote ── */
+  .ne-quote {
+    border-left: 3px solid rgb(var(--ds-gray-700));
+    padding-left: 12px;
+    color: rgb(var(--ds-gray-400));
+    font-style: italic;
+    margin: 6px 0;
+    font-size: 13px;
+  }
+
+  /* ── Code block ── */
+  .ne-code-block {
+    background: rgb(var(--ds-gray-900));
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 6px 0;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 12px;
+    display: block;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    color: rgb(var(--ds-text-gray));
+    counter-reset: ne-code-line;
+  }
+
+  /* ── Text formats ── */
+  .ne-bold { font-weight: 700; }
+  .ne-italic { font-style: italic; }
+  .ne-underline { text-decoration: underline; }
+  .ne-strike { text-decoration: line-through; }
+  .ne-underline.ne-strike { text-decoration: underline line-through; }
+  .ne-inline-code {
+    background: rgb(var(--ds-gray-900));
+    border: 1px solid rgb(var(--ds-gray-800));
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 12px;
+    color: #D44;
+  }
+
+  /* ── Editor root ── */
+  .ne-root {
+    outline: none;
+    min-height: 80px;
+    font-size: 13px;
+    line-height: 1.75;
+    color: rgb(var(--foreground));
+  }
+  .ne-root p {
+    margin: 1px 0;
+  }
+}
+
+/* =========================
    Typography utility classes
    (Design system text styles)
    ========================= */
