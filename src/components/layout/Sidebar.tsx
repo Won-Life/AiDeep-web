@@ -89,7 +89,11 @@ function ProjectList({
         >
           <span
             className="shrink-0 rounded-sm"
-            style={{ width: 18, height: 18, background: "rgb(var(--ds-gray-700))" }}
+            style={{
+              width: 18,
+              height: 18,
+              background: "rgb(var(--ds-gray-700))",
+            }}
           />
           {project.isEditing ? (
             <input
@@ -97,9 +101,16 @@ function ProjectList({
               placeholder="이름 입력..."
               defaultValue={project.name}
               className="sidebar-new-input bg-transparent border-none outline-none"
-              style={{ fontSize: 14, color: "rgb(var(--foreground))", flex: 1, minWidth: 0 }}
+              style={{
+                fontSize: 14,
+                color: "rgb(var(--foreground))",
+                flex: 1,
+                minWidth: 0,
+              }}
               onBlur={(e) => onSaveName(project.id, e.target.value.trim())}
-              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
             />
           ) : (
             <span
@@ -114,7 +125,11 @@ function ProjectList({
               }}
               onClick={() => onStartEdit(project.id)}
             >
-              {project.name || <span style={{ color: "rgb(var(--ds-gray-500))" }}>이름 입력...</span>}
+              {project.name || (
+                <span style={{ color: "rgb(var(--ds-gray-500))" }}>
+                  이름 입력...
+                </span>
+              )}
             </span>
           )}
         </li>
@@ -144,12 +159,22 @@ function ResourceTree({
     <div className="ml-3">
       {subItems.map((item, idx) => {
         const isLast = idx === subItems.length - 1;
+        const isFirst = idx === 0;
+        const topExtend = isFirst ? BRIDGE_H : 0;
         return (
-          <div key={item.id} className="flex items-center" style={{ height: ITEM_H }}>
-            <svg width="20" height={ITEM_H} style={{ flexShrink: 0 }}>
+          <div
+            key={item.id}
+            className="flex items-center"
+            style={{ height: ITEM_H }}
+          >
+            <svg
+              width="20"
+              height={ITEM_H}
+              style={{ flexShrink: 0, overflow: "visible" }}
+            >
               {isLast ? (
                 <path
-                  d={`M ${VX} 0 L ${VX} ${ITEM_H / 2 - R} Q ${VX} ${ITEM_H / 2} ${VX + R} ${ITEM_H / 2} L 20 ${ITEM_H / 2}`}
+                  d={`M ${VX} ${-topExtend} L ${VX} ${ITEM_H / 2 - R} Q ${VX} ${ITEM_H / 2} ${VX + R} ${ITEM_H / 2} L 20 ${ITEM_H / 2}`}
                   fill="none"
                   stroke="rgb(var(--ds-black))"
                   strokeWidth="1"
@@ -157,8 +182,24 @@ function ResourceTree({
                 />
               ) : (
                 <>
-                  <line x1={VX} y1="0" x2={VX} y2={ITEM_H} stroke="rgb(var(--ds-black))" strokeWidth="1" strokeLinecap="round" />
-                  <line x1={VX} y1={ITEM_H / 2} x2="20" y2={ITEM_H / 2} stroke="rgb(var(--ds-black))" strokeWidth="1" strokeLinecap="round" />
+                  <line
+                    x1={VX}
+                    y1={-topExtend}
+                    x2={VX}
+                    y2={ITEM_H}
+                    stroke="rgb(var(--ds-black))"
+                    strokeWidth="1"
+                    strokeLinecap="round"
+                  />
+                  <line
+                    x1={VX}
+                    y1={ITEM_H / 2}
+                    x2="20"
+                    y2={ITEM_H / 2}
+                    stroke="rgb(var(--ds-black))"
+                    strokeWidth="1"
+                    strokeLinecap="round"
+                  />
                 </>
               )}
             </svg>
@@ -177,7 +218,9 @@ function ResourceTree({
                   display: "inline-block",
                 }}
                 onBlur={(e) => onSaveName(item.id, e.target.value.trim())}
-                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
               />
             ) : (
               <span
@@ -195,7 +238,11 @@ function ResourceTree({
                 }}
                 onClick={() => onStartEdit(item.id)}
               >
-                {item.name || <span style={{ color: "rgb(var(--ds-gray-500))" }}>내용을 입력하세요</span>}
+                {item.name || (
+                  <span style={{ color: "rgb(var(--ds-gray-500))" }}>
+                    내용을 입력하세요
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -207,9 +254,7 @@ function ResourceTree({
 
 // ─── ResourceList ─────────────────────────────────────────────────────────────
 
-// Resource pill ~ 트리 연결: ml-3(12px) + VX(8px) = 20px
-const BRIDGE_LEFT = 20;
-const BRIDGE_H = 8;
+const BRIDGE_H = 8; // 첫 번째 트리 아이템 수직선 위쪽 연장 길이
 
 function ResourceList({
   resources,
@@ -226,7 +271,11 @@ function ResourceList({
   onToggleExpand: (id: string) => void;
   onAddSubItem: (resourceId: string) => void;
   onSaveResourceName: (id: string, name: string) => void;
-  onSaveSubItemName: (resourceId: string, subItemId: string, name: string) => void;
+  onSaveSubItemName: (
+    resourceId: string,
+    subItemId: string,
+    name: string,
+  ) => void;
   onStartEditResource: (id: string) => void;
   onStartEditSubItem: (resourceId: string, subItemId: string) => void;
 }) {
@@ -241,7 +290,11 @@ function ResourceList({
             <div className="flex items-center gap-2">
               {/* Resource 토글 버튼 */}
               <button
-                onClick={() => !resource.isEditing && hasSubItems && onToggleExpand(resource.id)}
+                onClick={() =>
+                  !resource.isEditing &&
+                  hasSubItems &&
+                  onToggleExpand(resource.id)
+                }
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer"
                 style={{
                   fontSize: 13,
@@ -259,9 +312,18 @@ function ResourceList({
                     placeholder="이름 입력..."
                     defaultValue={resource.name}
                     className="sidebar-new-input bg-transparent border-none outline-none"
-                    style={{ fontSize: 13, color: "rgb(var(--foreground))", flex: 1, minWidth: 0 }}
-                    onBlur={(e) => onSaveResourceName(resource.id, e.target.value.trim())}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                    style={{
+                      fontSize: 13,
+                      color: "rgb(var(--foreground))",
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                    onBlur={(e) =>
+                      onSaveResourceName(resource.id, e.target.value.trim())
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
                   />
                 ) : (
                   <span
@@ -271,21 +333,34 @@ function ResourceList({
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                     }}
-                    onClick={(e) => { e.stopPropagation(); onStartEditResource(resource.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartEditResource(resource.id);
+                    }}
                   >
-                    {resource.name || <span style={{ color: "rgb(var(--ds-gray-500))" }}>이름 입력...</span>}
+                    {resource.name || (
+                      <span style={{ color: "rgb(var(--ds-gray-500))" }}>
+                        이름 입력...
+                      </span>
+                    )}
                   </span>
                 )}
                 {hasSubItems && (
                   <svg
-                    width="10" height="10" viewBox="0 0 10 10"
-                    fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round"
+                    width="10"
+                    height="10"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                    strokeLinecap="round"
                     style={{ flexShrink: 0 }}
                   >
-                    {isExpanded
-                      ? <path d="M2 6.5L5 3.5L8 6.5" />
-                      : <path d="M2 3.5L5 6.5L8 3.5" />
-                    }
+                    {isExpanded ? (
+                      <path d="M2 6.5L5 3.5L8 6.5" />
+                    ) : (
+                      <path d="M2 3.5L5 6.5L8 3.5" />
+                    )}
                   </svg>
                 )}
               </button>
@@ -294,24 +369,30 @@ function ResourceList({
               <button
                 onClick={() => onAddSubItem(resource.id)}
                 className="flex items-center justify-center cursor-pointer"
-                style={{ fontSize: 18, color: "rgb(var(--ds-gray-400))", background: "transparent", flexShrink: 0 }}
+                style={{
+                  fontSize: 18,
+                  color: "rgb(var(--ds-gray-400))",
+                  background: "transparent",
+                  flexShrink: 0,
+                }}
               >
                 +
               </button>
             </div>
 
-            {/* Resource pill → 트리 연결선 (브릿지) */}
-            {isExpanded && hasSubItems && (
-              <div style={{ marginLeft: BRIDGE_LEFT, width: 1, height: BRIDGE_H, background: "rgb(var(--ds-black))" }} />
-            )}
-
             {/* 서브 아이템 트리 */}
             {isExpanded && (
-              <ResourceTree
-                subItems={resource.subItems}
-                onSaveName={(subItemId, name) => onSaveSubItemName(resource.id, subItemId, name)}
-                onStartEdit={(subItemId) => onStartEditSubItem(resource.id, subItemId)}
-              />
+              <div style={{ marginTop: BRIDGE_H }}>
+                <ResourceTree
+                  subItems={resource.subItems}
+                  onSaveName={(subItemId, name) =>
+                    onSaveSubItemName(resource.id, subItemId, name)
+                  }
+                  onStartEdit={(subItemId) =>
+                    onStartEditSubItem(resource.id, subItemId)
+                  }
+                />
+              </div>
             )}
           </div>
         );
@@ -331,13 +412,18 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
   const [expanded, setExpanded] = useState<Set<string>>(
-    new Set(INITIAL_RESOURCES.filter((r) => r.subItems.length > 0).map((r) => r.id)),
+    new Set(
+      INITIAL_RESOURCES.filter((r) => r.subItems.length > 0).map((r) => r.id),
+    ),
   );
 
   // ── Project handlers ──────────────────────────────────────────────────────
 
   const addProject = () => {
-    setProjects((prev) => [...prev, { id: makeId(), name: "", isEditing: true }]);
+    setProjects((prev) => [
+      ...prev,
+      { id: makeId(), name: "", isEditing: true },
+    ]);
   };
 
   const saveProjectName = (id: string, name: string) => {
@@ -349,7 +435,10 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   // ── Resource handlers ─────────────────────────────────────────────────────
 
   const addResource = () => {
-    setResources((prev) => [...prev, { id: makeId(), name: "", subItems: [], isEditing: true }]);
+    setResources((prev) => [
+      ...prev,
+      { id: makeId(), name: "", subItems: [], isEditing: true },
+    ]);
   };
 
   const saveResourceName = (id: string, name: string) => {
@@ -362,7 +451,13 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     setResources((prev) =>
       prev.map((r) =>
         r.id === resourceId
-          ? { ...r, subItems: [...r.subItems, { id: makeId(), name: "", isEditing: true }] }
+          ? {
+              ...r,
+              subItems: [
+                ...r.subItems,
+                { id: makeId(), name: "", isEditing: true },
+              ],
+            }
           : r,
       ),
     );
@@ -371,24 +466,37 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   };
 
   const startEditProject = (id: string) => {
-    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, isEditing: true } : p)));
+    setProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, isEditing: true } : p)),
+    );
   };
 
   const startEditResource = (id: string) => {
-    setResources((prev) => prev.map((r) => (r.id === id ? { ...r, isEditing: true } : r)));
+    setResources((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, isEditing: true } : r)),
+    );
   };
 
   const startEditSubItem = (resourceId: string, subItemId: string) => {
     setResources((prev) =>
       prev.map((r) =>
         r.id === resourceId
-          ? { ...r, subItems: r.subItems.map((s) => (s.id === subItemId ? { ...s, isEditing: true } : s)) }
+          ? {
+              ...r,
+              subItems: r.subItems.map((s) =>
+                s.id === subItemId ? { ...s, isEditing: true } : s,
+              ),
+            }
           : r,
       ),
     );
   };
 
-  const saveSubItemName = (resourceId: string, subItemId: string, name: string) => {
+  const saveSubItemName = (
+    resourceId: string,
+    subItemId: string,
+    name: string,
+  ) => {
     setResources((prev) =>
       prev.map((r) =>
         r.id === resourceId
@@ -433,12 +541,22 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span style={{ fontSize: 18, fontWeight: 700, color: "rgb(var(--foreground))" }}>
+              <span
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "rgb(var(--foreground))",
+                }}
+              >
                 Project
               </span>
               <button
                 onClick={addProject}
-                style={{ fontSize: 22, color: "rgb(var(--ds-black))", lineHeight: 1 }}
+                style={{
+                  fontSize: 22,
+                  color: "rgb(var(--ds-black))",
+                  lineHeight: 1,
+                }}
                 className="cursor-pointer"
               >
                 +
@@ -447,24 +565,42 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             <button
               onClick={onToggle}
               className="cursor-pointer"
-              style={{ fontSize: 20, color: "rgb(var(--ds-gray-500))", fontWeight: 600 }}
+              style={{
+                fontSize: 20,
+                color: "rgb(var(--ds-gray-500))",
+                fontWeight: 600,
+              }}
             >
               {isOpen ? "«" : "»"}
             </button>
           </div>
 
-          <ProjectList projects={projects} onSaveName={saveProjectName} onStartEdit={startEditProject} />
+          <ProjectList
+            projects={projects}
+            onSaveName={saveProjectName}
+            onStartEdit={startEditProject}
+          />
         </div>
 
         {/* Resource 섹션 */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <span style={{ fontSize: 18, fontWeight: 700, color: "rgb(var(--foreground))" }}>
+            <span
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: "rgb(var(--foreground))",
+              }}
+            >
               Resource
             </span>
             <button
               onClick={addResource}
-              style={{ fontSize: 22, color: "rgb(var(--ds-black))", lineHeight: 1 }}
+              style={{
+                fontSize: 22,
+                color: "rgb(var(--ds-black))",
+                lineHeight: 1,
+              }}
               className="cursor-pointer"
             >
               +
@@ -491,7 +627,13 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
       >
         <button
           className="flex items-center justify-center rounded-full cursor-pointer"
-          style={{ width: 24, height: 24, fontSize: 13, color: "rgb(var(--ds-gray-500))", border: "1.5px solid rgb(var(--ds-gray-600))" }}
+          style={{
+            width: 24,
+            height: 24,
+            fontSize: 13,
+            color: "rgb(var(--ds-gray-500))",
+            border: "1.5px solid rgb(var(--ds-gray-600))",
+          }}
         >
           ?
         </button>
@@ -501,12 +643,60 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
           title="레이아웃"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <rect x="1" y="1" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="1" y="7" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="1" y="13" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="10" y="1" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="10" y="7" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="10" y="13" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
+            <rect
+              x="1"
+              y="1"
+              width="7"
+              height="4"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1"
+            />
+            <rect
+              x="1"
+              y="7"
+              width="7"
+              height="4"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1"
+            />
+            <rect
+              x="1"
+              y="13"
+              width="7"
+              height="4"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1"
+            />
+            <rect
+              x="10"
+              y="1"
+              width="7"
+              height="4"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1"
+            />
+            <rect
+              x="10"
+              y="7"
+              width="7"
+              height="4"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1"
+            />
+            <rect
+              x="10"
+              y="13"
+              width="7"
+              height="4"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1"
+            />
           </svg>
         </button>
       </div>
