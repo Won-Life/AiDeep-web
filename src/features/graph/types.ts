@@ -1,49 +1,42 @@
-export type Timestamp = string | number;
-export type NodeType = string;
-export type ContentType = string;
-export type ReferenceType = string;
+export type NodeType = "PROJECT" | "DATA" | "RESOURCE" | "ARCHIVE";
 
-export interface WhiteboardResponse {
-  whiteboardId: string;
-  graphs: GraphDto[];
-  meta: {
-    updatedAt: Timestamp;
-    version: number;
-    name?: string | null;
-  };
-}
-
-export interface GraphDto {
-  graphId: string;
+/** GET /workspace/sync 응답의 success 필드 */
+export interface SyncResponse {
   nodes: NodeDto[];
   edges: EdgeDto[];
-  meta: {
-    updatedAt: string;
-  };
+}
+
+export interface NodeContent {
+  dataType?: string;
+  color?: string;
+  textColor?: string;
+  markdownBody?: string;
+  jsonBody?: string;
 }
 
 export interface NodeDto {
-  nodeId: string;
-  nodeType: NodeType;
-  contentType: ContentType;
-  position: { x: number; y: number };
-  color: string;
-  meta: {
-    updatedAt: string;
-    createdAt: string;
-    starred: boolean;
-  };
+  node_id: string;
   title: string;
-  body?: string | null;
-  referenceType?: ReferenceType | null;
-  referenceid?: string | null;
+  node_type: NodeType;
+  content: NodeContent;
+  version: number;
+  position_x: number;
+  position_y: number;
+  workspace_id: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface EdgeDto {
-  edgeId: string;
-  source: string;
-  target: string;
-  type?: string | null;
-  sourceHandle?: string | null;
-  targetHandle?: string | null;
+  edge_id: string;
+  workspace_id: string;
+  source_id: string;
+  target_id: string;
+  source_handle: string;
+  target_handle: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }

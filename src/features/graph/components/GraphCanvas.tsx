@@ -27,6 +27,8 @@ import * as d3 from "d3";
 import { nodeTypes } from "@/types/nodeTypes";
 import { edgeTypes } from "@/types/edgeTypes";
 import { getNodes } from "../api/getNodes";
+import { createMdNode, moveNode } from "../api/nodes";
+import { createEdge } from "../api/edges";
 import type { EdgeDto, NodeDto } from "../types";
 import { rectCollide } from "../layout/rectCollide";
 import { getRandomColorPair, DEFAULT_NODE_COLOR } from "../constants/colors";
@@ -582,6 +584,7 @@ interface D3Node extends d3.SimulationNodeDatum {
 }
 
 interface GraphCanvasInnerProps {
+  workspaceId: string;
   focusedNodeId: string | null;
   onFocusComplete?: () => void;
   nodes: Node[];
@@ -591,6 +594,7 @@ interface GraphCanvasInnerProps {
 }
 
 function GraphCanvasInner({
+  workspaceId,
   focusedNodeId,
   onFocusComplete,
   nodes,
@@ -995,8 +999,17 @@ function GraphCanvasInner({
           graphColor,
         );
       });
+
+      // API: 엣지 생성
+      createEdge(
+        workspaceId,
+        sourceId,
+        targetId,
+        params.sourceHandle ?? "source-side",
+        params.targetHandle ?? "target-side",
+      ).catch((err) => console.error("[createEdge] failed", err));
     },
-    [nodes, edges],
+    [nodes, edges, workspaceId],
   );
 
   /* =========================
@@ -1102,6 +1115,18 @@ function GraphCanvasInner({
           );
           return [...eds, newEdge];
         });
+
+        // API: 노드 생성 + 엣지 생성
+        createMdNode(workspaceId, "새 노드", adjustedPosition).catch((err) =>
+          console.error("[createMdNode] failed", err),
+        );
+        createEdge(
+          workspaceId,
+          connectionState.fromNode.id,
+          newNodeId,
+          fromHandle || "source-side",
+          "target-side",
+        ).catch((err) => console.error("[createEdge] failed", err));
       }
 
       // onPaneClick이 실행되지 않도록 약간의 딜레이 후 플래그 해제
@@ -1565,8 +1590,14 @@ function GraphCanvasInner({
 
       // 드래그 위치 초기화
       previousDragPositionRef.current = null;
+
+      // API: 노드 위치 저장
+      moveNode(workspaceId, draggedNode.id, {
+        x: draggedNode.position.x,
+        y: draggedNode.position.y,
+      }).catch((err) => console.error("[moveNode] failed", err));
     },
-    [nodes, edges, hoveredNodeId],
+    [nodes, edges, hoveredNodeId, workspaceId],
   );
 
   /* =========================
@@ -1581,24 +1612,25 @@ function GraphCanvasInner({
     edges: Edge[];
   } {
     const nodes: Node[] = graphNodes.map((n) => ({
-      id: n.nodeId,
+      id: n.node_id,
       type: "textUpdater",
-      position: n.position,
+      position: { x: n.position_x, y: n.position_y },
       data: {
         text: n.title,
-        color: n.color,
-        isMain: n.nodeType === "PROJECT",
-        nodeType: n.nodeType,
+        color: n.content?.color ?? DEFAULT_NODE_COLOR.bg,
+        textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
+        isMain: n.node_type === "PROJECT",
+        nodeType: n.node_type,
       },
     }));
 
     const rawEdges: Edge[] = graphEdges.map((e) => ({
-      id: e.edgeId,
-      source: e.source,
-      target: e.target,
-      type: e.type ?? "branch",
-      sourceHandle: e.sourceHandle ?? "source-side",
-      targetHandle: e.targetHandle ?? "target-side",
+      id: e.edge_id,
+      source: e.source_id,
+      target: e.target_id,
+      type: "branch",
+      sourceHandle: e.source_handle ?? "source-side",
+      targetHandle: e.target_handle ?? "target-side",
       data: {},
     }));
 
@@ -1706,6 +1738,7 @@ function GraphCanvasInner({
 }
 
 interface GraphCanvasProps {
+  workspaceId: string;
   focusedNodeId?: string | null;
   onFocusComplete?: () => void;
   nodes: Node[];
@@ -1715,6 +1748,7 @@ interface GraphCanvasProps {
 }
 
 export default function GraphCanvas({
+  workspaceId,
   focusedNodeId = null,
   onFocusComplete,
   nodes,
@@ -1725,6 +1759,7 @@ export default function GraphCanvas({
   return (
     <ReactFlowProvider>
       <GraphCanvasInner
+        workspaceId={workspaceId}
         focusedNodeId={focusedNodeId}
         onFocusComplete={onFocusComplete}
         nodes={nodes}

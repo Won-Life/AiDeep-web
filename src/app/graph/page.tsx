@@ -12,6 +12,7 @@ import DropDown from "@/components/ui/DropDown";
 import ChipHeader from "@/components/layout/ChipHeader";
 import { initialEdges, initialNodes } from "@/mock/mindmap";
 import { getNodes } from "@/features/graph/api/getNodes";
+import { toFlowNode, toFlowEdge } from "@/features/graph/api/mappers";
 
 const INITIAL_PROJECTS: Project[] = [
   { id: "p1", name: "Project 1" },
@@ -55,6 +56,8 @@ function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
+const WORKSPACE_ID = "08612bb4-2dd8-471b-9133-bbc213f97aee";
+
 export default function GraphPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
@@ -67,6 +70,7 @@ export default function GraphPage() {
   );
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
+  const [synced, setSynced] = useState(false);
 
   const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
 
@@ -168,13 +172,19 @@ export default function GraphPage() {
   };
 
   useEffect(() => {
-    const workspaceId = "550e8400-e29b-41d4-a716-446655440001";
-    getNodes(workspaceId)
-      .then((res) => {
-        console.log("[getNodes]", res);
+    getNodes(WORKSPACE_ID)
+      .then((data) => {
+        if (data.nodes?.length) {
+          setNodes(data.nodes.map(toFlowNode));
+        }
+        if (data.edges?.length) {
+          setEdges(data.edges.map(toFlowEdge));
+        }
+        setSynced(true);
       })
       .catch((error) => {
-        console.error("[getNodes] failed", error);
+        console.error("[getNodes] failed, using mock data", error);
+        setSynced(true);
       });
   }, []);
 
@@ -182,6 +192,7 @@ export default function GraphPage() {
     <div className="relative w-full h-screen overflow-hidden">
       <div className="absolute inset-0 z-0">
         <GraphCanvas
+          workspaceId={WORKSPACE_ID}
           focusedNodeId={focusedNodeId}
           onFocusComplete={() => setFocusedNodeId(null)}
           nodes={nodes}
