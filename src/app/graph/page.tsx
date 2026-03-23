@@ -13,6 +13,8 @@ import ChipHeader from "@/components/layout/ChipHeader";
 import { initialEdges, initialNodes } from "@/mock/mindmap";
 import { getNodes } from "@/features/graph/api/getNodes";
 import { toFlowNode, toFlowEdge } from "@/features/graph/api/mappers";
+import { useWorkspaceSSE } from "@/hooks/useWorkspaceSSE";
+import { getWorkspaces } from "@/api/workspace";
 
 const INITIAL_PROJECTS: Project[] = [
   { id: "p1", name: "Project 1" },
@@ -56,9 +58,8 @@ function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-const WORKSPACE_ID = "08612bb4-2dd8-471b-9133-bbc213f97aee";
-
 export default function GraphPage() {
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
@@ -171,8 +172,25 @@ export default function GraphPage() {
     });
   };
 
+  // 1) 워크스페이스 목록 조회 → 첫 번째 자동 선택
   useEffect(() => {
-    getNodes(WORKSPACE_ID)
+    getWorkspaces()
+      .then((list) => {
+        if (list.length === 0) {
+          console.warn("[GraphPage] 소속된 워크스페이스가 없습니다.");
+          return;
+        }
+        setWorkspaceId(list[0].workspaceId);
+      })
+      .catch((error) => {
+        console.error("[getWorkspaces] failed", error);
+      });
+  }, []);
+
+  // 2) workspaceId 확보 후 노드/엣지 동기화
+  useEffect(() => {
+    if (!workspaceId) return;
+    getNodes(workspaceId)
       .then((data) => {
         if (data.nodes?.length) {
           setNodes(data.nodes.map(toFlowNode));
@@ -186,13 +204,20 @@ export default function GraphPage() {
         console.error("[getNodes] failed, using mock data", error);
         setSynced(true);
       });
-  }, []);
+  }, [workspaceId]);
+
+  useWorkspaceSSE({ workspaceId: workspaceId ?? "", setNodes });
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
       <div className="absolute inset-0 z-0">
+        {!workspaceId ? (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            워크스페이스를 불러오는 중...
+          </div>
+        ) : (
         <GraphCanvas
-          workspaceId={WORKSPACE_ID}
+          workspaceId={workspaceId}
           focusedNodeId={focusedNodeId}
           onFocusComplete={() => setFocusedNodeId(null)}
           nodes={nodes}
@@ -200,6 +225,7 @@ export default function GraphPage() {
           setNodes={setNodes}
           setEdges={setEdges}
         />
+        )}
       </div>
 
       <Sidebar
