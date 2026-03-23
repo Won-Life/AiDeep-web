@@ -1,72 +1,27 @@
 "use client";
-import { useState } from "react";
 
 export const SIDEBAR_WIDTH = 260;
 export const VISIBLE_BUTTON_WIDTH = 40;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Project {
+export interface Project {
   id: string;
   name: string;
   isEditing?: boolean;
 }
 
-interface ResourceSubItem {
+export interface ResourceSubItem {
   id: string;
   name: string;
   isEditing?: boolean;
 }
 
-interface Resource {
+export interface Resource {
   id: string;
   name: string;
   subItems: ResourceSubItem[];
   isEditing?: boolean;
-}
-
-// ─── Initial Data ─────────────────────────────────────────────────────────────
-
-const INITIAL_PROJECTS: Project[] = [
-  { id: "p1", name: "Project 1" },
-  { id: "p2", name: "Project 2" },
-  { id: "p3", name: "Project 3" },
-  { id: "p4", name: "Project 4" },
-];
-
-const INITIAL_RESOURCES: Resource[] = [
-  {
-    id: "r1",
-    name: "Resource n",
-    subItems: [
-      { id: "r1-1", name: "Resource n-1" },
-      { id: "r1-2", name: "Resource n-2" },
-      { id: "r1-3", name: "Resource n-3" },
-    ],
-  },
-  { id: "r2", name: "Resource n", subItems: [] },
-  {
-    id: "r3",
-    name: "Resource n",
-    subItems: [
-      { id: "r3-1", name: "Resource n-1" },
-      { id: "r3-2", name: "Resource n-2" },
-      { id: "r3-3", name: "Resource n-3" },
-    ],
-  },
-  {
-    id: "r4",
-    name: "Resource n",
-    subItems: [
-      { id: "r4-1", name: "Resource n-1" },
-      { id: "r4-2", name: "Resource n-2" },
-      { id: "r4-3", name: "Resource n-3" },
-    ],
-  },
-];
-
-function makeId() {
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 // ─── ProjectList ──────────────────────────────────────────────────────────────
@@ -225,6 +180,7 @@ function ResourceTree({
             ) : (
               <span
                 className="rounded-full px-3 py-1"
+                draggable
                 style={{
                   fontSize: 13,
                   background: "rgb(var(--ds-gray-800))",
@@ -237,6 +193,31 @@ function ResourceTree({
                   display: "inline-block",
                 }}
                 onClick={() => onStartEdit(item.id)}
+                onDragStart={(event) => {
+                  const dragPreview = document.createElement("div");
+                  dragPreview.textContent = item.name || " ";
+                  dragPreview.style.padding = "4px 12px";
+                  dragPreview.style.fontSize = "13px";
+                  dragPreview.style.borderRadius = "9999px";
+                  dragPreview.style.background = "rgb(var(--ds-gray-800))";
+                  dragPreview.style.color = "rgb(var(--foreground))";
+                  dragPreview.style.border = "1px solid rgba(0,0,0,0)";
+                  dragPreview.style.position = "absolute";
+                  dragPreview.style.top = "-9999px";
+                  dragPreview.style.left = "-9999px";
+                  document.body.appendChild(dragPreview);
+
+                  event.dataTransfer.setData(
+                    "application/resource-subitem",
+                    JSON.stringify({ id: item.id, name: item.name }),
+                  );
+                  event.dataTransfer.effectAllowed = "copy";
+                  event.dataTransfer.setDragImage(dragPreview, 10, 10);
+
+                  requestAnimationFrame(() => {
+                    document.body.removeChild(dragPreview);
+                  });
+                }}
               >
                 {item.name || (
                   <span style={{ color: "rgb(var(--ds-gray-500))" }}>
@@ -406,119 +387,42 @@ function ResourceList({
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
-}
-
-export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
-  const [expanded, setExpanded] = useState<Set<string>>(
-    new Set(
-      INITIAL_RESOURCES.filter((r) => r.subItems.length > 0).map((r) => r.id),
-    ),
-  );
-
-  // ── Project handlers ──────────────────────────────────────────────────────
-
-  const addProject = () => {
-    setProjects((prev) => [
-      ...prev,
-      { id: makeId(), name: "", isEditing: true },
-    ]);
-  };
-
-  const saveProjectName = (id: string, name: string) => {
-    setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, name, isEditing: false } : p)),
-    );
-  };
-
-  // ── Resource handlers ─────────────────────────────────────────────────────
-
-  const addResource = () => {
-    setResources((prev) => [
-      ...prev,
-      { id: makeId(), name: "", subItems: [], isEditing: true },
-    ]);
-  };
-
-  const saveResourceName = (id: string, name: string) => {
-    setResources((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, name, isEditing: false } : r)),
-    );
-  };
-
-  const addSubItem = (resourceId: string) => {
-    setResources((prev) =>
-      prev.map((r) =>
-        r.id === resourceId
-          ? {
-              ...r,
-              subItems: [
-                ...r.subItems,
-                { id: makeId(), name: "", isEditing: true },
-              ],
-            }
-          : r,
-      ),
-    );
-    // 서브 아이템 추가 시 자동으로 펼치기
-    setExpanded((prev) => new Set([...prev, resourceId]));
-  };
-
-  const startEditProject = (id: string) => {
-    setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, isEditing: true } : p)),
-    );
-  };
-
-  const startEditResource = (id: string) => {
-    setResources((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, isEditing: true } : r)),
-    );
-  };
-
-  const startEditSubItem = (resourceId: string, subItemId: string) => {
-    setResources((prev) =>
-      prev.map((r) =>
-        r.id === resourceId
-          ? {
-              ...r,
-              subItems: r.subItems.map((s) =>
-                s.id === subItemId ? { ...s, isEditing: true } : s,
-              ),
-            }
-          : r,
-      ),
-    );
-  };
-
-  const saveSubItemName = (
+  projects: Project[];
+  resources: Resource[];
+  expanded: Set<string>;
+  onAddProject: () => void;
+  onSaveProjectName: (id: string, name: string) => void;
+  onStartEditProject: (id: string) => void;
+  onAddResource: () => void;
+  onSaveResourceName: (id: string, name: string) => void;
+  onAddSubItem: (resourceId: string) => void;
+  onSaveSubItemName: (
     resourceId: string,
     subItemId: string,
     name: string,
-  ) => {
-    setResources((prev) =>
-      prev.map((r) =>
-        r.id === resourceId
-          ? {
-              ...r,
-              subItems: r.subItems.map((s) =>
-                s.id === subItemId ? { ...s, name, isEditing: false } : s,
-              ),
-            }
-          : r,
-      ),
-    );
-  };
+  ) => void;
+  onStartEditResource: (id: string) => void;
+  onStartEditSubItem: (resourceId: string, subItemId: string) => void;
+  onToggleExpand: (id: string) => void;
+}
 
-  const toggleExpand = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
+export default function Sidebar({
+  isOpen,
+  onToggle,
+  projects,
+  resources,
+  expanded,
+  onAddProject,
+  onSaveProjectName,
+  onStartEditProject,
+  onAddResource,
+  onSaveResourceName,
+  onAddSubItem,
+  onSaveSubItemName,
+  onStartEditResource,
+  onStartEditSubItem,
+  onToggleExpand,
+}: SidebarProps) {
   return (
     <aside
       className="fixed left-0 top-0 h-full flex flex-col z-50"
@@ -551,7 +455,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 Project
               </span>
               <button
-                onClick={addProject}
+                onClick={onAddProject}
                 style={{
                   fontSize: 22,
                   color: "rgb(var(--ds-black))",
@@ -577,8 +481,8 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
           <ProjectList
             projects={projects}
-            onSaveName={saveProjectName}
-            onStartEdit={startEditProject}
+            onSaveName={onSaveProjectName}
+            onStartEdit={onStartEditProject}
           />
         </div>
 
@@ -595,7 +499,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
               Resource
             </span>
             <button
-              onClick={addResource}
+              onClick={onAddResource}
               style={{
                 fontSize: 22,
                 color: "rgb(var(--ds-black))",
@@ -610,12 +514,12 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
           <ResourceList
             resources={resources}
             expanded={expanded}
-            onToggleExpand={toggleExpand}
-            onAddSubItem={addSubItem}
-            onSaveResourceName={saveResourceName}
-            onSaveSubItemName={saveSubItemName}
-            onStartEditResource={startEditResource}
-            onStartEditSubItem={startEditSubItem}
+            onToggleExpand={onToggleExpand}
+            onAddSubItem={onAddSubItem}
+            onSaveResourceName={onSaveResourceName}
+            onSaveSubItemName={onSaveSubItemName}
+            onStartEditResource={onStartEditResource}
+            onStartEditSubItem={onStartEditSubItem}
           />
         </div>
       </div>

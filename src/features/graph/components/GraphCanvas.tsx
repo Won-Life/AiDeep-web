@@ -1,5 +1,13 @@
 "use client";
-import { useState, useCallback, useEffect, useRef } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+  type DragEvent,
+} from "react";
 import {
   ReactFlow,
   applyNodeChanges,
@@ -18,7 +26,6 @@ import "@xyflow/react/dist/style.css";
 import * as d3 from "d3";
 import { nodeTypes } from "@/types/nodeTypes";
 import { edgeTypes } from "@/types/edgeTypes";
-import { initialEdges, initialNodes } from "@/mock/mindmap";
 import { getNodes } from "../api/getNodes";
 import type { EdgeDto, NodeDto } from "../types";
 import { rectCollide } from "../layout/rectCollide";
@@ -290,6 +297,38 @@ function findClosestNodeInRange(
   return closestNode;
 }
 
+function findNonOverlappingPosition(
+  base: { x: number; y: number },
+  nodes: Node[],
+): { x: number; y: number } {
+  const candidate = (x: number, y: number) => ({
+    id: "__drag_candidate__",
+    position: { x, y },
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
+  });
+
+  if (!nodes.some((node) => isOverlapping(candidate(base.x, base.y), node))) {
+    return base;
+  }
+
+  const step = 16;
+  const maxRadius = 12;
+  for (let r = 1; r <= maxRadius; r += 1) {
+    const radius = r * step;
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (Math.PI / 4) * i;
+      const x = base.x + Math.round(Math.cos(angle) * radius);
+      const y = base.y + Math.round(Math.sin(angle) * radius);
+      if (!nodes.some((node) => isOverlapping(candidate(x, y), node))) {
+        return { x, y };
+      }
+    }
+  }
+
+  return base;
+}
+
 function getHandleSide(node: Node, referenceX: number): "left" | "right" {
   return node.position.x < referenceX ? "left" : "right";
 }
@@ -545,14 +584,20 @@ interface D3Node extends d3.SimulationNodeDatum {
 interface GraphCanvasInnerProps {
   focusedNodeId: string | null;
   onFocusComplete?: () => void;
+  nodes: Node[];
+  edges: Edge[];
+  setNodes: Dispatch<SetStateAction<Node[]>>;
+  setEdges: Dispatch<SetStateAction<Edge[]>>;
 }
 
 function GraphCanvasInner({
   focusedNodeId,
   onFocusComplete,
+  nodes,
+  edges,
+  setNodes,
+  setEdges,
 }: GraphCanvasInnerProps) {
-  const [nodes, setNodes] = useState<Node[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
@@ -1118,6 +1163,130 @@ function GraphCanvasInner({
     [screenToFlowPosition, selectedNodeId],
   );
 
+  const onDragOver = useCallback(
+    (event: DragEvent) => {
+      const types = Array.from(event.dataTransfer.types);
+      if (!types.includes("application/resource-subitem")) return;
+
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const draggedPreview: Node = {
+        id: "__drag_preview__",
+        type: "textUpdater",
+        position,
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT,
+        data: {},
+      };
+
+      const closestNode = findClosestNodeInRange(
+        draggedPreview,
+        nodes,
+        edges,
+      );
+      const isInvalid =
+        closestNode &&
+        isInvalidConnection(closestNode.id, draggedPreview.id, edges);
+      setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
+    },
+    [screenToFlowPosition, nodes, edges],
+  );
+
+  const onDrop = useCallback(
+    (event: DragEvent) => {
+      const raw = event.dataTransfer.getData("application/resource-subitem");
+      if (!raw) return;
+      event.preventDefault();
+
+      let payload: { id: string; name: string } | null = null;
+      try {
+        payload = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      if (!payload?.name) return;
+
+      const basePosition = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const targetParent =
+        hoveredNodeId && nodes.find((node) => node.id === hoveredNodeId);
+      const shouldConnect =
+        targetParent && !isInvalidConnection(targetParent.id, "__new__", edges);
+
+      const position = shouldConnect && targetParent
+        ? adjustPositionRelativeToSource(
+            targetParent,
+            basePosition.y,
+            resolveConnectSideFromSource(
+              targetParent,
+              {
+                id: "__new__",
+                position: basePosition,
+                data: {},
+              } as Node,
+              undefined,
+              nodes,
+              edges,
+            ),
+            nodes,
+            edges,
+          )
+        : findNonOverlappingPosition(basePosition, nodes);
+
+      const colorPair = shouldConnect
+        ? getGraphColor(targetParent.id, nodes, edges)
+        : DEFAULT_NODE_COLOR;
+
+      const newNode: Node = {
+        id: makeNodeId(),
+        type: "textUpdater",
+        position,
+        data: {
+          text: payload.name,
+          isMain: false,
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        },
+      };
+
+      setNodes((prev) => [...prev, newNode]);
+
+      if (shouldConnect && targetParent) {
+        setEdges((prev) => {
+          const rawEdge: Edge = {
+            id: `e-${targetParent.id}-${newNode.id}-${Date.now()}`,
+            source: targetParent.id,
+            target: newNode.id,
+          };
+          const nextEdge = buildEdgePresentation(
+            rawEdge,
+            [...nodes, newNode],
+            [...prev, rawEdge],
+          );
+          return [...prev, nextEdge];
+        });
+      }
+
+      setHoveredNodeId(null);
+    },
+    [screenToFlowPosition, setNodes, setEdges, nodes, edges, hoveredNodeId],
+  );
+
+  const onDragLeave = useCallback((event: DragEvent) => {
+    const types = Array.from(event.dataTransfer.types);
+    if (!types.includes("application/resource-subitem")) return;
+    setHoveredNodeId(null);
+  }, []);
+
   const onNodeDragStart = useCallback(
     (event: React.MouseEvent, draggedNode: Node) => {
       // hover 상태 초기화
@@ -1497,6 +1666,9 @@ function GraphCanvasInner({
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onPaneClick={onPaneClick}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onDragLeave={onDragLeave}
         isValidConnection={isValidConnection}
         fitView
         connectionMode={ConnectionMode.Loose}
@@ -1536,17 +1708,29 @@ function GraphCanvasInner({
 interface GraphCanvasProps {
   focusedNodeId?: string | null;
   onFocusComplete?: () => void;
+  nodes: Node[];
+  edges: Edge[];
+  setNodes: Dispatch<SetStateAction<Node[]>>;
+  setEdges: Dispatch<SetStateAction<Edge[]>>;
 }
 
 export default function GraphCanvas({
   focusedNodeId = null,
   onFocusComplete,
+  nodes,
+  edges,
+  setNodes,
+  setEdges,
 }: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
       <GraphCanvasInner
         focusedNodeId={focusedNodeId}
         onFocusComplete={onFocusComplete}
+        nodes={nodes}
+        edges={edges}
+        setNodes={setNodes}
+        setEdges={setEdges}
       />
     </ReactFlowProvider>
   );
