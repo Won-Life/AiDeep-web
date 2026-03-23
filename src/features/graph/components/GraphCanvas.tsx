@@ -1460,6 +1460,9 @@ function GraphCanvasInner({
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, draggedNode: Node) => {
+      // hover-snap 발생 시 adjustedPosition을 추적하여 moveNode에 전달
+      let finalPosition = draggedNode.position;
+
       // hover된 노드가 있으면 연결 생성
       if (hoveredNodeId) {
         const newParent = nodes.find((n) => n.id === hoveredNodeId);
@@ -1490,6 +1493,9 @@ function GraphCanvasInner({
             edges,
             draggedNode.id,
           );
+
+          // hover-snap이 발생했으므로 최종 위치를 adjustedPosition으로 갱신
+          finalPosition = adjustedPosition;
 
           // 4. 드래그된 노드와 서브트리의 위치를 조정된 위치로 이동
           const deltaX = adjustedPosition.x - draggedNode.position.x;
@@ -1591,11 +1597,26 @@ function GraphCanvasInner({
       // 드래그 위치 초기화
       previousDragPositionRef.current = null;
 
-      // API: 노드 위치 저장
+      // API: 드래그된 노드 위치 저장 (hover-snap 시 adjustedPosition 사용)
       moveNode(workspaceId, draggedNode.id, {
-        x: draggedNode.position.x,
-        y: draggedNode.position.y,
+        x: finalPosition.x,
+        y: finalPosition.y,
       }).catch((err) => console.error("[moveNode] failed", err));
+
+      // API: 함께 이동된 자식 노드들 위치 저장
+      const draggedChildrenIds = getDescendantIds(draggedNode.id, edges);
+      draggedChildrenIds.forEach((childId) => {
+        const d3Child = d3NodesRef.current.find((n) => n.id === childId);
+        if (d3Child?.fx != null && d3Child?.fy != null) {
+          const childNode = nodes.find((n) => n.id === childId);
+          const childWidth = childNode?.width ?? NODE_WIDTH;
+          const childHeight = childNode?.height ?? NODE_HEIGHT;
+          moveNode(workspaceId, childId, {
+            x: d3Child.fx - childWidth / 2,
+            y: d3Child.fy - childHeight / 2,
+          }).catch((err) => console.error(`[moveNode child ${childId}] failed`, err));
+        }
+      });
     },
     [nodes, edges, hoveredNodeId, workspaceId],
   );
