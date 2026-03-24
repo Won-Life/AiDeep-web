@@ -115,7 +115,11 @@ function getGraphColor(
   return getRandomColorPair();
 }
 
-function isStandaloneNode(nodeId: string, nodes: Node[], edges: Edge[]): boolean {
+function isStandaloneNode(
+  nodeId: string,
+  nodes: Node[],
+  edges: Edge[],
+): boolean {
   const node = nodes.find((n) => n.id === nodeId);
   if (!node || node.data?.isMain) return false;
 
@@ -346,7 +350,9 @@ function getForcedOutboundSideForSubNodeInMainGraph(
   if (!mainNode) return null;
 
   const parentId = getParentId(node.id, edges);
-  const parentNode = parentId ? nodes.find((n) => n.id === parentId) : undefined;
+  const parentNode = parentId
+    ? nodes.find((n) => n.id === parentId)
+    : undefined;
   const referenceX = parentNode?.position.x ?? mainNode.position.x;
 
   // main(또는 parent) 쪽의 반대 방향(바깥쪽)으로만 새 연결을 허용
@@ -372,7 +378,9 @@ function resolveConnectSideFromSource(
 
   if (sourceHandle?.endsWith("side")) {
     const parentId = getParentId(sourceNode.id, edges);
-    const parentNode = parentId ? nodes.find((n) => n.id === parentId) : undefined;
+    const parentNode = parentId
+      ? nodes.find((n) => n.id === parentId)
+      : undefined;
     const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
     const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
     return getHandleSide(sourceNode, referenceX);
@@ -400,7 +408,9 @@ function resolveSideFromEdgeHandle(
     if (forcedSide) return forcedSide;
 
     const parentId = getParentId(sourceNode.id, edges);
-    const parentNode = parentId ? nodes.find((n) => n.id === parentId) : undefined;
+    const parentNode = parentId
+      ? nodes.find((n) => n.id === parentId)
+      : undefined;
     const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
     const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
     return getHandleSide(sourceNode, referenceX);
@@ -440,7 +450,9 @@ function adjustPositionRelativeToSource(
       : sourceNode.position.x - NODE_WIDTH - DEFAULT_NODE_DISTANCE;
 
   const siblingYs = edges
-    .filter((edge) => edge.source === sourceNode.id && edge.target !== excludeNodeId)
+    .filter(
+      (edge) => edge.source === sourceNode.id && edge.target !== excludeNodeId,
+    )
     .map((edge) => {
       const targetNode = nodes.find((node) => node.id === edge.target);
       if (!targetNode) return null;
@@ -455,7 +467,10 @@ function adjustPositionRelativeToSource(
         ),
       };
     })
-    .filter((item): item is { node: Node; edgeSide: "left" | "right" } => item !== null)
+    .filter(
+      (item): item is { node: Node; edgeSide: "left" | "right" } =>
+        item !== null,
+    )
     .filter((item) => item.edgeSide === side)
     .map((item) => item.node.position.y);
 
@@ -513,7 +528,9 @@ function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
   const targetHandle = resolveHandleId(target, "target", side, edges);
   const sourceHandleX =
     source.position.x +
-    (side === "right" ? (source.measured?.width ?? source.width ?? NODE_WIDTH) : 0);
+    (side === "right"
+      ? (source.measured?.width ?? source.width ?? NODE_WIDTH)
+      : 0);
 
   return {
     ...edge,
@@ -658,7 +675,7 @@ function GraphCanvasInner({
 
     // alpha가 충분히 작아지면 시뮬레이션 멈춤
     simulation.on("end", () => {
-      console.log("Simulation ended");
+      isDraggingRef.current = false;
     });
 
     simulationRef.current = simulation;
@@ -735,20 +752,25 @@ function GraphCanvasInner({
     [edges],
   );
 
-  const onNodesChange = useCallback((changes: NodeChange[]) => {
-    const removedNodeIds = changes
-      .filter((change) => change.type === "remove")
-      .map((change) => change.id);
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      const removedNodeIds = changes
+        .filter((change) => change.type === "remove")
+        .map((change) => change.id);
 
-    if (removedNodeIds.length > 0) {
-      requestArchiveForNodes(removedNodeIds);
-    }
+      if (removedNodeIds.length > 0) {
+        requestArchiveForNodes(removedNodeIds);
+      }
 
-    const nonRemoveChanges = changes.filter((change) => change.type !== "remove");
-    if (nonRemoveChanges.length === 0) return;
+      const nonRemoveChanges = changes.filter(
+        (change) => change.type !== "remove",
+      );
+      if (nonRemoveChanges.length === 0) return;
 
-    setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
-  }, [requestArchiveForNodes]);
+      setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
+    },
+    [requestArchiveForNodes],
+  );
 
   const onBeforeDelete = useCallback(
     ({ nodes: nodesToDelete }: { nodes: Node[]; edges: Edge[] }) => {
@@ -778,10 +800,13 @@ function GraphCanvasInner({
     // TODO: Implement archive persistence here (e.g. API call to archive these nodes and edges).
     setEdges((snapshot) =>
       snapshot.filter(
-        (edge) => !idsToArchive.has(edge.source) && !idsToArchive.has(edge.target),
+        (edge) =>
+          !idsToArchive.has(edge.source) && !idsToArchive.has(edge.target),
       ),
     );
-    setNodes((snapshot) => snapshot.filter((node) => !idsToArchive.has(node.id)));
+    setNodes((snapshot) =>
+      snapshot.filter((node) => !idsToArchive.has(node.id)),
+    );
     setHoveredNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
     setSelectedNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
     setPendingArchiveNodeIds([]);
@@ -809,42 +834,47 @@ function GraphCanvasInner({
     });
   }, [nodes]);
 
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    if (isArchiveModalOpen) {
-      const nonRemoveChanges = changes.filter((change) => change.type !== "remove");
-      if (nonRemoveChanges.length === 0) return;
-      setEdges((snapshot) => applyEdgeChanges(nonRemoveChanges, snapshot));
-      return;
-    }
-
-    setEdges((snapshot) => {
-      const removedEdges = changes
-        .filter((change) => change.type === "remove")
-        .map((change) => snapshot.find((edge) => edge.id === change.id))
-        .filter((edge): edge is Edge => edge !== undefined);
-
-      const updatedEdges = applyEdgeChanges(changes, snapshot);
-
-      if (removedEdges.length > 0) {
-        setNodes((currentNodes) => {
-          let updatedNodes = currentNodes;
-
-          removedEdges.forEach((edge) => {
-            updatedNodes = updateSubtreeColors(
-              edge.target,
-              updatedNodes,
-              updatedEdges,
-              DEFAULT_NODE_COLOR,
-            );
-          });
-
-          return updatedNodes;
-        });
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      if (isArchiveModalOpen) {
+        const nonRemoveChanges = changes.filter(
+          (change) => change.type !== "remove",
+        );
+        if (nonRemoveChanges.length === 0) return;
+        setEdges((snapshot) => applyEdgeChanges(nonRemoveChanges, snapshot));
+        return;
       }
 
-      return updatedEdges;
-    });
-  }, [isArchiveModalOpen]);
+      setEdges((snapshot) => {
+        const removedEdges = changes
+          .filter((change) => change.type === "remove")
+          .map((change) => snapshot.find((edge) => edge.id === change.id))
+          .filter((edge): edge is Edge => edge !== undefined);
+
+        const updatedEdges = applyEdgeChanges(changes, snapshot);
+
+        if (removedEdges.length > 0) {
+          setNodes((currentNodes) => {
+            let updatedNodes = currentNodes;
+
+            removedEdges.forEach((edge) => {
+              updatedNodes = updateSubtreeColors(
+                edge.target,
+                updatedNodes,
+                updatedEdges,
+                DEFAULT_NODE_COLOR,
+              );
+            });
+
+            return updatedNodes;
+          });
+        }
+
+        return updatedEdges;
+      });
+    },
+    [isArchiveModalOpen],
+  );
 
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
@@ -926,11 +956,10 @@ function GraphCanvasInner({
           source: sourceId,
           target: targetId,
         };
-        const nextEdge = buildEdgePresentation(
+        const nextEdge = buildEdgePresentation(rawEdge, nodes, [
+          ...snapshot,
           rawEdge,
-          nodes,
-          [...snapshot, rawEdge],
-        );
+        ]);
 
         return [...snapshot, nextEdge];
       });
@@ -1064,7 +1093,8 @@ function GraphCanvasInner({
             ? nodes.find((n) => n.id === parentId)
             : undefined;
           const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
-          const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
+          const referenceX =
+            parentNode?.position.x ?? mainNode?.position.x ?? 0;
           side = getHandleSide(sourceNode, referenceX);
         }
 
@@ -1210,11 +1240,7 @@ function GraphCanvasInner({
         data: {},
       };
 
-      const closestNode = findClosestNodeInRange(
-        draggedPreview,
-        nodes,
-        edges,
-      );
+      const closestNode = findClosestNodeInRange(draggedPreview, nodes, edges);
       const isInvalid =
         closestNode &&
         isInvalidConnection(closestNode.id, draggedPreview.id, edges);
@@ -1247,25 +1273,26 @@ function GraphCanvasInner({
       const shouldConnect =
         targetParent && !isInvalidConnection(targetParent.id, "__new__", edges);
 
-      const position = shouldConnect && targetParent
-        ? adjustPositionRelativeToSource(
-            targetParent,
-            basePosition.y,
-            resolveConnectSideFromSource(
+      const position =
+        shouldConnect && targetParent
+          ? adjustPositionRelativeToSource(
               targetParent,
-              {
-                id: "__new__",
-                position: basePosition,
-                data: {},
-              } as Node,
-              undefined,
+              basePosition.y,
+              resolveConnectSideFromSource(
+                targetParent,
+                {
+                  id: "__new__",
+                  position: basePosition,
+                  data: {},
+                } as Node,
+                undefined,
+                nodes,
+                edges,
+              ),
               nodes,
               edges,
-            ),
-            nodes,
-            edges,
-          )
-        : findNonOverlappingPosition(basePosition, nodes);
+            )
+          : findNonOverlappingPosition(basePosition, nodes);
 
       const colorPair = shouldConnect
         ? getGraphColor(targetParent.id, nodes, edges)
@@ -1460,9 +1487,6 @@ function GraphCanvasInner({
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, draggedNode: Node) => {
-      // hover-snap 발생 시 adjustedPosition을 추적하여 moveNode에 전달
-      let finalPosition = draggedNode.position;
-
       // hover된 노드가 있으면 연결 생성
       if (hoveredNodeId) {
         const newParent = nodes.find((n) => n.id === hoveredNodeId);
@@ -1470,109 +1494,146 @@ function GraphCanvasInner({
           newParent &&
           !isInvalidConnection(newParent.id, draggedNode.id, edges)
         ) {
-          // 1. 기존 부모와의 연결 끊기
+          // 1. 기존 부모와의 연결 확인
           const existingParentEdge = edges.find(
             (edge) => edge.target === draggedNode.id,
           );
 
-          // 2. 연결 방향 결정: 위치 기반이 아니라 소스 핸들 규칙 기준
-          const side = resolveConnectSideFromSource(
-            newParent,
-            draggedNode,
-            undefined,
-            nodes,
-            edges,
+          // 2. D3 좌표 기반으로 연결 방향 결정
+          const newParentD3 = d3NodesRef.current.find(
+            (n) => n.id === newParent.id,
           );
-
-          // 3. 드래그된 노드의 위치를 새 부모 노드 기준으로 조정
-          const adjustedPosition = adjustPositionRelativeToSource(
-            newParent,
-            draggedNode.position.y,
-            side,
-            nodes,
-            edges,
-            draggedNode.id,
+          const draggedD3 = d3NodesRef.current.find(
+            (n) => n.id === draggedNode.id,
           );
+          const newParentCenterX =
+            newParentD3?.x ??
+            newParent.position.x + (newParent.width ?? NODE_WIDTH) / 2;
+          const draggedCenterX =
+            draggedD3?.x ??
+            draggedNode.position.x + (draggedNode.width ?? NODE_WIDTH) / 2;
+          const side: "left" | "right" =
+            draggedCenterX < newParentCenterX ? "left" : "right";
 
-          // hover-snap이 발생했으므로 최종 위치를 adjustedPosition으로 갱신
-          finalPosition = adjustedPosition;
+          // 3. D3 좌표 기반으로 스냅 위치 계산
+          const newParentHalfWidth = (newParent.width ?? NODE_WIDTH) / 2;
+          const draggedHalfWidth = (draggedNode.width ?? NODE_WIDTH) / 2;
+          const draggedHalfHeight = (draggedNode.height ?? NODE_HEIGHT) / 2;
 
-          // 4. 드래그된 노드와 서브트리의 위치를 조정된 위치로 이동
-          const deltaX = adjustedPosition.x - draggedNode.position.x;
-          const deltaY = adjustedPosition.y - draggedNode.position.y;
+          const snapCenterX =
+            side === "right"
+              ? newParentCenterX +
+                newParentHalfWidth +
+                DEFAULT_NODE_DISTANCE +
+                draggedHalfWidth
+              : newParentCenterX -
+                newParentHalfWidth -
+                DEFAULT_NODE_DISTANCE -
+                draggedHalfWidth;
 
-          setNodes((currentNodes) => {
-            const childrenIds = getDescendantIds(draggedNode.id, edges);
-            const affectedNodeIds = new Set([draggedNode.id, ...childrenIds]);
+          // Y: 같은 방향 형제 노드들과 겹치지 않도록 D3 좌표로 조정
+          const verticalGap = NODE_HEIGHT + 24;
+          const siblingCenterYs = edges
+            .filter(
+              (e) => e.source === newParent.id && e.target !== draggedNode.id,
+            )
+            .map((e) => {
+              const sibD3 = d3NodesRef.current.find((n) => n.id === e.target);
+              if (!sibD3) return null;
+              const sibSide = sibD3.x < newParentCenterX ? "left" : "right";
+              return sibSide === side ? sibD3.y : null;
+            })
+            .filter((y): y is number => y !== null);
 
-            return currentNodes.map((node) => {
-              if (affectedNodeIds.has(node.id)) {
-                return {
-                  ...node,
-                  position: {
-                    x: node.position.x + deltaX,
-                    y: node.position.y + deltaY,
-                  },
-                };
+          let snapCenterY =
+            draggedD3?.y ??
+            draggedNode.position.y + (draggedNode.height ?? NODE_HEIGHT) / 2;
+          const isYAvailable = (y: number) =>
+            siblingCenterYs.every((sy) => Math.abs(sy - y) >= verticalGap);
+          if (!isYAvailable(snapCenterY)) {
+            for (let i = 1; i <= 20; i++) {
+              const upper = snapCenterY - i * verticalGap;
+              if (isYAvailable(upper)) {
+                snapCenterY = upper;
+                break;
               }
-              return node;
-            });
+              const lower = snapCenterY + i * verticalGap;
+              if (isYAvailable(lower)) {
+                snapCenterY = lower;
+                break;
+              }
+            }
+          }
+
+          // 4. D3 좌표로 드래그 노드와 서브트리 이동
+          const deltaX =
+            snapCenterX -
+            (draggedD3?.x ??
+              draggedNode.position.x + (draggedNode.width ?? NODE_WIDTH) / 2);
+          const deltaY =
+            snapCenterY -
+            (draggedD3?.y ??
+              draggedNode.position.y + (draggedNode.height ?? NODE_HEIGHT) / 2);
+
+          const childrenIds = getDescendantIds(draggedNode.id, edges);
+          const affectedIds = new Set([draggedNode.id, ...childrenIds]);
+
+          d3NodesRef.current.forEach((d3Node) => {
+            if (!affectedIds.has(d3Node.id)) return;
+            d3Node.x += deltaX;
+            d3Node.y += deltaY;
+            if (d3Node.fx != null) d3Node.fx += deltaX;
+            if (d3Node.fy != null) d3Node.fy += deltaY;
+            d3Node.vx = 0;
+            d3Node.vy = 0;
           });
 
-          // 5. 서브트리 대칭 이동이 필요한지 확인 후 실행
-          const childrenIds = getDescendantIds(draggedNode.id, edges);
+          // 5. 서브트리 대칭 이동이 필요한지 확인 후 D3 좌표로 실행
           if (childrenIds.size > 0) {
-            const adjustedCenterX =
-              adjustedPosition.x + (draggedNode.width ?? NODE_WIDTH) / 2;
-
-            const childNodes = nodes.filter((n) => childrenIds.has(n.id));
+            const childD3Nodes = d3NodesRef.current.filter((n) =>
+              childrenIds.has(n.id),
+            );
             const avgChildCenterX =
-              childNodes.reduce(
-                (sum, n) =>
-                  sum + n.position.x + deltaX + (n.width ?? NODE_WIDTH) / 2,
-                0,
-              ) / childNodes.length;
+              childD3Nodes.reduce((sum, n) => sum + n.x, 0) /
+              childD3Nodes.length;
 
             const needsMirror =
               side === "right"
-                ? avgChildCenterX < adjustedCenterX
-                : avgChildCenterX > adjustedCenterX;
+                ? avgChildCenterX < snapCenterX
+                : avgChildCenterX > snapCenterX;
 
             if (needsMirror) {
-              setNodes((currentNodes) =>
-                mirrorSubtree(
-                  currentNodes,
-                  draggedNode.id,
-                  edges,
-                  adjustedCenterX,
-                ),
-              );
+              childrenIds.forEach((childId) => {
+                const d3Node = d3NodesRef.current.find((n) => n.id === childId);
+                if (!d3Node) return;
+                const mirroredX = snapCenterX * 2 - d3Node.x;
+                d3Node.x = mirroredX;
+                if (d3Node.fx != null) d3Node.fx = mirroredX;
+                d3Node.vx = 0;
+              });
             }
           }
 
           // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
           setEdges((prev) => {
-            // 기존 부모 연결 제거
             const filtered = existingParentEdge
               ? prev.filter((edge) => edge.id !== existingParentEdge.id)
               : prev;
 
-            // 새 부모 연결 추가
             const rawEdge: Edge = {
               id: `e-${newParent.id}-${draggedNode.id}-${Date.now()}`,
               source: newParent.id,
               target: draggedNode.id,
             };
-            const newEdge = buildEdgePresentation(
+            const newEdge = buildEdgePresentation(rawEdge, nodes, [
+              ...filtered,
               rawEdge,
-              nodes,
-              [...filtered, rawEdge],
-            );
+            ]);
 
             return [...filtered, newEdge];
           });
 
-          // 7. 드래그된 노드와 그 subtree의 색상을 새 부모 노드 색상으로 업데이트
+          // 7. 서브트리 색상 업데이트 (시각적 데이터 - state 사용 불가피)
           setNodes((currentNodes) => {
             const graphColor = getGraphColor(newParent.id, currentNodes, edges);
             return updateSubtreeColors(
@@ -1582,17 +1643,38 @@ function GraphCanvasInner({
               graphColor,
             );
           });
+
+          // API: hover-snap 발생 시 snap된 D3 좌표로 노드 위치 저장
+          moveNode(workspaceId, draggedNode.id, {
+            x: snapCenterX - draggedHalfWidth,
+            y: snapCenterY - draggedHalfHeight,
+          }).catch((err) => console.error("[moveNode] failed", err));
+
+          // API: 함께 이동된 자식 노드들 위치 저장
+          childrenIds.forEach((childId) => {
+            const d3Child = d3NodesRef.current.find((n) => n.id === childId);
+            if (!d3Child) return;
+            const childNode = nodes.find((n) => n.id === childId);
+            const childWidth = childNode?.width ?? NODE_WIDTH;
+            const childHeight = childNode?.height ?? NODE_HEIGHT;
+            moveNode(workspaceId, childId, {
+              x: d3Child.x - childWidth / 2,
+              y: d3Child.y - childHeight / 2,
+            }).catch((err) =>
+              console.error(`[moveNode child ${childId}] failed`, err),
+            );
+          });
+
+          return;
         }
       }
 
       // D3 시뮬레이션 종료: fx, fy 해제 및 alphaTarget(0) 설정
-      isDraggingRef.current = false;
+      // isDraggingRef는 simulation "end" 이벤트에서 false로 세팅됨
+      // → D3 좌표 변경이 tick을 통해 React state에 반영된 뒤에 멈춤
 
-      // 드래그 노드와 자식들의 fx, fy 모두 해제
       const childrenIds = getDescendantIds(draggedNode.id, edges);
-      const allNodesToRelease = [draggedNode.id, ...childrenIds];
-
-      allNodesToRelease.forEach((nodeId) => {
+      [draggedNode.id, ...childrenIds].forEach((nodeId) => {
         const d3Node = d3NodesRef.current.find((n) => n.id === nodeId);
         if (d3Node) {
           d3Node.fx = null;
@@ -1605,31 +1687,28 @@ function GraphCanvasInner({
         simulation.alphaTarget(0);
       }
 
-      // hover 상태 초기화
       setHoveredNodeId(null);
-
-      // 드래그 위치 초기화
       previousDragPositionRef.current = null;
 
-      // API: 드래그된 노드 위치 저장 (hover-snap 시 adjustedPosition 사용)
+      // API: 일반 드래그 시 노드 위치 저장
       moveNode(workspaceId, draggedNode.id, {
-        x: finalPosition.x,
-        y: finalPosition.y,
+        x: draggedNode.position.x,
+        y: draggedNode.position.y,
       }).catch((err) => console.error("[moveNode] failed", err));
 
       // API: 함께 이동된 자식 노드들 위치 저장
-      const draggedChildrenIds = getDescendantIds(draggedNode.id, edges);
-      draggedChildrenIds.forEach((childId) => {
+      childrenIds.forEach((childId) => {
         const d3Child = d3NodesRef.current.find((n) => n.id === childId);
-        if (d3Child?.fx != null && d3Child?.fy != null) {
-          const childNode = nodes.find((n) => n.id === childId);
-          const childWidth = childNode?.width ?? NODE_WIDTH;
-          const childHeight = childNode?.height ?? NODE_HEIGHT;
-          moveNode(workspaceId, childId, {
-            x: d3Child.fx - childWidth / 2,
-            y: d3Child.fy - childHeight / 2,
-          }).catch((err) => console.error(`[moveNode child ${childId}] failed`, err));
-        }
+        if (!d3Child) return;
+        const childNode = nodes.find((n) => n.id === childId);
+        const childWidth = childNode?.width ?? NODE_WIDTH;
+        const childHeight = childNode?.height ?? NODE_HEIGHT;
+        moveNode(workspaceId, childId, {
+          x: d3Child.x - childWidth / 2,
+          y: d3Child.y - childHeight / 2,
+        }).catch((err) =>
+          console.error(`[moveNode child ${childId}] failed`, err),
+        );
       });
     },
     [nodes, edges, hoveredNodeId, workspaceId],
