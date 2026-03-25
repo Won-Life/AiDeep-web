@@ -23,5 +23,8 @@ export * from './edge';
 // Upload
 export * from './upload';
 
-// SSE
-export * from './sse';
+// SSE (legacy)
+export { subscribeToWorkspace as subscribeToWorkspaceSSE } from './sse';
+
+// WebSocket
+export * from './ws';

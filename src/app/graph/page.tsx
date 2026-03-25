@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Edge, type Node } from "@xyflow/react";
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
 import Sidebar, {
@@ -72,6 +72,10 @@ export default function GraphPage() {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [synced, setSynced] = useState(false);
+
+  // edgesRef: useWorkspaceSSE에 전달 (재구독 방지)
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
 
   const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
 
@@ -206,7 +210,7 @@ export default function GraphPage() {
       });
   }, [workspaceId]);
 
-  useWorkspaceSSE({ workspaceId: workspaceId ?? "", setNodes });
+  useWorkspaceSSE({ workspaceId: workspaceId ?? "", setNodes, setEdges, edgesRef });
 
   return (
     <div className="relative w-full h-screen overflow-hidden">

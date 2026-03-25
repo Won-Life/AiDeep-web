@@ -1,20 +1,29 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { subscribeToWorkspace } from "@/api/sse";
+import { subscribeToWorkspace, onLivePosition } from "@/api/ws";
+import type { LivePositionPayload } from "@/api/ws";
 import type {
   SseEvent,
   SseNodeMoveEvent,
   SseNodeCreateEvent,
   SseNodeDeleteEvent,
   SseNodeUpdateEvent,
+  SseEdgeCreateEvent,
 } from "@/api/types";
-import type { Node } from "@xyflow/react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Node, Edge } from "@xyflow/react";
+import type { Dispatch, SetStateAction, RefObject } from "react";
 import { DEFAULT_NODE_COLOR } from "@/features/graph/constants/colors";
+import { getDescendantIds } from "@/features/graph/utils/graphUtils";
+
+const TRANSITION_DURATION = 300;
+const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;
 
 interface UseWorkspaceSSEOptions {
   workspaceId: string;
   setNodes: Dispatch<SetStateAction<Node[]>>;
+  setEdges: Dispatch<SetStateAction<Edge[]>>;
+  edgesRef: RefObject<Edge[]>;
+  isDraggingRef?: RefObject<boolean>;
 }
 
 /**
@@ -24,11 +33,16 @@ interface UseWorkspaceSSEOptions {
 export function useWorkspaceSSE({
   workspaceId,
   setNodes,
+  setEdges,
+  edgesRef,
+  isDraggingRef,
 }: UseWorkspaceSSEOptions): void {
-  // Use refs so the latest setNodes is always available
+  // Use refs so the latest setters are always available
   // without re-subscribing on every render.
   const setNodesRef = useRef(setNodes);
   setNodesRef.current = setNodes;
+  const setEdgesRef = useRef(setEdges);
+  setEdgesRef.current = setEdges;
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -47,17 +61,65 @@ export function useWorkspaceSSE({
         case "NODE_UPDATE":
           handleNodeUpdate(event);
           break;
+        case "EDGE_CREATE":
+          handleEdgeCreate(event);
+          break;
       }
     };
 
     const handleNodeMove = (e: SseNodeMoveEvent) => {
-      setNodesRef.current((prev) =>
-        prev.map((node) =>
-          node.id === e.nodeId
-            ? { ...node, position: { x: e.x, y: e.y } }
-            : node,
-        ),
-      );
+      // 로컬 드래그 중이면 transition 생략 (충돌 방지)
+      const useTransition = !isDraggingRef?.current;
+      const transitionStyle = useTransition
+        ? { transition: MOVE_TRANSITION }
+        : {};
+
+      setNodesRef.current((prev) => {
+        const target = prev.find((n) => n.id === e.nodeId);
+        if (!target) return prev;
+
+        const deltaX = e.x - target.position.x;
+        const deltaY = e.y - target.position.y;
+        const childIds = getDescendantIds(e.nodeId, edgesRef.current);
+
+        return prev.map((node) => {
+          if (node.id === e.nodeId) {
+            return {
+              ...node,
+              position: { x: e.x, y: e.y },
+              style: { ...node.style, ...transitionStyle },
+            };
+          }
+          if (childIds.has(node.id)) {
+            return {
+              ...node,
+              position: {
+                x: node.position.x + deltaX,
+                y: node.position.y + deltaY,
+              },
+              style: { ...node.style, ...transitionStyle },
+            };
+          }
+          return node;
+        });
+      });
+
+      // transition 제거 (로컬 드래그 시 잔류 방지)
+      if (useTransition) {
+        const affectedIds = new Set([
+          e.nodeId,
+          ...getDescendantIds(e.nodeId, edgesRef.current),
+        ]);
+        setTimeout(() => {
+          setNodesRef.current((prev) =>
+            prev.map((node) =>
+              affectedIds.has(node.id)
+                ? { ...node, style: { ...node.style, transition: undefined } }
+                : node,
+            ),
+          );
+        }, TRANSITION_DURATION);
+      }
     };
 
     const handleNodeCreate = (e: SseNodeCreateEvent) => {
@@ -129,12 +191,61 @@ export function useWorkspaceSSE({
       );
     };
 
-    const handleError = (err: Event) => {
+    const handleEdgeCreate = (e: SseEdgeCreateEvent) => {
+      setEdgesRef.current((prev) => {
+        if (prev.some((edge) => edge.id === e.edge.edgeId)) return prev;
+        const newEdge: Edge = {
+          id: e.edge.edgeId,
+          source: e.edge.sourceId,
+          target: e.edge.targetId,
+          sourceHandle: e.edge.sourceHandle,
+          targetHandle: e.edge.targetHandle,
+        };
+        return [...prev, newEdge];
+      });
+    };
+
+    const handleError = (err: unknown) => {
       console.error("[useWorkspaceSSE] connection error", err);
     };
 
     const cleanup = subscribeToWorkspace(workspaceId, handleEvent, handleError);
 
-    return cleanup;
+    // 실시간 위치 이벤트 (transition 없이 즉시 적용)
+    const handleLivePosition = (payload: LivePositionPayload) => {
+      setNodesRef.current((prev) => {
+        const target = prev.find((n) => n.id === payload.nodeId);
+        if (!target) return prev;
+
+        const deltaX = payload.x - target.position.x;
+        const deltaY = payload.y - target.position.y;
+        if (deltaX === 0 && deltaY === 0) return prev;
+
+        const childIds = getDescendantIds(payload.nodeId, edgesRef.current);
+
+        return prev.map((node) => {
+          if (node.id === payload.nodeId) {
+            return { ...node, position: { x: payload.x, y: payload.y } };
+          }
+          if (childIds.has(node.id)) {
+            return {
+              ...node,
+              position: {
+                x: node.position.x + deltaX,
+                y: node.position.y + deltaY,
+              },
+            };
+          }
+          return node;
+        });
+      });
+    };
+
+    const cleanupLive = onLivePosition(handleLivePosition);
+
+    return () => {
+      cleanupLive(); // off() 먼저 — cleanup()이 socket을 null로 만들기 전에
+      cleanup();
+    };
   }, [workspaceId]);
 }

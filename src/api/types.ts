@@ -191,7 +191,7 @@ export interface UploadResponse {
 
 // ─── SSE ─────────────────────────────────────────────────────────────
 
-export type SseEventType = 'NODE_MOVE' | 'NODE_CREATE' | 'NODE_DELETE' | 'NODE_UPDATE';
+export type SseEventType = 'NODE_MOVE' | 'NODE_CREATE' | 'NODE_DELETE' | 'NODE_UPDATE' | 'EDGE_CREATE';
 
 export interface SseNodeMoveEvent {
   type: 'NODE_MOVE';
@@ -235,8 +235,22 @@ export interface SseNodeUpdateEvent {
   };
 }
 
+export interface SseEdgeCreateEvent {
+  type: 'EDGE_CREATE';
+  workspaceId: string;
+  userId: string;
+  edge: {
+    edgeId: string;
+    sourceId: string;
+    targetId: string;
+    sourceHandle: string;
+    targetHandle: string;
+  };
+}
+
 export type SseEvent =
   | SseNodeMoveEvent
   | SseNodeCreateEvent
   | SseNodeDeleteEvent
-  | SseNodeUpdateEvent;
+  | SseNodeUpdateEvent
+  | SseEdgeCreateEvent;
