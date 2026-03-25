@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, signup, sendEmailCode, verifyEmailCode } from '@/api/auth';
+import { createWorkspace } from '@/api/workspace';
 import { ApiError } from '@/api/types';
 
 type AuthMode = 'login' | 'signup';
@@ -72,6 +73,13 @@ export default function LoginPage() {
       await verifyEmailCode({ email, code: Number(verifyCode) });
       // 회원가입
       await signup({ email, password, name, phone });
+
+      // TODO: 임시 처리 - 백엔드에서 회원가입 시 기본 워크스페이스 자동 생성으로 교체 예정
+      const loginResult = await login({ email, password });
+      if (loginResult) {
+        await createWorkspace({ title: '내 워크스페이스', role: 'OWNER' });
+      }
+
       setMessage('회원가입이 완료되었습니다! 로그인해주세요.');
       setMode('login');
       resetForm();
