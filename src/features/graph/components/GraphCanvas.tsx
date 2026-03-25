@@ -1093,7 +1093,7 @@ function GraphCanvasInner({
           type: "textUpdater",
           position: adjustedPosition,
           data: {
-            text: "새 노드",
+            text: "",
             isMain: false,
             color: colorPair.bg,
             textColor: colorPair.text,
@@ -1176,7 +1176,7 @@ function GraphCanvasInner({
         type: "textUpdater",
         position,
         data: {
-          text: "새 노드",
+          text: "",
           isMain: false,
           color: DEFAULT_NODE_COLOR.bg,
           textColor: DEFAULT_NODE_COLOR.text,
