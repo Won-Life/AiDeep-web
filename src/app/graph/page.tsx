@@ -13,7 +13,7 @@ import ChipHeader from "@/components/layout/ChipHeader";
 import { initialEdges, initialNodes } from "@/mock/mindmap";
 import { getNodes } from "@/features/graph/api/getNodes";
 import { toFlowNode, toFlowEdge } from "@/features/graph/api/mappers";
-import { useWorkspaceSSE } from "@/hooks/useWorkspaceSSE";
+import { useWorkspaceWS } from "@/hooks/useWorkspaceWS";
 import { getWorkspaces } from "@/api/workspace";
 
 const INITIAL_PROJECTS: Project[] = [
@@ -73,7 +73,7 @@ export default function GraphPage() {
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [synced, setSynced] = useState(false);
 
-  // edgesRef: useWorkspaceSSE에 전달 (재구독 방지)
+  // edgesRef: useWorkspaceWS에 전달 (재구독 방지)
   const edgesRef = useRef(edges);
   edgesRef.current = edges;
 
@@ -210,7 +210,7 @@ export default function GraphPage() {
       });
   }, [workspaceId]);
 
-  useWorkspaceSSE({ workspaceId: workspaceId ?? "", setNodes, setEdges, edgesRef });
+  useWorkspaceWS({ workspaceId: workspaceId ?? "", setNodes, setEdges, edgesRef });
 
   return (
     <div className="relative w-full h-screen overflow-hidden">

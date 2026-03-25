@@ -1,8 +1,8 @@
 import { io, Socket } from 'socket.io-client';
 import { getAccessToken } from './client';
-import type { SseEvent } from './types';
+import type { WsEvent } from './types';
 
-export type WsEventHandler = (event: SseEvent) => void;
+export type WsEventHandler = (event: WsEvent) => void;
 export type WsErrorHandler = (error: unknown) => void;
 
 let socket: Socket | null = null;
@@ -32,7 +32,7 @@ export function subscribeToWorkspace(
     socket!.emit('join_workspace', { workspaceId });
   });
 
-  socket.on('workspace_event', (event: SseEvent) => {
+  socket.on('workspace_event', (event: WsEvent) => {
     onEvent(event);
   });
 

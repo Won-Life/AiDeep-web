@@ -3,12 +3,12 @@ import { useEffect, useRef } from "react";
 import { subscribeToWorkspace, onLivePosition } from "@/api/ws";
 import type { LivePositionPayload } from "@/api/ws";
 import type {
-  SseEvent,
-  SseNodeMoveEvent,
-  SseNodeCreateEvent,
-  SseNodeDeleteEvent,
-  SseNodeUpdateEvent,
-  SseEdgeCreateEvent,
+  WsEvent,
+  WsNodeMoveEvent,
+  WsNodeCreateEvent,
+  WsNodeDeleteEvent,
+  WsNodeUpdateEvent,
+  WsEdgeCreateEvent,
 } from "@/api/types";
 import type { Node, Edge } from "@xyflow/react";
 import type { Dispatch, SetStateAction, RefObject } from "react";
@@ -18,7 +18,7 @@ import { getDescendantIds } from "@/features/graph/utils/graphUtils";
 const TRANSITION_DURATION = 300;
 const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;
 
-interface UseWorkspaceSSEOptions {
+interface UseWorkspaceWSOptions {
   workspaceId: string;
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
@@ -27,16 +27,16 @@ interface UseWorkspaceSSEOptions {
 }
 
 /**
- * Subscribes to workspace SSE events and applies real-time updates
+ * Subscribes to workspace WS events and applies real-time updates
  * to the React Flow node state. Side-effect only hook.
  */
-export function useWorkspaceSSE({
+export function useWorkspaceWS({
   workspaceId,
   setNodes,
   setEdges,
   edgesRef,
   isDraggingRef,
-}: UseWorkspaceSSEOptions): void {
+}: UseWorkspaceWSOptions): void {
   // Use refs so the latest setters are always available
   // without re-subscribing on every render.
   const setNodesRef = useRef(setNodes);
@@ -47,7 +47,7 @@ export function useWorkspaceSSE({
   useEffect(() => {
     if (!workspaceId) return;
 
-    const handleEvent = (event: SseEvent) => {
+    const handleEvent = (event: WsEvent) => {
       switch (event.type) {
         case "NODE_MOVE":
           handleNodeMove(event);
@@ -67,7 +67,7 @@ export function useWorkspaceSSE({
       }
     };
 
-    const handleNodeMove = (e: SseNodeMoveEvent) => {
+    const handleNodeMove = (e: WsNodeMoveEvent) => {
       // 로컬 드래그 중이면 transition 생략 (충돌 방지)
       const useTransition = !isDraggingRef?.current;
       const transitionStyle = useTransition
@@ -122,7 +122,7 @@ export function useWorkspaceSSE({
       }
     };
 
-    const handleNodeCreate = (e: SseNodeCreateEvent) => {
+    const handleNodeCreate = (e: WsNodeCreateEvent) => {
       const newNode: Node = {
         id: e.node.nodeId,
         type: "textUpdater",
@@ -144,13 +144,13 @@ export function useWorkspaceSSE({
       });
     };
 
-    const handleNodeDelete = (e: SseNodeDeleteEvent) => {
+    const handleNodeDelete = (e: WsNodeDeleteEvent) => {
       setNodesRef.current((prev) =>
         prev.filter((node) => node.id !== e.nodeId),
       );
     };
 
-    const handleNodeUpdate = (e: SseNodeUpdateEvent) => {
+    const handleNodeUpdate = (e: WsNodeUpdateEvent) => {
       setNodesRef.current((prev) =>
         prev.map((node) => {
           if (node.id !== e.nodeId) return node;
@@ -191,7 +191,7 @@ export function useWorkspaceSSE({
       );
     };
 
-    const handleEdgeCreate = (e: SseEdgeCreateEvent) => {
+    const handleEdgeCreate = (e: WsEdgeCreateEvent) => {
       setEdgesRef.current((prev) => {
         if (prev.some((edge) => edge.id === e.edge.edgeId)) return prev;
         const newEdge: Edge = {
@@ -206,7 +206,7 @@ export function useWorkspaceSSE({
     };
 
     const handleError = (err: unknown) => {
-      console.error("[useWorkspaceSSE] connection error", err);
+      console.error("[useWorkspaceWS] connection error", err);
     };
 
     const cleanup = subscribeToWorkspace(workspaceId, handleEvent, handleError);

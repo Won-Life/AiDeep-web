@@ -23,7 +23,7 @@ export * from './edge';
 // Upload
 export * from './upload';
 
-// SSE (legacy)
+// SSE (legacy — deprecated, use ws.ts instead)
 export { subscribeToWorkspace as subscribeToWorkspaceSSE } from './sse';
 
 // WebSocket
