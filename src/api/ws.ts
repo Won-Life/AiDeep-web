@@ -71,3 +71,43 @@ export function onLivePosition(
     socket?.off('node_position_live', handler);
   };
 }
+
+// ─── Cursor Sharing ──────────────────────────────────────────────────
+
+export interface CursorPayload {
+  userId: string;
+  x: number;
+  y: number;
+  userName: string;
+  color: string;
+}
+
+export function emitCursorMove(
+  workspaceId: string,
+  x: number,
+  y: number,
+  userName: string,
+  color: string,
+): void {
+  socket?.emit('cursor_move', { workspaceId, x, y, userName, color });
+}
+
+export function onCursorMove(
+  handler: (payload: CursorPayload) => void,
+): () => void {
+  if (!socket) return () => {};
+  socket.on('cursor_move', handler);
+  return () => {
+    socket?.off('cursor_move', handler);
+  };
+}
+
+export function onCursorLeave(
+  handler: (payload: { userId: string }) => void,
+): () => void {
+  if (!socket) return () => {};
+  socket.on('cursor_leave', handler);
+  return () => {
+    socket?.off('cursor_leave', handler);
+  };
+}

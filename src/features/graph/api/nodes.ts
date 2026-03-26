@@ -48,6 +48,15 @@ export async function moveNode(
   });
 }
 
+export async function deleteNode(
+  workspaceId: string,
+  nodeId: string,
+): Promise<void> {
+  await api(`/workspace/${workspaceId}/node/${nodeId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function updateNodeContent(
   workspaceId: string,
   nodeId: string,

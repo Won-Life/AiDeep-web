@@ -6,8 +6,8 @@ export async function createEdge(
   targetId: string,
   sourceHandle: string,
   targetHandle: string,
-): Promise<string> {
-  return api<string>(`/workspace/${workspaceId}/edge/`, {
+): Promise<{ edgeId: string }> {
+  return api<{ edgeId: string }>(`/workspace/${workspaceId}/edge/`, {
     method: "POST",
     body: JSON.stringify({ sourceId, targetId, sourceHandle, targetHandle }),
   });

@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { type Edge, type Node } from "@xyflow/react";
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
 import Sidebar, {
@@ -10,11 +11,15 @@ import Sidebar, {
 } from "@/components/layout/Sidebar";
 import DropDown from "@/components/ui/DropDown";
 import ChipHeader from "@/components/layout/ChipHeader";
+import UserMenu from "@/components/layout/UserMenu";
 import { initialEdges, initialNodes } from "@/mock/mindmap";
 import { getNodes } from "@/features/graph/api/getNodes";
 import { toFlowNode, toFlowEdge } from "@/features/graph/api/mappers";
 import { useWorkspaceWS } from "@/hooks/useWorkspaceWS";
 import { getWorkspaces } from "@/api/workspace";
+import { getMe } from "@/api/user";
+import { logout } from "@/api/auth";
+import type { UserMeResponse } from "@/api/types";
 
 const INITIAL_PROJECTS: Project[] = [
   { id: "p1", name: "Project 1" },
@@ -52,14 +57,20 @@ const INITIAL_RESOURCES: Resource[] = [
       { id: "r4-3", name: "Resource n-3" },
     ],
   },
-];
+]
 
 function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 export default function GraphPage() {
+  const router = useRouter();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [userMe, setUserMe] = useState<UserMeResponse | null>(null);
+
+  const currentUserId = userMe?.userId ?? "";
+  const currentUserName = userMe?.username ?? "Anonymous";
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
@@ -176,6 +187,26 @@ export default function GraphPage() {
     });
   };
 
+  // 0) 유저 정보 조회
+  useEffect(() => {
+    getMe<UserMeResponse>()
+      .then(setUserMe)
+      .catch((error) => {
+        console.error("[getMe] failed — redirecting to login", error);
+        router.replace("/login");
+      });
+  }, [router]);
+
+  // 로그아웃 핸들러
+  const handleLogout = useCallback(async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("[logout] API failed", error);
+    }
+    router.replace("/login");
+  }, [router]);
+
   // 1) 워크스페이스 목록 조회 → 첫 번째 자동 선택
   useEffect(() => {
     getWorkspaces()
@@ -222,6 +253,8 @@ export default function GraphPage() {
         ) : (
         <GraphCanvas
           workspaceId={workspaceId}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
           focusedNodeId={focusedNodeId}
           onFocusComplete={() => setFocusedNodeId(null)}
           nodes={nodes}
@@ -257,6 +290,12 @@ export default function GraphPage() {
       />
 
       <DropDown sidebarWidth={sidebarWidth} />
+
+      <UserMenu
+        username={currentUserName}
+        email={userMe?.email ?? ""}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }

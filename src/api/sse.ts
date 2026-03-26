@@ -1,7 +1,7 @@
 // =============== deprecated sse ===================//
 
-import { getAccessToken } from "./client";
-import type { WsEvent } from "./types";
+import { getAccessToken } from './client';
+import type { WsEvent } from './types';
 
 export type WsEventHandler = (event: WsEvent) => void;
 export type SseErrorHandler = (error: Event) => void;
@@ -21,7 +21,7 @@ export function subscribeToWorkspace(
 ): () => void {
   const token = getAccessToken();
   const params = new URLSearchParams({ workspaceId });
-  if (token) params.set("token", token);
+  if (token) params.set('token', token);
 
   const url = `/api/workspace/stream?${params.toString()}`;
   const source = new EventSource(url);
