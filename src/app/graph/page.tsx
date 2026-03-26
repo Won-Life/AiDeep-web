@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Edge, type Node } from "@xyflow/react";
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
 import Sidebar, {
@@ -13,7 +13,7 @@ import ChipHeader from "@/components/layout/ChipHeader";
 import { initialEdges, initialNodes } from "@/mock/mindmap";
 import { getNodes } from "@/features/graph/api/getNodes";
 import { toFlowNode, toFlowEdge } from "@/features/graph/api/mappers";
-import { useWorkspaceSSE } from "@/hooks/useWorkspaceSSE";
+import { useWorkspaceWS } from "@/hooks/useWorkspaceWS";
 import { getWorkspaces } from "@/api/workspace";
 
 const INITIAL_PROJECTS: Project[] = [
@@ -72,6 +72,10 @@ export default function GraphPage() {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [synced, setSynced] = useState(false);
+
+  // edgesRef: useWorkspaceWS에 전달 (재구독 방지)
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
 
   const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
 
@@ -206,7 +210,7 @@ export default function GraphPage() {
       });
   }, [workspaceId]);
 
-  useWorkspaceSSE({ workspaceId: workspaceId ?? "", setNodes });
+  useWorkspaceWS({ workspaceId: workspaceId ?? "", setNodes, setEdges, edgesRef });
 
   return (
     <div className="relative w-full h-screen overflow-hidden">

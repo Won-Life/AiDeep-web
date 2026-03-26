@@ -10,12 +10,16 @@ interface MdBody {
   jsonBody: string;
 }
 
+interface CreateNodeResponse {
+  nodeId: string;
+}
+
 export async function createProjectNode(
   workspaceId: string,
   title: string,
   position: Position,
-): Promise<string> {
-  return api<string>(`/workspace/${workspaceId}/node/project`, {
+): Promise<CreateNodeResponse> {
+  return api<CreateNodeResponse>(`/workspace/${workspaceId}/node/project`, {
     method: "POST",
     body: JSON.stringify({ title, position }),
   });
@@ -26,8 +30,8 @@ export async function createMdNode(
   title: string,
   position: Position,
   body: MdBody = { markdownBody: "", jsonBody: "" },
-): Promise<string> {
-  return api<string>(`/workspace/${workspaceId}/node/md`, {
+): Promise<CreateNodeResponse> {
+  return api<CreateNodeResponse>(`/workspace/${workspaceId}/node/md`, {
     method: "POST",
     body: JSON.stringify({ title, position, body }),
   });

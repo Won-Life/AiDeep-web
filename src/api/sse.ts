@@ -1,7 +1,9 @@
-import { getAccessToken } from './client';
-import type { SseEvent } from './types';
+// =============== deprecated sse ===================//
 
-export type SseEventHandler = (event: SseEvent) => void;
+import { getAccessToken } from "./client";
+import type { WsEvent } from "./types";
+
+export type WsEventHandler = (event: WsEvent) => void;
 export type SseErrorHandler = (error: Event) => void;
 
 /**
@@ -14,19 +16,19 @@ export type SseErrorHandler = (error: Event) => void;
  */
 export function subscribeToWorkspace(
   workspaceId: string,
-  onEvent: SseEventHandler,
+  onEvent: WsEventHandler,
   onError?: SseErrorHandler,
 ): () => void {
   const token = getAccessToken();
   const params = new URLSearchParams({ workspaceId });
-  if (token) params.set('token', token);
+  if (token) params.set("token", token);
 
   const url = `/api/workspace/stream?${params.toString()}`;
   const source = new EventSource(url);
 
   source.onmessage = (msg: MessageEvent) => {
     try {
-      const parsed: SseEvent = JSON.parse(msg.data);
+      const parsed: WsEvent = JSON.parse(msg.data);
       onEvent(parsed);
     } catch {
       // Silently ignore malformed events

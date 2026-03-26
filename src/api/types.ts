@@ -189,11 +189,11 @@ export interface UploadResponse {
   size: number;
 }
 
-// ─── SSE ─────────────────────────────────────────────────────────────
+// ─── WS (WebSocket Events) ───────────────────────────────────────────
 
-export type SseEventType = 'NODE_MOVE' | 'NODE_CREATE' | 'NODE_DELETE' | 'NODE_UPDATE';
+export type WsEventType = 'NODE_MOVE' | 'NODE_CREATE' | 'NODE_DELETE' | 'NODE_UPDATE' | 'EDGE_CREATE';
 
-export interface SseNodeMoveEvent {
+export interface WsNodeMoveEvent {
   type: 'NODE_MOVE';
   workspaceId: string;
   userId: string;
@@ -202,7 +202,7 @@ export interface SseNodeMoveEvent {
   y: number;
 }
 
-export interface SseNodeCreateEvent {
+export interface WsNodeCreateEvent {
   type: 'NODE_CREATE';
   workspaceId: string;
   userId: string;
@@ -216,14 +216,14 @@ export interface SseNodeCreateEvent {
   };
 }
 
-export interface SseNodeDeleteEvent {
+export interface WsNodeDeleteEvent {
   type: 'NODE_DELETE';
   workspaceId: string;
   nodeId: string;
   userId: string;
 }
 
-export interface SseNodeUpdateEvent {
+export interface WsNodeUpdateEvent {
   type: 'NODE_UPDATE';
   workspaceId: string;
   nodeId: string;
@@ -235,8 +235,22 @@ export interface SseNodeUpdateEvent {
   };
 }
 
-export type SseEvent =
-  | SseNodeMoveEvent
-  | SseNodeCreateEvent
-  | SseNodeDeleteEvent
-  | SseNodeUpdateEvent;
+export interface WsEdgeCreateEvent {
+  type: 'EDGE_CREATE';
+  workspaceId: string;
+  userId: string;
+  edge: {
+    edgeId: string;
+    sourceId: string;
+    targetId: string;
+    sourceHandle: string;
+    targetHandle: string;
+  };
+}
+
+export type WsEvent =
+  | WsNodeMoveEvent
+  | WsNodeCreateEvent
+  | WsNodeDeleteEvent
+  | WsNodeUpdateEvent
+  | WsEdgeCreateEvent;

@@ -28,10 +28,12 @@ import { nodeTypes } from "@/types/nodeTypes";
 import { edgeTypes } from "@/types/edgeTypes";
 import { getNodes } from "../api/getNodes";
 import { createMdNode, moveNode } from "../api/nodes";
+import { emitLivePosition } from "@/api/ws";
 import { createEdge } from "../api/edges";
 import type { EdgeDto, NodeDto } from "../types";
 import { rectCollide } from "../layout/rectCollide";
 import { getRandomColorPair, DEFAULT_NODE_COLOR } from "../constants/colors";
+import { getDescendantIds } from "../utils/graphUtils";
 
 // DB 저장 함수 (예시)
 async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
@@ -153,24 +155,6 @@ function updateSubtreeColors(
   );
 }
 
-function getDescendantIds(nodeId: string, edges: Edge[]): Set<string> {
-  const descendants = new Set<string>();
-  const queue: string[] = [nodeId];
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) continue;
-
-    for (const edge of edges) {
-      if (edge.source === current && !descendants.has(edge.target)) {
-        descendants.add(edge.target);
-        queue.push(edge.target);
-      }
-    }
-  }
-
-  return descendants;
-}
 
 function areSiblings(aId: string, bId: string, edges: Edge[]): boolean {
   const parentA = getParentId(aId, edges);
@@ -617,6 +601,8 @@ function GraphCanvasInner({
   const isDraggingRef = useRef(false);
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
   const isConnectingRef = useRef(false);
+  const lastLiveEmitRef = useRef(0);
+  const LIVE_EMIT_INTERVAL = 50; // ms
 
   /* =========================
      D3 Force Simulation 초기화
@@ -807,7 +793,7 @@ function GraphCanvasInner({
         });
       return isSame ? snapshot : updated;
     });
-  }, [nodes]);
+  }, [nodes, edges.length]);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     if (isArchiveModalOpen) {
@@ -1020,7 +1006,7 @@ function GraphCanvasInner({
   }, []);
 
   const onConnectEnd = useCallback(
-    (event: MouseEvent | TouchEvent, connectionState: any) => {
+    async (event: MouseEvent | TouchEvent, connectionState: any) => {
       // 기존 노드에 연결되지 않았을 때 (빈 공간에 드롭)
       if (!connectionState.isValid) {
         // 마우스 위치 가져오기
@@ -1052,13 +1038,10 @@ function GraphCanvasInner({
         if (forcedSourceSide) {
           side = forcedSourceSide;
         } else if (fromHandle.includes("left")) {
-          // Main 노드의 왼쪽 핸들
           side = "left";
         } else if (fromHandle.includes("right")) {
-          // Main 노드의 오른쪽 핸들
           side = "right";
         } else {
-          // Sub 노드의 핸들 ("source-side") - 위치 기반으로 handleSide 계산
           const parentId = getParentId(sourceNode.id, edges);
           const parentNode = parentId
             ? nodes.find((n) => n.id === parentId)
@@ -1077,9 +1060,6 @@ function GraphCanvasInner({
           edges,
         );
 
-        // 새 노드 ID 생성
-        const newNodeId = makeNodeId();
-
         // source 노드의 색상 가져오기
         const colorPair = getGraphColor(
           connectionState.fromNode.id,
@@ -1087,46 +1067,56 @@ function GraphCanvasInner({
           edges,
         );
 
-        // 새 노드 생성
-        const newNode: Node = {
-          id: newNodeId,
-          type: "textUpdater",
-          position: adjustedPosition,
-          data: {
-            text: "",
-            isMain: false,
-            color: colorPair.bg,
-            textColor: colorPair.text,
-          },
-        };
-
-        // 노드와 엣지 동시 추가
-        setNodes((nds) => [...nds, newNode]);
-        setEdges((eds) => {
-          const rawEdge: Edge = {
-            id: `e-${connectionState.fromNode.id}-${newNodeId}-${Date.now()}`,
-            source: connectionState.fromNode.id,
-            target: newNodeId,
-          };
-          const newEdge = buildEdgePresentation(
-            rawEdge,
-            [...nodes, newNode],
-            [...eds, rawEdge],
+        try {
+          // API: 노드 생성 → 실제 UUID 획득
+          const { nodeId: realNodeId } = await createMdNode(
+            workspaceId,
+            "새 노드",
+            adjustedPosition,
           );
-          return [...eds, newEdge];
-        });
 
-        // API: 노드 생성 + 엣지 생성
-        createMdNode(workspaceId, "새 노드", adjustedPosition).catch((err) =>
-          console.error("[createMdNode] failed", err),
-        );
-        createEdge(
-          workspaceId,
-          connectionState.fromNode.id,
-          newNodeId,
-          fromHandle || "source-side",
-          "target-side",
-        ).catch((err) => console.error("[createEdge] failed", err));
+          // 실제 UUID로 로컬 노드 추가
+          const newNode: Node = {
+            id: realNodeId,
+            type: "textUpdater",
+            position: adjustedPosition,
+            data: {
+              text: "",
+              isMain: false,
+              color: colorPair.bg,
+              textColor: colorPair.text,
+            },
+          };
+
+          setNodes((nds) => {
+            if (nds.some((n) => n.id === realNodeId)) return nds;
+            return [...nds, newNode];
+          });
+          setEdges((eds) => {
+            const rawEdge: Edge = {
+              id: `e-${connectionState.fromNode.id}-${realNodeId}-${Date.now()}`,
+              source: connectionState.fromNode.id,
+              target: realNodeId,
+            };
+            const newEdge = buildEdgePresentation(
+              rawEdge,
+              [...nodes, newNode],
+              [...eds, rawEdge],
+            );
+            return [...eds, newEdge];
+          });
+
+          // API: 실제 UUID로 엣지 생성
+          await createEdge(
+            workspaceId,
+            connectionState.fromNode.id,
+            realNodeId,
+            fromHandle || "source-side",
+            "target-side",
+          );
+        } catch (err) {
+          console.error("[onConnectEnd] node/edge creation failed", err);
+        }
       }
 
       // onPaneClick이 실행되지 않도록 약간의 딜레이 후 플래그 해제
@@ -1134,7 +1124,7 @@ function GraphCanvasInner({
         isConnectingRef.current = false;
       }, 0);
     },
-    [screenToFlowPosition, nodes, edges],
+    [screenToFlowPosition, nodes, edges, workspaceId],
   );
 
   /* =========================
@@ -1149,7 +1139,7 @@ function GraphCanvasInner({
      Empty pane click → create node
      ========================= */
   const onPaneClick = useCallback(
-    (event: React.MouseEvent) => {
+    async (event: React.MouseEvent) => {
       // 연결 드래그 중이면 노드 생성하지 않음
       if (isConnectingRef.current) return;
 
@@ -1162,30 +1152,35 @@ function GraphCanvasInner({
       // (선택) 우클릭은 제외
       if (event.button !== 0) return;
 
-      // (선택) Shift 눌렀을 때만 생성하고 싶으면:
-      // if (!event.shiftKey) return;
-
       // wrapper 기준 좌표로 변환 (screenToFlowPosition은 clientX/Y 기반으로 처리)
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       });
 
-      const newNode: Node = {
-        id: makeNodeId(),
-        type: "textUpdater",
-        position,
-        data: {
-          text: "",
-          isMain: false,
-          color: DEFAULT_NODE_COLOR.bg,
-          textColor: DEFAULT_NODE_COLOR.text,
-        },
-      };
+      try {
+        const { nodeId } = await createMdNode(workspaceId, "새 노드", position);
+        const newNode: Node = {
+          id: makeNodeId(),
+          type: "textUpdater",
+          position,
+          data: {
+            text: "",
+            isMain: false,
+            color: DEFAULT_NODE_COLOR.bg,
+            textColor: DEFAULT_NODE_COLOR.text,
+          },
+        };
 
-      setNodes((prev) => [...prev, newNode]);
+        setNodes((prev) => {
+          if (prev.some((n) => n.id === nodeId)) return prev;
+          return [...prev, newNode];
+        });
+      } catch (err) {
+        console.error("[onPaneClick] createMdNode failed", err);
+      }
     },
-    [screenToFlowPosition, selectedNodeId],
+    [screenToFlowPosition, selectedNodeId, workspaceId],
   );
 
   const onDragOver = useCallback(
@@ -1454,8 +1449,20 @@ function GraphCanvasInner({
           }
         });
       }
+
+      // WS: 실시간 위치 브로드캐스트 (50ms throttle)
+      const now = Date.now();
+      if (now - lastLiveEmitRef.current >= LIVE_EMIT_INTERVAL) {
+        lastLiveEmitRef.current = now;
+        emitLivePosition(
+          workspaceId,
+          draggedNode.id,
+          draggedNode.position.x,
+          draggedNode.position.y,
+        );
+      }
     },
-    [nodes, edges],
+    [nodes, edges, workspaceId],
   );
 
   const onNodeDragStop = useCallback(
