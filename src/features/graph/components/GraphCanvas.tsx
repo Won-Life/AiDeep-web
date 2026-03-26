@@ -1081,7 +1081,7 @@ function GraphCanvasInner({
             type: "textUpdater",
             position: adjustedPosition,
             data: {
-              text: "새 노드",
+              text: "",
               isMain: false,
               color: colorPair.bg,
               textColor: colorPair.text,
@@ -1160,13 +1160,12 @@ function GraphCanvasInner({
 
       try {
         const { nodeId } = await createMdNode(workspaceId, "새 노드", position);
-
         const newNode: Node = {
-          id: nodeId,
+          id: makeNodeId(),
           type: "textUpdater",
           position,
           data: {
-            text: "새 노드",
+            text: "",
             isMain: false,
             color: DEFAULT_NODE_COLOR.bg,
             textColor: DEFAULT_NODE_COLOR.text,
@@ -1527,21 +1526,35 @@ function GraphCanvasInner({
             });
           });
 
-          // 5. 독립 노드(부모 없음)를 연결할 때는 서브트리 대칭 이동 필요
-          if (!existingParentEdge) {
-            // 조정된 위치의 중심점을 기준으로 서브트리 대칭 이동
+          // 5. 서브트리 대칭 이동이 필요한지 확인 후 실행
+          const childrenIds = getDescendantIds(draggedNode.id, edges);
+          if (childrenIds.size > 0) {
             const adjustedCenterX =
               adjustedPosition.x + (draggedNode.width ?? NODE_WIDTH) / 2;
 
-            // 서브트리 대칭 이동 (자식들만 이동, 드래그된 노드는 이미 위치 확정)
-            setNodes((currentNodes) => {
-              return mirrorSubtree(
-                currentNodes,
-                draggedNode.id,
-                edges,
-                adjustedCenterX,
+            const childNodes = nodes.filter((n) => childrenIds.has(n.id));
+            const avgChildCenterX =
+              childNodes.reduce(
+                (sum, n) =>
+                  sum + n.position.x + deltaX + (n.width ?? NODE_WIDTH) / 2,
+                0,
+              ) / childNodes.length;
+
+            const needsMirror =
+              side === "right"
+                ? avgChildCenterX < adjustedCenterX
+                : avgChildCenterX > adjustedCenterX;
+
+            if (needsMirror) {
+              setNodes((currentNodes) =>
+                mirrorSubtree(
+                  currentNodes,
+                  draggedNode.id,
+                  edges,
+                  adjustedCenterX,
+                ),
               );
-            });
+            }
           }
 
           // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
