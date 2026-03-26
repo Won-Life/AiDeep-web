@@ -816,11 +816,18 @@ function GraphCanvasInner({
           let updatedNodes = currentNodes;
 
           removedEdges.forEach((edge) => {
+            const remainingParentId = getParentId(edge.target, updatedEdges);
+            const remainingParent = remainingParentId
+              ? updatedNodes.find((n) => n.id === remainingParentId)
+              : null;
+            const color = remainingParent
+              ? getGraphColor(remainingParentId!, updatedNodes, updatedEdges)
+              : DEFAULT_NODE_COLOR;
             updatedNodes = updateSubtreeColors(
               edge.target,
               updatedNodes,
               updatedEdges,
-              DEFAULT_NODE_COLOR,
+              color,
             );
           });
 
@@ -1473,44 +1480,55 @@ function GraphCanvasInner({
       // hover된 노드가 있으면 연결 생성
       if (hoveredNodeId) {
         const newParent = nodes.find((n) => n.id === hoveredNodeId);
+        const draggedIsMain = draggedNode.data?.isMain === true;
         if (
           newParent &&
-          !isInvalidConnection(newParent.id, draggedNode.id, edges)
+          !isInvalidConnection(
+            draggedIsMain ? draggedNode.id : newParent.id,
+            draggedIsMain ? newParent.id : draggedNode.id,
+            edges,
+          )
         ) {
-          // 1. 기존 부모와의 연결 끊기
+          // source/target 역할 결정: main 노드가 드래그된 경우 항상 source
+          const parentNode = draggedIsMain ? draggedNode : newParent;
+          const childNode = draggedIsMain ? newParent : draggedNode;
+
+          // 1. 기존 부모와의 연결 끊기 (childNode 기준)
           const existingParentEdge = edges.find(
-            (edge) => edge.target === draggedNode.id,
+            (edge) => edge.target === childNode.id,
           );
 
-          // 2. 연결 방향 결정: 위치 기반이 아니라 소스 핸들 규칙 기준
+          // 2. 연결 방향 결정
           const side = resolveConnectSideFromSource(
-            newParent,
-            draggedNode,
+            parentNode,
+            childNode,
             undefined,
             nodes,
             edges,
           );
 
-          // 3. 드래그된 노드의 위치를 새 부모 노드 기준으로 조정
+          // 3. childNode 위치를 parentNode 기준으로 조정
           const adjustedPosition = adjustPositionRelativeToSource(
-            newParent,
-            draggedNode.position.y,
+            parentNode,
+            childNode.position.y,
             side,
             nodes,
             edges,
-            draggedNode.id,
+            childNode.id,
           );
 
-          // hover-snap이 발생했으므로 최종 위치를 adjustedPosition으로 갱신
-          finalPosition = adjustedPosition;
+          // draggedNode가 child인 경우에만 finalPosition 갱신
+          if (!draggedIsMain) {
+            finalPosition = adjustedPosition;
+          }
 
-          // 4. 드래그된 노드와 서브트리의 위치를 조정된 위치로 이동
-          const deltaX = adjustedPosition.x - draggedNode.position.x;
-          const deltaY = adjustedPosition.y - draggedNode.position.y;
+          // 4. childNode와 서브트리의 위치를 조정된 위치로 이동
+          const deltaX = adjustedPosition.x - childNode.position.x;
+          const deltaY = adjustedPosition.y - childNode.position.y;
 
           setNodes((currentNodes) => {
-            const childrenIds = getDescendantIds(draggedNode.id, edges);
-            const affectedNodeIds = new Set([draggedNode.id, ...childrenIds]);
+            const childrenIds = getDescendantIds(childNode.id, edges);
+            const affectedNodeIds = new Set([childNode.id, ...childrenIds]);
 
             return currentNodes.map((node) => {
               if (affectedNodeIds.has(node.id)) {
@@ -1527,10 +1545,10 @@ function GraphCanvasInner({
           });
 
           // 5. 서브트리 대칭 이동이 필요한지 확인 후 실행
-          const childrenIds = getDescendantIds(draggedNode.id, edges);
+          const childrenIds = getDescendantIds(childNode.id, edges);
           if (childrenIds.size > 0) {
             const adjustedCenterX =
-              adjustedPosition.x + (draggedNode.width ?? NODE_WIDTH) / 2;
+              adjustedPosition.x + (childNode.width ?? NODE_WIDTH) / 2;
 
             const childNodes = nodes.filter((n) => childrenIds.has(n.id));
             const avgChildCenterX =
@@ -1549,7 +1567,7 @@ function GraphCanvasInner({
               setNodes((currentNodes) =>
                 mirrorSubtree(
                   currentNodes,
-                  draggedNode.id,
+                  childNode.id,
                   edges,
                   adjustedCenterX,
                 ),
@@ -1559,16 +1577,14 @@ function GraphCanvasInner({
 
           // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
           setEdges((prev) => {
-            // 기존 부모 연결 제거
             const filtered = existingParentEdge
               ? prev.filter((edge) => edge.id !== existingParentEdge.id)
               : prev;
 
-            // 새 부모 연결 추가
             const rawEdge: Edge = {
-              id: `e-${newParent.id}-${draggedNode.id}-${Date.now()}`,
-              source: newParent.id,
-              target: draggedNode.id,
+              id: `e-${parentNode.id}-${childNode.id}-${Date.now()}`,
+              source: parentNode.id,
+              target: childNode.id,
             };
             const newEdge = buildEdgePresentation(
               rawEdge,
@@ -1579,15 +1595,10 @@ function GraphCanvasInner({
             return [...filtered, newEdge];
           });
 
-          // 7. 드래그된 노드와 그 subtree의 색상을 새 부모 노드 색상으로 업데이트
+          // 7. childNode 서브트리 색상을 parentNode 색상으로 업데이트
           setNodes((currentNodes) => {
-            const graphColor = getGraphColor(newParent.id, currentNodes, edges);
-            return updateSubtreeColors(
-              draggedNode.id,
-              currentNodes,
-              edges,
-              graphColor,
-            );
+            const graphColor = getGraphColor(parentNode.id, currentNodes, edges);
+            return updateSubtreeColors(childNode.id, currentNodes, edges, graphColor);
           });
         }
       }

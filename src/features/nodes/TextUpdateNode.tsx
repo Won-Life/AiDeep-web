@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Handle,
   Position,
@@ -6,6 +6,28 @@ import {
   useUpdateNodeInternals,
 } from "@xyflow/react";
 import { NotionEditor } from "@/features/editor/NotionEditor";
+
+function extractLabelFromContent(content: string | undefined): string | null {
+  if (!content) return null;
+  try {
+    const state = JSON.parse(content);
+    const children: Array<{
+      type: string;
+      tag?: string;
+      children?: Array<{ text?: string }>;
+    }> = state?.root?.children ?? [];
+    for (const node of children) {
+      const text = node.children
+        ?.map((c) => c.text ?? "")
+        .join("")
+        .trim();
+      if (text) return text;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export type NodeData = {
   text?: string;
@@ -31,17 +53,17 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const handlePosition = handleSide === "left" ? Position.Left : Position.Right;
   const showInputBox = nodeData.showInputBox ?? false;
   const isHovered = nodeData.isHovered ?? false;
+  const [isNodeHovered, setIsNodeHovered] = useState(false);
 
   // 부모가 없는 서브 노드는 양쪽에 핸들 표시
   const showBothHandles = isMain || !hasParent;
 
-  // 로컬 state로 입력값 관리 (타이핑할 때마다 업데이트)
-  const [localValue, setLocalValue] = useState(nodeData.text || "");
+  const PLACEHOLDER = isMain ? "중심 노드" : "서브 노드";
 
-  // data.text가 외부에서 변경되면 로컬 state도 동기화
-  useEffect(() => {
-    setLocalValue(nodeData.text || "");
-  }, [nodeData.text]);
+  // content에서 첫 텍스트를 추출, 없으면 text 필드로 fallback
+  const label =
+    extractLabelFromContent(nodeData.content) || nodeData.text || "";
+  const isEmpty = label === "";
 
   // 핸들 구성이 바뀌면 React Flow 내부 핸들 bounds를 즉시 갱신
   useEffect(() => {
@@ -50,30 +72,11 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
     }
   }, [id, handleSide, showBothHandles, updateNodeInternals]);
 
-  // 타이핑할 때는 로컬 state만 업데이트 (DB 저장 안 함)
-  const handleChange = useCallback(
-    (evt: React.ChangeEvent<HTMLInputElement>) => {
-      setLocalValue(evt.target.value);
-    },
-    [],
-  );
-
-  // 엔터 키를 누를 때만 부모에게 알림 (DB 저장)
-  const handleKeyDown = useCallback(
-    (evt: React.KeyboardEvent<HTMLInputElement>) => {
-      if (evt.key === "Enter" && nodeData.onChange && id) {
-        nodeData.onChange(id, localValue);
-        evt.currentTarget.blur(); // 포커스 해제 (선택사항)
-      }
-    },
-    [id, localValue, nodeData],
-  );
-
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
   const containerClasses = isMain
-    ? "text-updater-node px-4 py-3 rounded-lg border-2" // 중심 노드: 네모난 형태, 테두리
-    : "text-updater-node px-3 py-2 rounded-full"; // 서브 노드: 동그란 형태
+    ? "text-updater-node rounded-lg border"
+    : "text-updater-node rounded-full";
 
   // React Flow 기본 엣지 색상과 동일한 회색 (#b1b1b7)
   const EDGE_COLOR = "#D9D9D9";
@@ -81,8 +84,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const containerStyle = isMain
     ? {
         backgroundColor: nodeData.color || "#ffffff",
-        borderColor: isHovered ? "#93C5FD" : EDGE_COLOR, // hover 시 연한 파란색
-        borderWidth: isHovered ? "3px" : "2px", // hover 시 두께 증가
+        borderColor: isHovered ? "#93C5FD" : EDGE_COLOR,
+        borderWidth: isHovered ? "3px" : "1px",
       }
     : {
         backgroundColor: nodeData.color || "#ffffff",
@@ -102,9 +105,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
             top: "100%",
             marginTop: "4px",
             borderColor: EDGE_COLOR,
-            ...(handleSide === "left"
-              ? { right: 0 }
-              : { left: 0 }),
+            ...(handleSide === "left" ? { right: 0 } : { left: 0 }),
             zIndex: 0,
           }}
           onClick={(e) => e.stopPropagation()}
@@ -121,31 +122,75 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
       {/* 노드 - 입력박스보다 앞에 배치 */}
       <div
         className={containerClasses}
-        style={{ ...containerStyle, position: "relative", zIndex: 10 }}
+        style={{
+          ...containerStyle,
+          position: "relative",
+          zIndex: 10,
+          maxWidth: "200px",
+          minWidth: `${PLACEHOLDER.length}em`,
+          padding: isMain ? "26px 36px" : "6px 12px",
+        }}
+        onMouseEnter={() => setIsNodeHovered(true)}
+        onMouseLeave={() => setIsNodeHovered(false)}
       >
-        <div>
-          <input
-            id="text"
-            name="text"
-            value={localValue}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            className="nodrag bg-transparent border-none outline-none w-full placeholder-muted text-center"
-            style={{ color: nodeData.textColor || "rgb(var(--foreground))" }}
-            placeholder={isMain ? "중심 노드 입력" : "서브 노드 입력"}
-          />
+        <div
+          className="text-center select-none"
+          style={{
+            color: isEmpty
+              ? "#aaaaaa"
+              : nodeData.textColor || "rgb(var(--foreground))",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            wordBreak: "break-word",
+            lineHeight: "1.4em",
+            maxHeight: "2.8em",
+          }}
+        >
+          {isEmpty ? PLACEHOLDER : label}
         </div>
         {showBothHandles ? (
           <>
-            <Handle type="target" position={Position.Left} id="target-left" />
-            <Handle type="target" position={Position.Right} id="target-right" />
-            <Handle type="source" position={Position.Left} id="source-left" />
-            <Handle type="source" position={Position.Right} id="source-right" />
+            <Handle
+              type="target"
+              position={Position.Left}
+              id="target-left"
+              style={{ opacity: isNodeHovered ? 1 : 0 }}
+            />
+            <Handle
+              type="target"
+              position={Position.Right}
+              id="target-right"
+              style={{ opacity: isNodeHovered ? 1 : 0 }}
+            />
+            <Handle
+              type="source"
+              position={Position.Left}
+              id="source-left"
+              style={{ opacity: isNodeHovered ? 1 : 0 }}
+            />
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="source-right"
+              style={{ opacity: isNodeHovered ? 1 : 0 }}
+            />
           </>
         ) : (
           <>
-            <Handle type="target" position={handlePosition} id="target-side" />
-            <Handle type="source" position={handlePosition} id="source-side" />
+            <Handle
+              type="target"
+              position={handlePosition}
+              id="target-side"
+              style={{ opacity: isNodeHovered ? 1 : 0 }}
+            />
+            <Handle
+              type="source"
+              position={handlePosition}
+              id="source-side"
+              style={{ opacity: isNodeHovered ? 1 : 0 }}
+            />
           </>
         )}
       </div>
