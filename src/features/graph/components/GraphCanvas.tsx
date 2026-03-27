@@ -117,7 +117,11 @@ function getGraphColor(
   return getRandomColorPair();
 }
 
-function isStandaloneNode(nodeId: string, nodes: Node[], edges: Edge[]): boolean {
+function isStandaloneNode(
+  nodeId: string,
+  nodes: Node[],
+  edges: Edge[],
+): boolean {
   const node = nodes.find((n) => n.id === nodeId);
   if (!node || node.data?.isMain) return false;
 
@@ -154,7 +158,6 @@ function updateSubtreeColors(
       : node,
   );
 }
-
 
 function areSiblings(aId: string, bId: string, edges: Edge[]): boolean {
   const parentA = getParentId(aId, edges);
@@ -330,7 +333,9 @@ function getForcedOutboundSideForSubNodeInMainGraph(
   if (!mainNode) return null;
 
   const parentId = getParentId(node.id, edges);
-  const parentNode = parentId ? nodes.find((n) => n.id === parentId) : undefined;
+  const parentNode = parentId
+    ? nodes.find((n) => n.id === parentId)
+    : undefined;
   const referenceX = parentNode?.position.x ?? mainNode.position.x;
 
   // main(또는 parent) 쪽의 반대 방향(바깥쪽)으로만 새 연결을 허용
@@ -356,7 +361,9 @@ function resolveConnectSideFromSource(
 
   if (sourceHandle?.endsWith("side")) {
     const parentId = getParentId(sourceNode.id, edges);
-    const parentNode = parentId ? nodes.find((n) => n.id === parentId) : undefined;
+    const parentNode = parentId
+      ? nodes.find((n) => n.id === parentId)
+      : undefined;
     const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
     const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
     return getHandleSide(sourceNode, referenceX);
@@ -384,7 +391,9 @@ function resolveSideFromEdgeHandle(
     if (forcedSide) return forcedSide;
 
     const parentId = getParentId(sourceNode.id, edges);
-    const parentNode = parentId ? nodes.find((n) => n.id === parentId) : undefined;
+    const parentNode = parentId
+      ? nodes.find((n) => n.id === parentId)
+      : undefined;
     const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
     const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
     return getHandleSide(sourceNode, referenceX);
@@ -424,7 +433,9 @@ function adjustPositionRelativeToSource(
       : sourceNode.position.x - NODE_WIDTH - DEFAULT_NODE_DISTANCE;
 
   const siblingYs = edges
-    .filter((edge) => edge.source === sourceNode.id && edge.target !== excludeNodeId)
+    .filter(
+      (edge) => edge.source === sourceNode.id && edge.target !== excludeNodeId,
+    )
     .map((edge) => {
       const targetNode = nodes.find((node) => node.id === edge.target);
       if (!targetNode) return null;
@@ -439,7 +450,10 @@ function adjustPositionRelativeToSource(
         ),
       };
     })
-    .filter((item): item is { node: Node; edgeSide: "left" | "right" } => item !== null)
+    .filter(
+      (item): item is { node: Node; edgeSide: "left" | "right" } =>
+        item !== null,
+    )
     .filter((item) => item.edgeSide === side)
     .map((item) => item.node.position.y);
 
@@ -497,7 +511,9 @@ function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
   const targetHandle = resolveHandleId(target, "target", side, edges);
   const sourceHandleX =
     source.position.x +
-    (side === "right" ? (source.measured?.width ?? source.width ?? NODE_WIDTH) : 0);
+    (side === "right"
+      ? (source.measured?.width ?? source.width ?? NODE_WIDTH)
+      : 0);
 
   return {
     ...edge,
@@ -721,20 +737,25 @@ function GraphCanvasInner({
     [edges],
   );
 
-  const onNodesChange = useCallback((changes: NodeChange[]) => {
-    const removedNodeIds = changes
-      .filter((change) => change.type === "remove")
-      .map((change) => change.id);
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      const removedNodeIds = changes
+        .filter((change) => change.type === "remove")
+        .map((change) => change.id);
 
-    if (removedNodeIds.length > 0) {
-      requestArchiveForNodes(removedNodeIds);
-    }
+      if (removedNodeIds.length > 0) {
+        requestArchiveForNodes(removedNodeIds);
+      }
 
-    const nonRemoveChanges = changes.filter((change) => change.type !== "remove");
-    if (nonRemoveChanges.length === 0) return;
+      const nonRemoveChanges = changes.filter(
+        (change) => change.type !== "remove",
+      );
+      if (nonRemoveChanges.length === 0) return;
 
-    setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
-  }, [requestArchiveForNodes]);
+      setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
+    },
+    [requestArchiveForNodes],
+  );
 
   const onBeforeDelete = useCallback(
     ({ nodes: nodesToDelete }: { nodes: Node[]; edges: Edge[] }) => {
@@ -764,10 +785,13 @@ function GraphCanvasInner({
     // TODO: Implement archive persistence here (e.g. API call to archive these nodes and edges).
     setEdges((snapshot) =>
       snapshot.filter(
-        (edge) => !idsToArchive.has(edge.source) && !idsToArchive.has(edge.target),
+        (edge) =>
+          !idsToArchive.has(edge.source) && !idsToArchive.has(edge.target),
       ),
     );
-    setNodes((snapshot) => snapshot.filter((node) => !idsToArchive.has(node.id)));
+    setNodes((snapshot) =>
+      snapshot.filter((node) => !idsToArchive.has(node.id)),
+    );
     setHoveredNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
     setSelectedNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
     setPendingArchiveNodeIds([]);
@@ -795,49 +819,54 @@ function GraphCanvasInner({
     });
   }, [nodes, edges.length]);
 
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    if (isArchiveModalOpen) {
-      const nonRemoveChanges = changes.filter((change) => change.type !== "remove");
-      if (nonRemoveChanges.length === 0) return;
-      setEdges((snapshot) => applyEdgeChanges(nonRemoveChanges, snapshot));
-      return;
-    }
-
-    setEdges((snapshot) => {
-      const removedEdges = changes
-        .filter((change) => change.type === "remove")
-        .map((change) => snapshot.find((edge) => edge.id === change.id))
-        .filter((edge): edge is Edge => edge !== undefined);
-
-      const updatedEdges = applyEdgeChanges(changes, snapshot);
-
-      if (removedEdges.length > 0) {
-        setNodes((currentNodes) => {
-          let updatedNodes = currentNodes;
-
-          removedEdges.forEach((edge) => {
-            const remainingParentId = getParentId(edge.target, updatedEdges);
-            const remainingParent = remainingParentId
-              ? updatedNodes.find((n) => n.id === remainingParentId)
-              : null;
-            const color = remainingParent
-              ? getGraphColor(remainingParentId!, updatedNodes, updatedEdges)
-              : DEFAULT_NODE_COLOR;
-            updatedNodes = updateSubtreeColors(
-              edge.target,
-              updatedNodes,
-              updatedEdges,
-              color,
-            );
-          });
-
-          return updatedNodes;
-        });
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      if (isArchiveModalOpen) {
+        const nonRemoveChanges = changes.filter(
+          (change) => change.type !== "remove",
+        );
+        if (nonRemoveChanges.length === 0) return;
+        setEdges((snapshot) => applyEdgeChanges(nonRemoveChanges, snapshot));
+        return;
       }
 
-      return updatedEdges;
-    });
-  }, [isArchiveModalOpen]);
+      setEdges((snapshot) => {
+        const removedEdges = changes
+          .filter((change) => change.type === "remove")
+          .map((change) => snapshot.find((edge) => edge.id === change.id))
+          .filter((edge): edge is Edge => edge !== undefined);
+
+        const updatedEdges = applyEdgeChanges(changes, snapshot);
+
+        if (removedEdges.length > 0) {
+          setNodes((currentNodes) => {
+            let updatedNodes = currentNodes;
+
+            removedEdges.forEach((edge) => {
+              const remainingParentId = getParentId(edge.target, updatedEdges);
+              const remainingParent = remainingParentId
+                ? updatedNodes.find((n) => n.id === remainingParentId)
+                : null;
+              const color = remainingParent
+                ? getGraphColor(remainingParentId!, updatedNodes, updatedEdges)
+                : DEFAULT_NODE_COLOR;
+              updatedNodes = updateSubtreeColors(
+                edge.target,
+                updatedNodes,
+                updatedEdges,
+                color,
+              );
+            });
+
+            return updatedNodes;
+          });
+        }
+
+        return updatedEdges;
+      });
+    },
+    [isArchiveModalOpen],
+  );
 
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
@@ -919,11 +948,10 @@ function GraphCanvasInner({
           source: sourceId,
           target: targetId,
         };
-        const nextEdge = buildEdgePresentation(
+        const nextEdge = buildEdgePresentation(rawEdge, nodes, [
+          ...snapshot,
           rawEdge,
-          nodes,
-          [...snapshot, rawEdge],
-        );
+        ]);
 
         return [...snapshot, nextEdge];
       });
@@ -1054,7 +1082,8 @@ function GraphCanvasInner({
             ? nodes.find((n) => n.id === parentId)
             : undefined;
           const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
-          const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
+          const referenceX =
+            parentNode?.position.x ?? mainNode?.position.x ?? 0;
           side = getHandleSide(sourceNode, referenceX);
         }
 
@@ -1168,7 +1197,7 @@ function GraphCanvasInner({
       try {
         const { nodeId } = await createMdNode(workspaceId, "새 노드", position);
         const newNode: Node = {
-          id: makeNodeId(),
+          id: nodeId,
           type: "textUpdater",
           position,
           data: {
@@ -1212,11 +1241,7 @@ function GraphCanvasInner({
         data: {},
       };
 
-      const closestNode = findClosestNodeInRange(
-        draggedPreview,
-        nodes,
-        edges,
-      );
+      const closestNode = findClosestNodeInRange(draggedPreview, nodes, edges);
       const isInvalid =
         closestNode &&
         isInvalidConnection(closestNode.id, draggedPreview.id, edges);
@@ -1249,25 +1274,26 @@ function GraphCanvasInner({
       const shouldConnect =
         targetParent && !isInvalidConnection(targetParent.id, "__new__", edges);
 
-      const position = shouldConnect && targetParent
-        ? adjustPositionRelativeToSource(
-            targetParent,
-            basePosition.y,
-            resolveConnectSideFromSource(
+      const position =
+        shouldConnect && targetParent
+          ? adjustPositionRelativeToSource(
               targetParent,
-              {
-                id: "__new__",
-                position: basePosition,
-                data: {},
-              } as Node,
-              undefined,
+              basePosition.y,
+              resolveConnectSideFromSource(
+                targetParent,
+                {
+                  id: "__new__",
+                  position: basePosition,
+                  data: {},
+                } as Node,
+                undefined,
+                nodes,
+                edges,
+              ),
               nodes,
               edges,
-            ),
-            nodes,
-            edges,
-          )
-        : findNonOverlappingPosition(basePosition, nodes);
+            )
+          : findNonOverlappingPosition(basePosition, nodes);
 
       const colorPair = shouldConnect
         ? getGraphColor(targetParent.id, nodes, edges)
@@ -1586,19 +1612,27 @@ function GraphCanvasInner({
               source: parentNode.id,
               target: childNode.id,
             };
-            const newEdge = buildEdgePresentation(
+            const newEdge = buildEdgePresentation(rawEdge, nodes, [
+              ...filtered,
               rawEdge,
-              nodes,
-              [...filtered, rawEdge],
-            );
+            ]);
 
             return [...filtered, newEdge];
           });
 
           // 7. childNode 서브트리 색상을 parentNode 색상으로 업데이트
           setNodes((currentNodes) => {
-            const graphColor = getGraphColor(parentNode.id, currentNodes, edges);
-            return updateSubtreeColors(childNode.id, currentNodes, edges, graphColor);
+            const graphColor = getGraphColor(
+              parentNode.id,
+              currentNodes,
+              edges,
+            );
+            return updateSubtreeColors(
+              childNode.id,
+              currentNodes,
+              edges,
+              graphColor,
+            );
           });
         }
       }
@@ -1646,7 +1680,9 @@ function GraphCanvasInner({
           moveNode(workspaceId, childId, {
             x: d3Child.fx - childWidth / 2,
             y: d3Child.fy - childHeight / 2,
-          }).catch((err) => console.error(`[moveNode child ${childId}] failed`, err));
+          }).catch((err) =>
+            console.error(`[moveNode child ${childId}] failed`, err),
+          );
         }
       });
     },
