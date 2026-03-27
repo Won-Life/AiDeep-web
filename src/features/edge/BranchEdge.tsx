@@ -1,5 +1,5 @@
 import type { EdgeProps } from "@xyflow/react";
-import { BaseEdge, getSmoothStepPath } from "@xyflow/react";
+import { BaseEdge } from "@xyflow/react";
 
 export function BranchEdge(props: EdgeProps) {
   const { id, sourceX, sourceY, targetX, targetY, data, markerEnd } = props;
