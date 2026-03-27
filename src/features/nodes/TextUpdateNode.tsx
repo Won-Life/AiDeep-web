@@ -41,7 +41,7 @@ export type NodeData = {
   showInputBox?: boolean; // 입력박스 표시 여부
   isHovered?: boolean; // 드래그 중 hover 상태
   onChange?: (nodeId: string, value: string) => void;
-  onContentChange?: (nodeId: string, content: string) => void; // 에디터 내용 저장 콜백
+  onContentChange?: (nodeId: string, jsonBody: string, markdownBody: string) => void; // 에디터 내용 저장 콜백
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {

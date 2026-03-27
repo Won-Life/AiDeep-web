@@ -27,7 +27,7 @@ import * as d3 from "d3";
 import { nodeTypes } from "@/types/nodeTypes";
 import { edgeTypes } from "@/types/edgeTypes";
 import { getNodes } from "../api/getNodes";
-import { createMdNode, moveNode, deleteNode } from "../api/nodes";
+import { createMdNode, moveNode, deleteNode, updateNodeContent } from "../api/nodes";
 import { emitLivePosition, emitCursorMove } from "@/api/ws";
 import { createEdge } from "../api/edges";
 import type { EdgeDto, NodeDto } from "../types";
@@ -642,6 +642,9 @@ function GraphCanvasInner({
   const simulationRef = useRef<d3.Simulation<D3Node, undefined> | null>(null);
   const d3NodesRef = useRef<D3Node[]>([]);
   const isDraggingRef = useRef(false);
+  const nodesRef = useRef<Node[]>(nodes);
+  nodesRef.current = nodes;
+  const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [isGrabbing, setIsGrabbing] = useState(false);
   const [isHoveringNode, setIsHoveringNode] = useState(false);
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -683,6 +686,14 @@ function GraphCanvasInner({
     document.addEventListener('pointermove', handler);
     return () => document.removeEventListener('pointermove', handler);
   }, []); // 마운트/언마운트 시 1회만 등록 — 최신 값은 ref로 접근
+
+  // contentSaveTimers cleanup on unmount
+  useEffect(() => {
+    return () => {
+      contentSaveTimers.current.forEach((timer) => clearTimeout(timer));
+      contentSaveTimers.current.clear();
+    };
+  }, []);
 
   /* =========================
      D3 Force Simulation 초기화
@@ -775,8 +786,26 @@ function GraphCanvasInner({
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         onChange: (nodeId: string, value: string) =>
           handleNodeDataChange(nodeId, { text: value }),
-        onContentChange: (nodeId: string, content: string) =>
-          handleNodeDataChange(nodeId, { content }),
+        onContentChange: (nodeId: string, jsonBody: string, markdownBody: string) => {
+          handleNodeDataChange(nodeId, { content: jsonBody });
+
+          const prev = contentSaveTimers.current.get(nodeId);
+          if (prev) clearTimeout(prev);
+          contentSaveTimers.current.set(
+            nodeId,
+            setTimeout(() => {
+              const currentNode = nodesRef.current.find((n) => n.id === nodeId);
+              updateNodeContent(workspaceId, nodeId, {
+                body: {
+                  jsonBody,
+                  markdownBody,
+                  color: (currentNode?.data?.color as string) ?? "#ffffff",
+                  textColor: (currentNode?.data?.textColor as string) ?? "#000000",
+                },
+              }).catch(console.error);
+            }, 800),
+          );
+        },
       },
     };
   });
