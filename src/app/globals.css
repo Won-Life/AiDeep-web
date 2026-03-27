@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* 커서 공유 활성화 시 기본 커서 숨김 */
+.cursor-none,
+.cursor-none * {
+  cursor: none !important;
+}
+
 /* =========================
    Design Tokens (Light)
    ========================= */

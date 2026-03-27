@@ -8,6 +8,8 @@ interface Position {
 interface MdBody {
   markdownBody: string;
   jsonBody: string;
+  color : string
+  textColor : string
 }
 
 interface CreateNodeResponse {
@@ -29,8 +31,10 @@ export async function createMdNode(
   workspaceId: string,
   title: string,
   position: Position,
-  body: MdBody = { markdownBody: "", jsonBody: "" },
+  body : MdBody
+  // body: MdBody = { markdownBody: "", jsonBody: "" },
 ): Promise<CreateNodeResponse> {
+  console.log(body)
   return api<CreateNodeResponse>(`/workspace/${workspaceId}/node/md`, {
     method: "POST",
     body: JSON.stringify({ title, position, body }),
@@ -45,6 +49,15 @@ export async function moveNode(
   return api<string>(`/workspace/${workspaceId}/node/${nodeId}/move`, {
     method: "PATCH",
     body: JSON.stringify({ position }),
+  });
+}
+
+export async function deleteNode(
+  workspaceId: string,
+  nodeId: string,
+): Promise<void> {
+  await api(`/workspace/${workspaceId}/node/${nodeId}`, {
+    method: "DELETE",
   });
 }
 

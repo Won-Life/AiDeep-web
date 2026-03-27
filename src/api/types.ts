@@ -59,6 +59,15 @@ export interface IssueMasterRequest {
   userId: string;
 }
 
+// ─── User ────────────────────────────────────────────────────────────
+
+export interface UserMeResponse {
+  userId: string;
+  username: string;
+  email: string;
+  createdAt: string;
+}
+
 // ─── Workspace ───────────────────────────────────────────────────────
 
 export type WorkspaceRole = 'OWNER' | 'EDITOR' | 'VIEWER';
@@ -132,6 +141,8 @@ export interface CreateProjectNodeRequest {
 export interface MdBody {
   markdownBody: string;
   jsonBody: string;
+  color : string
+  textColor : string
 }
 
 export interface CreateMdNodeRequest {
