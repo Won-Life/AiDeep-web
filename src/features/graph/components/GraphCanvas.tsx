@@ -294,12 +294,14 @@ function findNonOverlappingPosition(
   base: { x: number; y: number },
   nodes: Node[],
 ): { x: number; y: number } {
-  const candidate = (x: number, y: number) => ({
-    id: "__drag_candidate__",
-    position: { x, y },
-    width: NODE_WIDTH,
-    height: NODE_HEIGHT,
-  });
+  const candidate = (x: number, y: number) =>
+    ({
+      id: "__drag_candidate__",
+      position: { x, y },
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+      data: {},
+    }) as Node;
 
   if (!nodes.some((node) => isOverlapping(candidate(base.x, base.y), node))) {
     return base;
@@ -363,16 +365,6 @@ function resolveConnectSideFromSource(
   if (sourceHandle?.includes("left")) return "left";
   if (sourceHandle?.includes("right")) return "right";
 
-  if (sourceHandle?.endsWith("side")) {
-    const parentId = getParentId(sourceNode.id, edges);
-    const parentNode = parentId
-      ? nodes.find((n) => n.id === parentId)
-      : undefined;
-    const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
-    const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
-    return getHandleSide(sourceNode, referenceX);
-  }
-
   return getEdgeSide(sourceNode, targetNode);
 }
 
@@ -380,28 +372,9 @@ function resolveSideFromEdgeHandle(
   edge: Edge,
   sourceNode: Node,
   targetNode: Node,
-  nodes: Node[],
-  edges: Edge[],
 ): "left" | "right" {
   if (edge.sourceHandle?.includes("left")) return "left";
   if (edge.sourceHandle?.includes("right")) return "right";
-
-  if (edge.sourceHandle === "source-side") {
-    const forcedSide = getForcedOutboundSideForSubNodeInMainGraph(
-      sourceNode,
-      nodes,
-      edges,
-    );
-    if (forcedSide) return forcedSide;
-
-    const parentId = getParentId(sourceNode.id, edges);
-    const parentNode = parentId
-      ? nodes.find((n) => n.id === parentId)
-      : undefined;
-    const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
-    const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
-    return getHandleSide(sourceNode, referenceX);
-  }
 
   return getEdgeSide(sourceNode, targetNode);
 }
@@ -449,8 +422,6 @@ function adjustPositionRelativeToSource(
           edge,
           sourceNode,
           targetNode,
-          nodes,
-          edges,
         ),
       };
     })
@@ -489,15 +460,12 @@ function adjustPositionRelativeToSource(
 }
 
 function resolveHandleId(
-  node: Node,
+  _node: Node,
   role: "source" | "target",
   side: "left" | "right",
-  edges: Edge[],
+  _edges: Edge[],
 ): string {
-  const hasParent = getParentId(node.id, edges) !== null;
-  const shouldUseBothHandles = node.data?.isMain || !hasParent;
-
-  return shouldUseBothHandles ? `${role}-${side}` : `${role}-side`;
+  return `${role}-${side}`;
 }
 
 function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
@@ -597,6 +565,57 @@ interface GraphCanvasInnerProps {
   edges: Edge[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
+}
+
+export function convertToReactFlow(
+  graphNodes: NodeDto[],
+  graphEdges: EdgeDto[],
+): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = graphNodes.map((n) => ({
+    id: n.node_id,
+    type: "textUpdater",
+    position: { x: n.position_x, y: n.position_y },
+    data: {
+      text: n.title,
+      color: n.content?.color ?? DEFAULT_NODE_COLOR.bg,
+      textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
+      isMain: n.node_type === "PROJECT",
+      nodeType: n.node_type,
+    },
+  }));
+
+  const rawEdges: Edge[] = graphEdges.map((e) => ({
+    id: e.edge_id,
+    source: e.source_id,
+    target: e.target_id,
+    type: "branch",
+    sourceHandle: e.source_handle,
+    targetHandle: e.target_handle,
+    data: {},
+  }));
+
+  // 각 노드의 handleSide를 부모 위치 기준으로 설정
+  const nodesWithHandleSide: Node[] = nodes.map((node) => {
+    if (node.data?.isMain) return node;
+    const parentEdge = rawEdges.find((e) => e.target === node.id);
+    if (!parentEdge) return node;
+    const parentNode = nodes.find((n) => n.id === parentEdge.source);
+    if (!parentNode) return node;
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        handleSide: getHandleSide(node, parentNode.position.x),
+        hasParent: true,
+      },
+    };
+  });
+
+  const edges: Edge[] = rawEdges.map((edge) =>
+    buildEdgePresentation(edge, nodesWithHandleSide, rawEdges),
+  );
+
+  return { nodes: nodesWithHandleSide, edges };
 }
 
 function GraphCanvasInner({
@@ -803,7 +822,7 @@ function GraphCanvasInner({
   );
 
   const onBeforeDelete = useCallback(
-    ({ nodes: nodesToDelete }: { nodes: Node[]; edges: Edge[] }) => {
+    async ({ nodes: nodesToDelete }: { nodes: Node[]; edges: Edge[] }) => {
       if (nodesToDelete.length > 0) {
         requestArchiveForNodes(nodesToDelete.map((node) => node.id));
         return false;
@@ -940,11 +959,12 @@ function GraphCanvasInner({
         return false;
       }
 
-      // Source 노드가 부모가 있는 서브 노드인 경우, source-side 핸들만 허용
+      // Source 노드가 부모가 있는 서브 노드인 경우, 해당 방향 핸들만 허용
       const sourceParentId = getParentId(sourceNode.id, edges);
       if (!sourceNode.data?.isMain && sourceParentId !== null) {
         const sourceHandle = connection.sourceHandle;
-        if (sourceHandle !== "source-side") {
+        const expectedHandle = `source-${sourceNode.data?.handleSide ?? "right"}`;
+        if (sourceHandle !== expectedHandle) {
           return false;
         }
       }
@@ -963,11 +983,12 @@ function GraphCanvasInner({
         }
       }
 
-      // Target 노드가 부모가 있는 서브 노드인 경우, target-side 핸들만 허용
+      // Target 노드가 부모가 있는 서브 노드인 경우, 해당 방향 핸들만 허용
       const targetParentId = getParentId(targetNode.id, edges);
       if (!targetNode.data?.isMain && targetParentId !== null) {
         const targetHandle = connection.targetHandle;
-        if (targetHandle !== "target-side") {
+        const expectedHandle = `target-${targetNode.data?.handleSide ?? "right"}`;
+        if (targetHandle !== expectedHandle) {
           return false;
         }
       }
@@ -1063,12 +1084,19 @@ function GraphCanvasInner({
       });
 
       // API: 엣지 생성 → BE가 발급한 edgeId로 추가
+      // source/target이 swap된 경우 핸들도 교차 적용
+      const swapped = sourceId !== params.source;
+      const srcNode = nodes.find((n) => n.id === sourceId);
+      const tgtNode = nodes.find((n) => n.id === targetId);
+      const fallbackSide = srcNode && tgtNode ? getEdgeSide(srcNode, tgtNode) : "right";
+      const resolvedSourceHandle = (swapped ? params.targetHandle : params.sourceHandle) ?? `source-${fallbackSide}`;
+      const resolvedTargetHandle = (swapped ? params.sourceHandle : params.targetHandle) ?? `target-${fallbackSide}`;
       createEdge(
         workspaceId,
         sourceId,
         targetId,
-        params.sourceHandle ?? "source-side",
-        params.targetHandle ?? "target-side",
+        resolvedSourceHandle,
+        resolvedTargetHandle,
       ).then(({ edgeId }) => {
         setEdges((snapshot) => {
           if (snapshot.some((e) => e.id === edgeId)) return snapshot;
@@ -1181,8 +1209,8 @@ function GraphCanvasInner({
             workspaceId,
             connectionState.fromNode.id,
             realNodeId,
-            fromHandle || "source-side",
-            "target-side",
+            fromHandle || `source-${side}`,
+            `target-${side}`,
           );
           setEdges((eds) => {
             if (eds.some((e) => e.id === edgeId)) return eds;
@@ -1675,8 +1703,8 @@ function GraphCanvasInner({
             workspaceId,
             newParent.id,
             draggedNode.id,
-            "source-side",
-            "target-side",
+            `source-${side}`,
+            `target-${side}`,
           ).then(({ edgeId }) => {
             setEdges((prev) => {
               if (prev.some((e) => e.id === edgeId)) return prev;
@@ -1758,43 +1786,6 @@ function GraphCanvasInner({
   /* =========================
      Persist
      ========================= */
-
-  function convertToReactFlow(
-    graphNodes: NodeDto[],
-    graphEdges: EdgeDto[],
-  ): {
-    nodes: Node[];
-    edges: Edge[];
-  } {
-    const nodes: Node[] = graphNodes.map((n) => ({
-      id: n.node_id,
-      type: "textUpdater",
-      position: { x: n.position_x, y: n.position_y },
-      data: {
-        text: n.title,
-        color: n.content?.color ?? DEFAULT_NODE_COLOR.bg,
-        textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
-        isMain: n.node_type === "PROJECT",
-        nodeType: n.node_type,
-      },
-    }));
-
-    const rawEdges: Edge[] = graphEdges.map((e) => ({
-      id: e.edge_id,
-      source: e.source_id,
-      target: e.target_id,
-      type: "branch",
-      sourceHandle: e.source_handle ?? "source-side",
-      targetHandle: e.target_handle ?? "target-side",
-      data: {},
-    }));
-
-    const edges: Edge[] = rawEdges.map((edge) =>
-      buildEdgePresentation(edge, nodes, rawEdges),
-    );
-
-    return { nodes, edges };
-  }
 
   // useEffect(() => {
   //   async function load() {
