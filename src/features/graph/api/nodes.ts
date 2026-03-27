@@ -71,3 +71,23 @@ export async function updateNodeContent(
     body: JSON.stringify(data),
   });
 }
+
+export interface NodeDetail {
+  node_id: string;
+  title: string;
+  node_type: string;
+  content: { markdownBody?: string; jsonBody?: string } | null;
+  version: number;
+  position_x: number;
+  position_y: number;
+  workspace_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getNode(
+  workspaceId: string,
+  nodeId: string,
+): Promise<NodeDetail> {
+  return api<NodeDetail>(`/workspace/${workspaceId}/node/${nodeId}`);
+}
