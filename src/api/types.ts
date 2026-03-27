@@ -141,6 +141,8 @@ export interface CreateProjectNodeRequest {
 export interface MdBody {
   markdownBody: string;
   jsonBody: string;
+  color : string
+  textColor : string
 }
 
 export interface CreateMdNodeRequest {

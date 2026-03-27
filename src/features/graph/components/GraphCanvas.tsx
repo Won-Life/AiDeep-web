@@ -37,6 +37,7 @@ import { getDescendantIds } from "../utils/graphUtils";
 import { useCursors } from "@/hooks/useCursors";
 import { getCursorColor } from "@/utils/cursorColor";
 import CursorOverlay from "./CursorOverlay";
+import { MdBody } from "@/api/types";
 
 // DB 저장 함수 (예시)
 async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
@@ -1125,6 +1126,7 @@ function GraphCanvasInner({
             workspaceId,
             "새 노드",
             adjustedPosition,
+            { markdownBody: "", jsonBody: "", color : colorPair.bg, textColor : colorPair.bg }
           );
 
           // 실제 UUID로 로컬 노드 추가
@@ -1206,7 +1208,15 @@ function GraphCanvasInner({
       });
 
       try {
-        const { nodeId } = await createMdNode(workspaceId, "새 노드", position);
+        const body = { markdownBody: "", jsonBody: "", color : DEFAULT_NODE_COLOR.bg, textColor : DEFAULT_NODE_COLOR.bg } as MdBody
+
+        const { nodeId } = await createMdNode(
+          workspaceId, 
+          "", 
+          position,
+          body
+          );
+
         const newNode: Node = {
           id: makeNodeId(),
           type: "textUpdater",
