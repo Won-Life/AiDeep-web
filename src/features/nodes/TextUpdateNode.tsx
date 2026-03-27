@@ -1,11 +1,14 @@
+"use client";
+
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Handle,
   Position,
   type NodeProps,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { NotionEditor } from "@/features/editor/NotionEditor";
+import { NodeEditorPanel } from "@/features/editor/NodeEditorPanel";
 
 function extractLabelFromContent(content: string | undefined): string | null {
   if (!content) return null;
@@ -41,11 +44,13 @@ export type NodeData = {
   hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
   isHovered?: boolean; // 드래그 중 hover 상태
+  workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   onChange?: (nodeId: string, value: string) => void;
   onContentChange?: (nodeId: string, jsonBody: string, markdownBody: string) => void; // 에디터 내용 저장 콜백
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {
+  const router = useRouter();
   const updateNodeInternals = useUpdateNodeInternals();
   const nodeData = data as NodeData;
   const isMain = nodeData.isMain ?? false;
@@ -99,27 +104,18 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
     <div className="relative">
       {/* 노션 에디터 패널 - 노드 뒤에 배치 */}
       {showInputBox && (
-        <div
-          className="absolute bg-white border rounded-lg shadow-lg overflow-hidden flex flex-col"
-          style={{
-            width: "360px",
-            minHeight: "220px",
-            maxHeight: "480px",
-            top: "100%",
-            marginTop: "4px",
-            borderColor: EDGE_COLOR,
-            ...(sideRelativeToParent === "left" ? { right: 0 } : { left: 0 }),
-            zIndex: 0,
-          }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <NotionEditor
-            nodeId={id}
-            initialContent={nodeData.content}
-            onSave={nodeData.onContentChange}
-          />
-        </div>
+        <NodeEditorPanel
+          nodeId={id}
+          initialContent={nodeData.content}
+          onSave={nodeData.onContentChange}
+          borderColor={EDGE_COLOR}
+          handleSide={sideRelativeToParent}
+          onExpandClick={() =>
+            router.push(
+              `/graph/node/${id}?workspaceId=${nodeData.workspaceId ?? ""}`,
+            )
+          }
+        />
       )}
 
       {/* 노드 - 입력박스보다 앞에 배치 */}

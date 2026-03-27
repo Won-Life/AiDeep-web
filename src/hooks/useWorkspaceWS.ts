@@ -179,6 +179,9 @@ export function useWorkspaceWS({
                 ...(e.patch.data?.markdownBody !== undefined && {
                   body: e.patch.data.markdownBody,
                 }),
+                ...(e.patch.data?.jsonBody !== undefined && {
+                  content: e.patch.data.jsonBody,
+                }),
                 ...(e.patch.data?.color !== undefined && {
                   color: e.patch.data.color,
                 }),

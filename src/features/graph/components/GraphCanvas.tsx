@@ -644,6 +644,35 @@ function GraphCanvasInner({
 
   const { screenToFlowPosition, setCenter } = useReactFlow();
 
+  // viewport 저장 (debounce)
+  const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedViewport = useRef<{ x: number; y: number; zoom: number } | null>(
+    (() => {
+      if (typeof window === "undefined") return null;
+      try {
+        const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    })(),
+  );
+
+  const handleViewportChange = useCallback(
+    (viewport: { x: number; y: number; zoom: number }) => {
+      if (viewportSaveTimer.current) clearTimeout(viewportSaveTimer.current);
+      viewportSaveTimer.current = setTimeout(() => {
+        try {
+          sessionStorage.setItem(
+            `graph_viewport_${workspaceId}`,
+            JSON.stringify(viewport),
+          );
+        } catch {}
+      }, 300);
+    },
+    [workspaceId],
+  );
+
   // D3 force simulation 관리
   const simulationRef = useRef<d3.Simulation<D3Node, undefined> | null>(null);
   const d3NodesRef = useRef<D3Node[]>([]);
@@ -820,6 +849,7 @@ function GraphCanvasInner({
         hasParent, // 부모 노드 존재 여부 전달
         showInputBox: selectedNodeId === node.id, // 선택된 노드에만 입력박스 표시
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
+        workspaceId, // 전체화면 이동 시 사용
         onChange: (nodeId: string, value: string) =>
           handleNodeDataChange(nodeId, { text: value }),
         onContentChange: (
@@ -2000,7 +2030,10 @@ function GraphCanvasInner({
         onDrop={onDrop}
         onDragLeave={onDragLeave}
         isValidConnection={isValidConnection}
-        fitView
+        onViewportChange={handleViewportChange}
+        {...(savedViewport.current
+          ? { defaultViewport: savedViewport.current }
+          : { fitView: true })}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />

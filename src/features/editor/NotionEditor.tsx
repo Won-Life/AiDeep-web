@@ -71,6 +71,7 @@ export interface NotionEditorProps {
   nodeId: string;
   initialContent?: string;
   onSave?: (nodeId: string, jsonBody: string, markdownBody: string) => void;
+  onFullscreen?: () => void;
 }
 
 // ─── Image Node ───────────────────────────────────────────────────────────────
@@ -301,11 +302,11 @@ const BLOCK_OPTIONS = [
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
 
 function ToolbarPlugin({
-  showDebug,
-  onDebugToggle,
+  onFullscreen,
 }: {
-  showDebug: boolean;
-  onDebugToggle: () => void;
+  showDebug?: boolean;
+  onDebugToggle?: () => void;
+  onFullscreen?: () => void;
 }) {
   const [editor] = useLexicalComposerContext();
   const [isBold, setIsBold] = useState(false);
@@ -558,32 +559,32 @@ function ToolbarPlugin({
         </button>
       ))}
 
-      {/* ── Debug toggle ── */}
-      <div style={{ marginLeft: "auto" }}>
-        <button
-          type="button"
-          title="데이터 구조 보기"
-          onClick={onDebugToggle}
-          className="flex items-center justify-center rounded cursor-pointer transition-colors font-mono"
-          style={{
-            width: 26,
-            height: 26,
-            fontSize: 9,
-            background: showDebug ? "#E8E8E8" : "transparent",
-            color: showDebug ? "#1A1A1A" : "#CCCCCC",
-          }}
-          onMouseEnter={(e) => {
-            if (!showDebug)
-              (e.currentTarget as HTMLElement).style.background = "#F3F3F3";
-          }}
-          onMouseLeave={(e) => {
-            if (!showDebug)
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-          }}
-        >
-          {"{}"}
-        </button>
-      </div>
+      {/* ── Fullscreen toggle ── */}
+      {onFullscreen && (
+        <div style={{ marginLeft: "auto" }}>
+          <button
+            type="button"
+            title="전체화면으로 보기"
+            onClick={onFullscreen}
+            onMouseDown={(e) => e.preventDefault()}
+            className="flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[#F3F3F3]"
+            style={{ width: 26, height: 26 }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="#CCCCCC"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M1 4.5V1H4.5M7.5 1H11V4.5M11 7.5V11H7.5M4.5 11H1V7.5" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -594,15 +595,15 @@ export function NotionEditor({
   nodeId,
   initialContent,
   onSave,
+  onFullscreen,
 }: NotionEditorProps) {
-  const [showDebug, setShowDebug] = useState(false);
 
   const initialConfig = {
     namespace: `ne-${nodeId}`,
     theme: EDITOR_THEME,
     nodes: REGISTERED_NODES,
     onError: (error: Error) => console.error("[NotionEditor]", error),
-    editorState: initialContent ?? MOCK_INITIAL_STATE,
+    editorState: initialContent || MOCK_INITIAL_STATE,
   };
 
   const handleChange = useCallback(
@@ -621,10 +622,7 @@ export function NotionEditor({
     // flex-1 + min-h-0: flex child가 부모의 max-height 안에서 제대로 수축되도록 함
     <div className="flex flex-col flex-1 min-h-0 bg-white rounded-b-lg">
       <LexicalComposer initialConfig={initialConfig}>
-        <ToolbarPlugin
-          showDebug={showDebug}
-          onDebugToggle={() => setShowDebug((v) => !v)}
-        />
+        <ToolbarPlugin onFullscreen={onFullscreen} />
 
         {/* min-h-0: flex child가 컨텐츠 크기 이하로 수축 가능 → overflow-y-auto 작동 */}
         <div className="relative flex-1 min-h-0 overflow-y-auto">
@@ -648,7 +646,7 @@ export function NotionEditor({
           />
         </div>
 
-        {showDebug && <DebugPanel />}
+
 
         <HistoryPlugin />
         <ListPlugin />
