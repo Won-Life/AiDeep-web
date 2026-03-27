@@ -182,13 +182,13 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
             <Handle
               type="target"
               position={handlePosition}
-              id="target-side"
+              id={`target-${handleSide}`}
               style={{ opacity: isNodeHovered ? 1 : 0 }}
             />
             <Handle
               type="source"
               position={handlePosition}
-              id="source-side"
+              id={`source-${handleSide}`}
               style={{ opacity: isNodeHovered ? 1 : 0 }}
             />
           </>
