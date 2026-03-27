@@ -3,7 +3,7 @@ import { BaseEdge, getSmoothStepPath } from "@xyflow/react";
 
 export function BranchEdge(props: EdgeProps) {
   const { id, sourceX, sourceY, targetX, targetY, data, markerEnd } = props;
-  const hubX: number = data.hubX; // (sourceX + targetX) / 2;
+  const hubX: number = data.hubX as number; // (sourceX + targetX) / 2;
   const hubY: number = sourceY;
 
   const trunkPath = `M ${sourceX},${sourceY} L ${hubX},${hubY}`;
