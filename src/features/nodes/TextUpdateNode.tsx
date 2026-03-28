@@ -46,7 +46,11 @@ export type NodeData = {
   isHovered?: boolean; // 드래그 중 hover 상태
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   onChange?: (nodeId: string, value: string) => void;
-  onContentChange?: (nodeId: string, jsonBody: string, markdownBody: string) => void; // 에디터 내용 저장 콜백
+  onContentChange?: (
+    nodeId: string,
+    jsonBody: string,
+    markdownBody: string,
+  ) => void; // 에디터 내용 저장 콜백
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {
