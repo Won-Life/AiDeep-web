@@ -27,7 +27,7 @@ export default function UserMenu({ username, email, onLogout }: UserMenuProps) {
   const initial = username.charAt(0).toUpperCase() || "?";
 
   return (
-    <div ref={menuRef} className="fixed top-4 right-4 z-30">
+    <div ref={menuRef} className="relative">
       <button
         onClick={() => setIsOpen((prev) => !prev)}
         className="flex items-center justify-center w-9 h-9 rounded-full bg-gray-700 text-white text-sm font-semibold hover:bg-gray-600 shadow-md transition-colors"

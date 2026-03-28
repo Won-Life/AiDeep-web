@@ -1,8 +1,12 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { initialNodes } from "@/mock/mindmap";
 import { type Node } from "@xyflow/react";
 import { type NodeData } from "@/features/nodes/TextUpdateNode";
+import UserMenu from "./UserMenu";
+import { getMe } from "@/api/user";
+import { logout } from "@/api/auth";
+import { type UserMeResponse } from "@/api/types";
 
 interface ChipHeaderProps {
   sidebarWidth: number;
@@ -19,6 +23,16 @@ export default function ChipHeader({
     () => initialNodes.filter((node) => node.data.isMain),
     [],
   );
+  const [user, setUser] = useState<UserMeResponse | null>(null);
+
+  useEffect(() => {
+    getMe<UserMeResponse>().then(setUser).catch(() => {});
+  }, []);
+
+  async function handleLogout() {
+    await logout();
+    window.location.href = "/login";
+  }
 
   return (
     <header
@@ -40,8 +54,14 @@ export default function ChipHeader({
               paddingRight: 15,
               paddingTop: 10,
               paddingBottom: 10,
-              backgroundColor: activeProjectId === node.id ? "rgb(var(--surface-hover))" : undefined,
-              color: activeProjectId === node.id ? "rgb(var(--foreground))" : "rgb(var(--muted))",
+              backgroundColor:
+                activeProjectId === node.id
+                  ? "rgb(var(--surface-hover))"
+                  : undefined,
+              color:
+                activeProjectId === node.id
+                  ? "rgb(var(--foreground))"
+                  : "rgb(var(--muted))",
               fontWeight: activeProjectId === node.id ? 500 : 400,
             }}
           >
@@ -51,11 +71,13 @@ export default function ChipHeader({
       </div>
 
       {/* 오른쪽: 사용자 정보 */}
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-muted rounded-full"></div>
-        <span className="text-sm text-foreground">USER_name</span>
-        <span className="text-muted">▼</span>
-      </div>
+      {user && (
+        <UserMenu
+          username={user.username}
+          email={user.email}
+          onLogout={handleLogout}
+        />
+      )}
     </header>
   );
 }
