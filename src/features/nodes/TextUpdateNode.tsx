@@ -36,7 +36,7 @@ export type NodeData = {
   color?: string;
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
-  handleSide?: "left" | "right";
+  sideRelativeToParent?: "left" | "right";
   hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
   isHovered?: boolean; // 드래그 중 hover 상태
@@ -49,15 +49,13 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const nodeData = data as NodeData;
   const isMain = nodeData.isMain ?? false;
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
-  const handleSide = nodeData.handleSide ?? "right";
-  const handlePosition = handleSide === "left" ? Position.Left : Position.Right;
+  const sideRelativeToParent = nodeData.sideRelativeToParent ?? "right";
+  const sourceHandlePosition = sideRelativeToParent === "left" ? Position.Left : Position.Right;
   const showInputBox = nodeData.showInputBox ?? false;
   const isHovered = nodeData.isHovered ?? false;
   const [isNodeHovered, setIsNodeHovered] = useState(false);
 
   // 부모가 없는 서브 노드는 양쪽에 핸들 표시
-  const showBothHandles = isMain || !hasParent;
-
   const PLACEHOLDER = isMain ? "중심 노드" : "서브 노드";
 
   // content에서 첫 텍스트를 추출, 없으면 text 필드로 fallback
@@ -70,7 +68,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
     if (id) {
       updateNodeInternals(id);
     }
-  }, [id, handleSide, showBothHandles, updateNodeInternals]);
+  }, [id, sideRelativeToParent, hasParent, updateNodeInternals]);
 
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
@@ -105,7 +103,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
             top: "100%",
             marginTop: "4px",
             borderColor: EDGE_COLOR,
-            ...(handleSide === "left" ? { right: 0 } : { left: 0 }),
+            ...(sideRelativeToParent === "left" ? { right: 0 } : { left: 0 }),
             zIndex: 0,
           }}
           onClick={(e) => e.stopPropagation()}
@@ -150,20 +148,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
         >
           {isEmpty ? PLACEHOLDER : label}
         </div>
-        {showBothHandles ? (
+        {!hasParent ? (
           <>
-            <Handle
-              type="target"
-              position={Position.Left}
-              id="target-left"
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
-            />
-            <Handle
-              type="target"
-              position={Position.Right}
-              id="target-right"
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
-            />
             <Handle
               type="source"
               position={Position.Left}
@@ -181,14 +167,14 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           <>
             <Handle
               type="target"
-              position={handlePosition}
-              id={`target-${handleSide}`}
+              position={sideRelativeToParent === "right" ? Position.Left : Position.Right}
+              id={sideRelativeToParent === "right" ? "target-left" : "target-right"}
               style={{ opacity: isNodeHovered ? 1 : 0 }}
             />
             <Handle
               type="source"
-              position={handlePosition}
-              id={`source-${handleSide}`}
+              position={sourceHandlePosition}
+              id={`source-${sideRelativeToParent}`}
               style={{ opacity: isNodeHovered ? 1 : 0 }}
             />
           </>
