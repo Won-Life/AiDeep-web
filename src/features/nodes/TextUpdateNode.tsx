@@ -37,6 +37,7 @@ export type NodeData = {
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
   sideRelativeToParent?: "left" | "right";
+  handleSide?: "left" | "right"; // Canvas가 위치 변경마다 재계산하는 핸들 방향
   hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
   isHovered?: boolean; // 드래그 중 hover 상태
@@ -49,8 +50,12 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const nodeData = data as NodeData;
   const isMain = nodeData.isMain ?? false;
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
-  const sideRelativeToParent = nodeData.sideRelativeToParent ?? "right";
-  const sourceHandlePosition = sideRelativeToParent === "left" ? Position.Left : Position.Right;
+  // sideRelativeToParent는 최초 생성 시점에만 설정되므로 handleSide를 사용
+  const sideRelativeToParent = (nodeData.handleSide ??
+    nodeData.sideRelativeToParent ??
+    "right") as "left" | "right";
+  const sourceHandlePosition =
+    sideRelativeToParent === "left" ? Position.Left : Position.Right;
   const showInputBox = nodeData.showInputBox ?? false;
   const isHovered = nodeData.isHovered ?? false;
   const [isNodeHovered, setIsNodeHovered] = useState(false);
@@ -157,9 +162,21 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
               style={{ opacity: isNodeHovered ? 1 : 0 }}
             />
             <Handle
+              type="target"
+              position={Position.Left}
+              id="target-left"
+              style={{ opacity: isNodeHovered ? 1 : 0 }}
+            />
+            <Handle
               type="source"
               position={Position.Right}
               id="source-right"
+              style={{ opacity: isNodeHovered ? 1 : 0 }}
+            />
+            <Handle
+              type="target"
+              position={Position.Right}
+              id="target-right"
               style={{ opacity: isNodeHovered ? 1 : 0 }}
             />
           </>
@@ -167,8 +184,16 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           <>
             <Handle
               type="target"
-              position={sideRelativeToParent === "right" ? Position.Left : Position.Right}
-              id={sideRelativeToParent === "right" ? "target-left" : "target-right"}
+              position={
+                sideRelativeToParent === "right"
+                  ? Position.Left
+                  : Position.Right
+              }
+              id={
+                sideRelativeToParent === "right"
+                  ? "target-left"
+                  : "target-right"
+              }
               style={{ opacity: isNodeHovered ? 1 : 0 }}
             />
             <Handle
