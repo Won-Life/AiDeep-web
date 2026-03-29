@@ -70,7 +70,7 @@ type BlockType =
 export interface NotionEditorProps {
   nodeId: string;
   initialContent?: string;
-  onSave?: (nodeId: string, content: string) => void;
+  onSave?: (nodeId: string, jsonBody: string, markdownBody: string) => void;
 }
 
 // ─── Image Node ───────────────────────────────────────────────────────────────
@@ -608,11 +608,11 @@ export function NotionEditor({
   const handleChange = useCallback(
     (editorState: EditorState) => {
       const json = JSON.stringify(editorState.toJSON(), null, 2);
+      let markdown = "";
       editorState.read(() => {
-        const markdown = $convertToMarkdownString(TRANSFORMERS);
-        console.log(`[NotionEditor:${nodeId}] markdown:\n`, markdown);
+        markdown = $convertToMarkdownString(TRANSFORMERS);
       });
-      onSave?.(nodeId, json);
+      onSave?.(nodeId, json, markdown);
     },
     [nodeId, onSave],
   );
