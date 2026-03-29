@@ -173,6 +173,9 @@ export function useWorkspaceWS({
               data: {
                 ...updated.data,
                 ...(e.patch.title !== undefined && { text: e.patch.title }),
+                ...(e.patch.data?.jsonBody !== undefined && {
+                  content: e.patch.data.jsonBody,
+                }),
                 ...(e.patch.data?.markdownBody !== undefined && {
                   body: e.patch.data.markdownBody,
                 }),
