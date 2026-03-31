@@ -26,7 +26,12 @@ import "@xyflow/react/dist/style.css";
 import * as d3 from "d3";
 import { nodeTypes } from "@/types/nodeTypes";
 import { edgeTypes } from "@/types/edgeTypes";
-import { createMdNode, moveNode, deleteNode, updateNodeContent } from "../api/nodes";
+import {
+  createMdNode,
+  moveNode,
+  deleteNode,
+  updateNodeContent,
+} from "../api/nodes";
 import { emitLivePosition, emitCursorMove } from "@/api/ws";
 import { createEdge } from "../api/edges";
 import type { EdgeDto, NodeDto } from "../types";
@@ -644,7 +649,9 @@ function GraphCanvasInner({
   const isDraggingRef = useRef(false);
   const nodesRef = useRef<Node[]>(nodes);
   nodesRef.current = nodes;
-  const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
   const [isGrabbing, setIsGrabbing] = useState(false);
   const [isHoveringNode, setIsHoveringNode] = useState(false);
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -814,7 +821,11 @@ function GraphCanvasInner({
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         onChange: (nodeId: string, value: string) =>
           handleNodeDataChange(nodeId, { text: value }),
-        onContentChange: (nodeId: string, jsonBody: string, markdownBody: string) => {
+        onContentChange: (
+          nodeId: string,
+          jsonBody: string,
+          markdownBody: string,
+        ) => {
           handleNodeDataChange(nodeId, { content: jsonBody });
 
           const prev = contentSaveTimers.current.get(nodeId);
@@ -828,7 +839,8 @@ function GraphCanvasInner({
                   jsonBody,
                   markdownBody,
                   color: (currentNode?.data?.color as string) ?? "#ffffff",
-                  textColor: (currentNode?.data?.textColor as string) ?? "#000000",
+                  textColor:
+                    (currentNode?.data?.textColor as string) ?? "#000000",
                 },
               }).catch(console.error);
             }, 800),
@@ -1415,7 +1427,7 @@ function GraphCanvasInner({
   );
 
   const onDrop = useCallback(
-    (event: DragEvent) => {
+    async (event: DragEvent) => {
       const raw = event.dataTransfer.getData("application/resource-subitem");
       if (!raw) return;
       event.preventDefault();
@@ -1463,8 +1475,23 @@ function GraphCanvasInner({
         ? getGraphColor(targetParent.id, nodes, edges)
         : DEFAULT_NODE_COLOR;
 
+      let nodeId: string;
+      try {
+        const res = await createMdNode(workspaceId, payload.name, position, {
+          markdownBody: "",
+          jsonBody: "",
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        });
+        nodeId = res.nodeId;
+      } catch (err) {
+        console.error("[onDrop] createMdNode failed", err);
+        setHoveredNodeId(null);
+        return;
+      }
+
       const newNode: Node = {
-        id: makeNodeId(),
+        id: nodeId,
         type: "textUpdater",
         position,
         data: {
@@ -1478,24 +1505,52 @@ function GraphCanvasInner({
       setNodes((prev) => [...prev, newNode]);
 
       if (shouldConnect && targetParent) {
-        setEdges((prev) => {
-          const rawEdge: Edge = {
-            id: `e-${targetParent.id}-${newNode.id}-${Date.now()}`,
-            source: targetParent.id,
-            target: newNode.id,
-          };
-          const nextEdge = buildEdgePresentation(
-            rawEdge,
-            [...nodes, newNode],
-            [...prev, rawEdge],
-          );
-          return [...prev, nextEdge];
-        });
+        const sideRelativeToParent = resolveConnectSideFromSource(
+          targetParent,
+          newNode,
+          undefined,
+          nodes,
+          edges,
+        );
+        createEdge(
+          workspaceId,
+          targetParent.id,
+          nodeId,
+          `source-${sideRelativeToParent}`,
+          `target-${sideRelativeToParent === "left" ? "right" : "left"}`,
+        )
+          .then(({ edgeId }) => {
+            setEdges((prev) => {
+              if (prev.some((e) => e.id === edgeId)) return prev;
+              const rawEdge: Edge = {
+                id: edgeId,
+                source: targetParent.id,
+                target: nodeId,
+              };
+              return [
+                ...prev,
+                buildEdgePresentation(
+                  rawEdge,
+                  [...nodes, newNode],
+                  [...prev, rawEdge],
+                ),
+              ];
+            });
+          })
+          .catch((err) => console.error("[onDrop] createEdge failed", err));
       }
 
       setHoveredNodeId(null);
     },
-    [screenToFlowPosition, setNodes, setEdges, nodes, edges, hoveredNodeId],
+    [
+      screenToFlowPosition,
+      setNodes,
+      setEdges,
+      nodes,
+      edges,
+      hoveredNodeId,
+      workspaceId,
+    ],
   );
 
   const onDragLeave = useCallback((event: DragEvent) => {
