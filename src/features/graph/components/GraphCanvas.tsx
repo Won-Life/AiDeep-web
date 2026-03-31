@@ -836,8 +836,6 @@ function GraphCanvasInner({
               const currentNode = nodesRef.current.find((n) => n.id === nodeId);
               updateNodeContent(workspaceId, nodeId, {
                 body: {
-                  jsonBody,
-                  markdownBody,
                   color: (currentNode?.data?.color as string) ?? "#ffffff",
                   textColor:
                     (currentNode?.data?.textColor as string) ?? "#000000",
