@@ -1,5 +1,25 @@
 import { api } from "@/api/client";
 
+export const EMPTY_LEXICAL_JSON = JSON.stringify({
+  root: {
+    children: [
+      {
+        children: [],
+        direction: null,
+        format: "",
+        indent: 0,
+        type: "paragraph",
+        version: 1,
+      },
+    ],
+    direction: null,
+    format: "",
+    indent: 0,
+    type: "root",
+    version: 1,
+  },
+});
+
 interface Position {
   x: number;
   y: number;
@@ -34,7 +54,6 @@ export async function createMdNode(
   body : MdBody
   // body: MdBody = { markdownBody: "", jsonBody: "" },
 ): Promise<CreateNodeResponse> {
-  console.log(body)
   return api<CreateNodeResponse>(`/workspace/${workspaceId}/node/md`, {
     method: "POST",
     body: JSON.stringify({ title, position, body }),
