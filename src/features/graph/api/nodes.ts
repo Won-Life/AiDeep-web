@@ -6,10 +6,10 @@ interface Position {
 }
 
 interface MdBody {
-  markdownBody: string;
-  jsonBody: string;
-  color : string
-  textColor : string
+  markdownBody?: string;
+  jsonBody?: string;
+  color?: string;
+  textColor?: string;
 }
 
 interface CreateNodeResponse {
@@ -66,7 +66,7 @@ export async function updateNodeContent(
   nodeId: string,
   data: { title?: string; body?: MdBody },
 ): Promise<string> {
-  return api<string>(`/workspace/${workspaceId}/node/${nodeId}/md`, {
+  return api<string>(`/workspace/${workspaceId}/node/${nodeId}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
