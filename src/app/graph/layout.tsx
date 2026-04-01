@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { type Node } from "@xyflow/react";
 import Sidebar, {
   type Project,
   type Resource,
@@ -17,6 +18,7 @@ import { getWorkspaces } from "@/api/workspace";
 import { getNodes } from "@/features/graph/api/getNodes";
 import { toFlowEdge, toFlowNode } from "@/features/graph/api/mappers";
 import { useWorkspaceWS } from "@/hooks/useWorkspaceWS";
+import { type NodeView } from "@/features/nodes/TextUpdateNode";
 import { GraphLayoutProvider, useGraphLayout } from "./context";
 
 const INITIAL_PROJECTS: Project[] = [
@@ -73,6 +75,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
     setWorkspaceId,
     setNodes,
     setEdges,
+    nodes,
     edgesRef,
     synced,
     setSynced,
@@ -253,6 +256,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
 
       <ChipHeader
         sidebarWidth={sidebarWidth}
+        nodes={nodes as Node<NodeView>[]}
         onNodeFocus={setFocusedNodeId}
         activeProjectId={focusedNodeId}
       />
