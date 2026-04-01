@@ -138,119 +138,6 @@ class ImageNode extends DecoratorNode<ReactNode> {
   }
 }
 
-// ─── Mock Initial State ───────────────────────────────────────────────────────
-
-const MOCK_INITIAL_STATE = JSON.stringify({
-  root: {
-    children: [
-      {
-        children: [
-          {
-            detail: 0,
-            format: 0,
-            mode: "normal",
-            style: "",
-            text: "🌌 야경",
-            type: "text",
-            version: 1,
-          },
-        ],
-        direction: "ltr",
-        format: "",
-        indent: 0,
-        tag: "h2",
-        type: "heading",
-        version: 1,
-      },
-      {
-        type: "image",
-        version: 1,
-        src: "https://littledeep.com/wp-content/uploads/2019/04/littledeep_nightsky_sns.png",
-        alt: "Night sky",
-      },
-      {
-        children: [
-          {
-            detail: 0,
-            format: 0,
-            mode: "normal",
-            style: "",
-            text: "아름다운 밤하늘 사진입니다.",
-            type: "text",
-            version: 1,
-          },
-        ],
-        direction: "ltr",
-        format: "",
-        indent: 0,
-        type: "paragraph",
-        version: 1,
-      },
-    ],
-    direction: "ltr",
-    format: "",
-    indent: 0,
-    type: "root",
-    version: 1,
-  },
-});
-
-// ─── Debug Panel Plugin ───────────────────────────────────────────────────────
-
-function DebugPanel() {
-  const [editor] = useLexicalComposerContext();
-  const [json, setJson] = useState<string>("");
-
-  useEffect(() => {
-    // Capture initial state
-    editor.getEditorState().read(() => {
-      setJson(JSON.stringify(editor.getEditorState().toJSON(), null, 2));
-    });
-
-    return editor.registerUpdateListener(({ editorState }) => {
-      setJson(JSON.stringify(editorState.toJSON(), null, 2));
-    });
-  }, [editor]);
-
-  return (
-    <div
-      className="nodrag nowheel shrink-0 overflow-y-auto"
-      style={{
-        borderTop: "1px solid #EBEBEB",
-        maxHeight: 200,
-        background: "#FAFAFA",
-      }}
-    >
-      <div
-        style={{
-          padding: "4px 8px 2px",
-          fontSize: 9,
-          color: "#AAA",
-          fontWeight: 600,
-          letterSpacing: "0.05em",
-          textTransform: "uppercase",
-        }}
-      >
-        Editor State JSON
-      </div>
-      <pre
-        style={{
-          margin: 0,
-          padding: "0 10px 10px",
-          fontSize: 10,
-          lineHeight: 1.6,
-          color: "#555",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-all",
-          fontFamily: "ui-monospace, monospace",
-        }}
-      >
-        {json}
-      </pre>
-    </div>
-  );
-}
-
 // ─── Editor Theme ─────────────────────────────────────────────────────────────
 // Class names are defined in globals.css under @layer components
 
@@ -645,8 +532,6 @@ export function NotionEditor({
             ErrorBoundary={LexicalErrorBoundary}
           />
         </div>
-
-
 
         <HistoryPlugin />
         <ListPlugin />
