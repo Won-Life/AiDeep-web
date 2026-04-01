@@ -35,7 +35,6 @@ function extractLabelFromContent(content: string | undefined): string | null {
 export type NodeData = {
   title?: string;
   content?: string; // 에디터 JSON 내용
-  label?: string;
   color?: string;
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
