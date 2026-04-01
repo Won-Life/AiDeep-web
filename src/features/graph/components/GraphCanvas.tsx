@@ -1392,11 +1392,12 @@ function GraphCanvasInner({
       });
 
       try {
+        const colorPair = getRandomColorPair();
         const body = {
           markdownBody: "",
           jsonBody: EMPTY_LEXICAL_JSON,
-          color: DEFAULT_NODE_COLOR.bg,
-          textColor: DEFAULT_NODE_COLOR.bg,
+          color: colorPair.bg,
+          textColor: colorPair.text,
         } as MdBody;
 
         const { nodeId } = await createMdNode(workspaceId, "", position, body);
@@ -1408,8 +1409,8 @@ function GraphCanvasInner({
           data: {
             title: "",
             isMain: false,
-            color: DEFAULT_NODE_COLOR.bg,
-            textColor: DEFAULT_NODE_COLOR.text,
+            color: colorPair.bg,
+            textColor: colorPair.text,
           },
         };
 
