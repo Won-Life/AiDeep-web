@@ -33,7 +33,7 @@ function extractLabelFromContent(content: string | undefined): string | null {
 }
 
 export type NodeData = {
-  text?: string;
+  title?: string;
   content?: string; // 에디터 JSON 내용
   label?: string;
   color?: string;
@@ -74,7 +74,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
 
   // content에서 첫 텍스트를 추출, 없으면 text 필드로 fallback
   const label =
-    extractLabelFromContent(nodeData.content) || nodeData.text || "";
+    extractLabelFromContent(nodeData.content) || nodeData.title || "";
   const isEmpty = label === "";
 
   // 핸들 구성이 바뀌면 React Flow 내부 핸들 bounds를 즉시 갱신

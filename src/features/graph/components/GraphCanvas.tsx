@@ -579,7 +579,7 @@ export function convertToReactFlow(
     type: "textUpdater",
     position: { x: n.position_x, y: n.position_y },
     data: {
-      text: n.title,
+      title: n.title,
       color: n.content?.color ?? DEFAULT_NODE_COLOR.bg,
       textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
       isMain: n.node_type === "PROJECT",
@@ -851,7 +851,7 @@ function GraphCanvasInner({
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
         onChange: (nodeId: string, value: string) =>
-          handleNodeDataChange(nodeId, { text: value }),
+          handleNodeDataChange(nodeId, { title: value }),
         onContentChange: (
           nodeId: string,
           jsonBody: string,
@@ -1310,7 +1310,7 @@ function GraphCanvasInner({
             type: "textUpdater",
             position: adjustedPosition,
             data: {
-              text: "",
+              title: "",
               isMain: false,
               color: colorPair.bg,
               textColor: colorPair.text,
@@ -1406,7 +1406,7 @@ function GraphCanvasInner({
           type: "textUpdater",
           position,
           data: {
-            text: "",
+            title: "",
             isMain: false,
             color: DEFAULT_NODE_COLOR.bg,
             textColor: DEFAULT_NODE_COLOR.text,
@@ -1524,7 +1524,7 @@ function GraphCanvasInner({
         type: "textUpdater",
         position,
         data: {
-          text: payload.name,
+          title: payload.name,
           isMain: false,
           color: colorPair.bg,
           textColor: colorPair.text,

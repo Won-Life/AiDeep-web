@@ -65,7 +65,7 @@ export default function ChipHeader({
               fontWeight: activeProjectId === node.id ? 500 : 400,
             }}
           >
-            {node.data?.text}
+            {node.data?.title}
           </button>
         ))}
       </div>
