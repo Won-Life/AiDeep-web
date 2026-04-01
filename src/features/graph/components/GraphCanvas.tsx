@@ -44,16 +44,6 @@ import { getCursorColor } from "@/utils/cursorColor";
 import CursorOverlay from "./CursorOverlay";
 import { MdBody } from "@/api/types";
 
-// DB 저장 함수 (예시)
-async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
-  console.log("Saving to DB:", { nodes, edges });
-}
-
-// TODO: uuid로 변경
-function makeNodeId() {
-  return `node_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-}
-
 // TODO: 실제 노드 너비로 변경
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 48;
