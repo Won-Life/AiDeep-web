@@ -32,7 +32,7 @@ function extractLabelFromContent(content: string | undefined): string | null {
   }
 }
 
-export type NodeData = {
+export type NodeView = {
   title?: string;
   content?: string; // 에디터 JSON 내용
   color?: string;
@@ -55,9 +55,10 @@ export type NodeData = {
 export function TextUpdaterNode({ data, id }: NodeProps) {
   const router = useRouter();
   const updateNodeInternals = useUpdateNodeInternals();
-  const nodeData = data as NodeData;
+  const nodeData = data as NodeView;
   const isMain = nodeData.isMain ?? false;
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
+
   // sideRelativeToParent는 최초 생성 시점에만 설정되므로 handleSide를 사용
   const sideRelativeToParent = (nodeData.handleSide ??
     nodeData.sideRelativeToParent ??
