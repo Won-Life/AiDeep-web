@@ -814,7 +814,7 @@ function GraphCanvasInner({
   /* =========================
      Node data update
      ========================= */
-  const handleNodeDataChange = useCallback(
+  const handleNodeViewChange = useCallback(
     (nodeId: string, newData: Record<string, unknown>) => {
       setNodes((snapshot) =>
         snapshot.map((node) =>
@@ -851,13 +851,13 @@ function GraphCanvasInner({
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
         onChange: (nodeId: string, value: string) =>
-          handleNodeDataChange(nodeId, { title: value }),
+          handleNodeViewChange(nodeId, { title: value }),
         onContentChange: (
           nodeId: string,
           jsonBody: string,
           markdownBody: string,
         ) => {
-          handleNodeDataChange(nodeId, { content: jsonBody });
+          handleNodeViewChange(nodeId, { content: jsonBody });
 
           // const prev = contentSaveTimers.current.get(nodeId);
           // if (prev) clearTimeout(prev);
