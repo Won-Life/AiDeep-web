@@ -10,25 +10,39 @@ import {
 } from "@xyflow/react";
 import { NodeEditorPanel } from "@/features/editor/NodeEditorPanel";
 
-function extractLabelFromContent(content: string | undefined): string | null {
-  if (!content) return null;
+// NOTE: 현재는 첫 non-empty line을 반환하며, h1 등 헤딩 식별 로직은 없음
+export function extractLabelFromContent(content: string | undefined): string {
+  if (!content) return "";
   try {
     const state = JSON.parse(content);
     const children: Array<{
-      type: string;
+      type?: string;
       tag?: string;
-      children?: Array<{ text?: string }>;
+      text?: string;
+      children?: Array<{
+        type?: string;
+        tag?: string;
+        text?: string;
+        children?: Array<{ text?: string }>;
+      }>;
     }> = state?.root?.children ?? [];
+
+    const collectText = (node: {
+      text?: string;
+      children?: Array<{ text?: string; children?: Array<{ text?: string }> }>;
+    }): string => {
+      if (node.text) return node.text;
+      if (!node.children?.length) return "";
+      return node.children.map(collectText).join("");
+    };
+
     for (const node of children) {
-      const text = node.children
-        ?.map((c) => c.text ?? "")
-        .join("")
-        .trim();
+      const text = collectText(node).trim();
       if (text) return text;
     }
-    return null;
+    return "";
   } catch {
-    return null;
+    return "";
   }
 }
 
