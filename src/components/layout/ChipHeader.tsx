@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { initialNodes } from "@/mock/mindmap";
 import { type Node } from "@xyflow/react";
-import { type NodeData } from "@/features/nodes/TextUpdateNode";
+import { type NodeView } from "@/features/nodes/TextUpdateNode";
 import UserMenu from "./UserMenu";
 import { getMe } from "@/api/user";
 import { logout } from "@/api/auth";
@@ -10,18 +9,20 @@ import { type UserMeResponse } from "@/api/types";
 
 interface ChipHeaderProps {
   sidebarWidth: number;
+  nodes: Node<NodeView>[];
   onNodeFocus?: (nodeId: string) => void;
   activeProjectId?: string | null;
 }
 
 export default function ChipHeader({
   sidebarWidth,
+  nodes,
   onNodeFocus,
   activeProjectId = null,
 }: ChipHeaderProps) {
-  const mainNodes: Node<NodeData>[] = useMemo(
-    () => initialNodes.filter((node) => node.data.isMain),
-    [],
+  const mainNodes: Node<NodeView>[] = useMemo(
+    () => nodes.filter((node) => node.data.isMain),
+    [nodes],
   );
   const [user, setUser] = useState<UserMeResponse | null>(null);
 
@@ -40,7 +41,7 @@ export default function ChipHeader({
       style={{ left: `${sidebarWidth}px` }}
     >
       <div className="flex gap-2">
-        {mainNodes.map((node: Node<NodeData>) => (
+        {mainNodes.map((node: Node<NodeView>) => (
           <button
             key={node.id}
             onClick={() => {
@@ -65,7 +66,7 @@ export default function ChipHeader({
               fontWeight: activeProjectId === node.id ? 500 : 400,
             }}
           >
-            {node.data?.text}
+            {node.data?.title}
           </button>
         ))}
       </div>

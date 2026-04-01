@@ -44,16 +44,6 @@ import { getCursorColor } from "@/utils/cursorColor";
 import CursorOverlay from "./CursorOverlay";
 import { MdBody } from "@/api/types";
 
-// DB 저장 함수 (예시)
-async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
-  console.log("Saving to DB:", { nodes, edges });
-}
-
-// TODO: uuid로 변경
-function makeNodeId() {
-  return `node_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-}
-
 // TODO: 실제 노드 너비로 변경
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 48;
@@ -579,7 +569,7 @@ export function convertToReactFlow(
     type: "textUpdater",
     position: { x: n.position_x, y: n.position_y },
     data: {
-      text: n.title,
+      title: n.title,
       color: n.content?.color ?? DEFAULT_NODE_COLOR.bg,
       textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
       isMain: n.node_type === "PROJECT",
@@ -643,6 +633,35 @@ function GraphCanvasInner({
   );
 
   const { screenToFlowPosition, setCenter } = useReactFlow();
+
+  // viewport 저장 (debounce)
+  const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedViewport = useRef<{ x: number; y: number; zoom: number } | null>(
+    (() => {
+      if (typeof window === "undefined") return null;
+      try {
+        const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    })(),
+  );
+
+  const handleViewportChange = useCallback(
+    (viewport: { x: number; y: number; zoom: number }) => {
+      if (viewportSaveTimer.current) clearTimeout(viewportSaveTimer.current);
+      viewportSaveTimer.current = setTimeout(() => {
+        try {
+          sessionStorage.setItem(
+            `graph_viewport_${workspaceId}`,
+            JSON.stringify(viewport),
+          );
+        } catch {}
+      }, 300);
+    },
+    [workspaceId],
+  );
 
   // D3 force simulation 관리
   const simulationRef = useRef<d3.Simulation<D3Node, undefined> | null>(null);
@@ -785,7 +804,7 @@ function GraphCanvasInner({
   /* =========================
      Node data update
      ========================= */
-  const handleNodeDataChange = useCallback(
+  const handleNodeViewChange = useCallback(
     (nodeId: string, newData: Record<string, unknown>) => {
       setNodes((snapshot) =>
         snapshot.map((node) =>
@@ -820,14 +839,15 @@ function GraphCanvasInner({
         hasParent, // 부모 노드 존재 여부 전달
         showInputBox: selectedNodeId === node.id, // 선택된 노드에만 입력박스 표시
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
+        workspaceId, // 전체화면 이동 시 사용
         onChange: (nodeId: string, value: string) =>
-          handleNodeDataChange(nodeId, { text: value }),
+          handleNodeViewChange(nodeId, { title: value }),
         onContentChange: (
           nodeId: string,
           jsonBody: string,
           markdownBody: string,
         ) => {
-          handleNodeDataChange(nodeId, { content: jsonBody });
+          handleNodeViewChange(nodeId, { content: jsonBody });
 
           // const prev = contentSaveTimers.current.get(nodeId);
           // if (prev) clearTimeout(prev);
@@ -1280,7 +1300,7 @@ function GraphCanvasInner({
             type: "textUpdater",
             position: adjustedPosition,
             data: {
-              text: "",
+              title: "",
               isMain: false,
               color: colorPair.bg,
               textColor: colorPair.text,
@@ -1362,11 +1382,12 @@ function GraphCanvasInner({
       });
 
       try {
+        const colorPair = getRandomColorPair();
         const body = {
           markdownBody: "",
           jsonBody: EMPTY_LEXICAL_JSON,
-          color: DEFAULT_NODE_COLOR.bg,
-          textColor: DEFAULT_NODE_COLOR.bg,
+          color: colorPair.bg,
+          textColor: colorPair.text,
         } as MdBody;
 
         const { nodeId } = await createMdNode(workspaceId, "", position, body);
@@ -1376,10 +1397,10 @@ function GraphCanvasInner({
           type: "textUpdater",
           position,
           data: {
-            text: "",
+            title: "",
             isMain: false,
-            color: DEFAULT_NODE_COLOR.bg,
-            textColor: DEFAULT_NODE_COLOR.text,
+            color: colorPair.bg,
+            textColor: colorPair.text,
           },
         };
 
@@ -1494,7 +1515,7 @@ function GraphCanvasInner({
         type: "textUpdater",
         position,
         data: {
-          text: payload.name,
+          title: payload.name,
           isMain: false,
           color: colorPair.bg,
           textColor: colorPair.text,
@@ -2000,7 +2021,10 @@ function GraphCanvasInner({
         onDrop={onDrop}
         onDragLeave={onDragLeave}
         isValidConnection={isValidConnection}
-        fitView
+        onViewportChange={handleViewportChange}
+        {...(savedViewport.current
+          ? { defaultViewport: savedViewport.current }
+          : { fitView: true })}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
