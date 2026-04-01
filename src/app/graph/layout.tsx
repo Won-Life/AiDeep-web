@@ -64,12 +64,18 @@ function makeId() {
 function GraphLayoutInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const {
-    focusedNodeId, setFocusedNodeId,
-    setUserMe, userMe,
+    focusedNodeId,
+    setFocusedNodeId,
+    setUserMe,
+    userMe,
     setSidebarWidth,
-    workspaceId, setWorkspaceId,
-    setNodes, setEdges,
-    edgesRef, synced, setSynced,
+    workspaceId,
+    setWorkspaceId,
+    setNodes,
+    setEdges,
+    edgesRef,
+    synced,
+    setSynced,
   } = useGraphLayout();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -102,6 +108,8 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   useEffect(() => {
     getMe()
       .then(setUserMe)
+      // DO: 500(서버 에러)에도 /login으로 리다이렉트됨
+      // isAxiosError(err) && err.response?.status === 401 일 때만 로그아웃해야 함
       .catch(() => router.replace("/login"));
   }, [router, setUserMe]);
 
@@ -127,7 +135,12 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
       });
   }, [synced, setWorkspaceId, setNodes, setEdges, setSynced]);
 
-  useWorkspaceWS({ workspaceId: workspaceId ?? "", setNodes, setEdges, edgesRef });
+  useWorkspaceWS({
+    workspaceId: workspaceId ?? "",
+    setNodes,
+    setEdges,
+    edgesRef,
+  });
 
   const handleLogout = useCallback(async () => {
     try {
@@ -137,7 +150,10 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   }, [router]);
 
   const addProject = () =>
-    setProjects((prev) => [...prev, { id: makeId(), name: "", isEditing: true }]);
+    setProjects((prev) => [
+      ...prev,
+      { id: makeId(), name: "", isEditing: true },
+    ]);
   const saveProjectName = (id: string, name: string) =>
     setProjects((prev) =>
       prev.map((p) => (p.id === id ? { ...p, name, isEditing: false } : p)),
@@ -161,7 +177,10 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
         r.id === resourceId
           ? {
               ...r,
-              subItems: [...r.subItems, { id: makeId(), name: "", isEditing: true }],
+              subItems: [
+                ...r.subItems,
+                { id: makeId(), name: "", isEditing: true },
+              ],
             }
           : r,
       ),
@@ -185,7 +204,11 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
           : r,
       ),
     );
-  const saveSubItemName = (resourceId: string, subItemId: string, name: string) =>
+  const saveSubItemName = (
+    resourceId: string,
+    subItemId: string,
+    name: string,
+  ) =>
     setResources((prev) =>
       prev.map((r) =>
         r.id === resourceId
