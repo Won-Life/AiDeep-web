@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { initialNodes } from "@/mock/mindmap";
 import { type Node } from "@xyflow/react";
 import { type NodeView } from "@/features/nodes/TextUpdateNode";
 import UserMenu from "./UserMenu";
@@ -10,18 +9,20 @@ import { type UserMeResponse } from "@/api/types";
 
 interface ChipHeaderProps {
   sidebarWidth: number;
+  nodes: Node<NodeView>[];
   onNodeFocus?: (nodeId: string) => void;
   activeProjectId?: string | null;
 }
 
 export default function ChipHeader({
   sidebarWidth,
+  nodes,
   onNodeFocus,
   activeProjectId = null,
 }: ChipHeaderProps) {
   const mainNodes: Node<NodeView>[] = useMemo(
-    () => initialNodes.filter((node) => node.data.isMain),
-    [],
+    () => nodes.filter((node) => node.data.isMain),
+    [nodes],
   );
   const [user, setUser] = useState<UserMeResponse | null>(null);
 
