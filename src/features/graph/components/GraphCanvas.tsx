@@ -31,6 +31,7 @@ import {
   moveNode,
   deleteNode,
   updateNodeContent,
+  EMPTY_LEXICAL_JSON,
 } from "../api/nodes";
 import { emitLivePosition, emitCursorMove } from "@/api/ws";
 import { createEdge } from "../api/edges";
@@ -828,23 +829,21 @@ function GraphCanvasInner({
         ) => {
           handleNodeDataChange(nodeId, { content: jsonBody });
 
-          const prev = contentSaveTimers.current.get(nodeId);
-          if (prev) clearTimeout(prev);
-          contentSaveTimers.current.set(
-            nodeId,
-            setTimeout(() => {
-              const currentNode = nodesRef.current.find((n) => n.id === nodeId);
-              updateNodeContent(workspaceId, nodeId, {
-                body: {
-                  jsonBody,
-                  markdownBody,
-                  color: (currentNode?.data?.color as string) ?? "#ffffff",
-                  textColor:
-                    (currentNode?.data?.textColor as string) ?? "#000000",
-                },
-              }).catch(console.error);
-            }, 800),
-          );
+          // const prev = contentSaveTimers.current.get(nodeId);
+          // if (prev) clearTimeout(prev);
+          // contentSaveTimers.current.set(
+          //   nodeId,
+          //   setTimeout(() => {
+          //     const currentNode = nodesRef.current.find((n) => n.id === nodeId);
+          //     updateNodeContent(workspaceId, nodeId, {
+          //       body: {
+          //         color: (currentNode?.data?.color as string) ?? "#ffffff",
+          //         textColor:
+          //           (currentNode?.data?.textColor as string) ?? "#000000",
+          //       },
+          //     }).catch(console.error);
+          //   }, 800),
+          // );
         },
       },
     };
@@ -1269,7 +1268,7 @@ function GraphCanvasInner({
             adjustedPosition,
             {
               markdownBody: "",
-              jsonBody: "",
+              jsonBody: EMPTY_LEXICAL_JSON,
               color: colorPair.bg,
               textColor: colorPair.text,
             },
@@ -1365,7 +1364,7 @@ function GraphCanvasInner({
       try {
         const body = {
           markdownBody: "",
-          jsonBody: "",
+          jsonBody: EMPTY_LEXICAL_JSON,
           color: DEFAULT_NODE_COLOR.bg,
           textColor: DEFAULT_NODE_COLOR.bg,
         } as MdBody;
@@ -1479,7 +1478,7 @@ function GraphCanvasInner({
       try {
         const res = await createMdNode(workspaceId, payload.name, position, {
           markdownBody: "",
-          jsonBody: "",
+          jsonBody: EMPTY_LEXICAL_JSON,
           color: colorPair.bg,
           textColor: colorPair.text,
         });
