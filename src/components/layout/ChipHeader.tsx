@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { initialNodes } from "@/mock/mindmap";
 import { type Node } from "@xyflow/react";
-import { type NodeData } from "@/features/nodes/TextUpdateNode";
+import { type NodeView } from "@/features/nodes/TextUpdateNode";
 import UserMenu from "./UserMenu";
 import { getMe } from "@/api/user";
 import { logout } from "@/api/auth";
@@ -19,7 +19,7 @@ export default function ChipHeader({
   onNodeFocus,
   activeProjectId = null,
 }: ChipHeaderProps) {
-  const mainNodes: Node<NodeData>[] = useMemo(
+  const mainNodes: Node<NodeView>[] = useMemo(
     () => initialNodes.filter((node) => node.data.isMain),
     [],
   );
@@ -40,7 +40,7 @@ export default function ChipHeader({
       style={{ left: `${sidebarWidth}px` }}
     >
       <div className="flex gap-2">
-        {mainNodes.map((node: Node<NodeData>) => (
+        {mainNodes.map((node: Node<NodeView>) => (
           <button
             key={node.id}
             onClick={() => {
