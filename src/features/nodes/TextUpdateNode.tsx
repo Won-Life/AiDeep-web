@@ -140,7 +140,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           className="text-center select-none"
           style={{
             color: isEmpty
-              ? "#aaaaaa"
+              ? "rgb(var(--ds-gray-500))"
               : nodeData.textColor || "rgb(var(--foreground))",
             display: "-webkit-box",
             WebkitLineClamp: 2,
