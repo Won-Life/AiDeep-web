@@ -7,6 +7,10 @@ export type WsErrorHandler = (error: unknown) => void;
 
 let socket: Socket | null = null;
 
+export function getSocket(): Socket | null {
+  return socket;
+}
+
 export function subscribeToWorkspace(
   workspaceId: string,
   onEvent: WsEventHandler,
