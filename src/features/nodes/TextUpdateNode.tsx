@@ -48,7 +48,6 @@ export function extractLabelFromContent(content: string | undefined): string {
 
 export type NodeView = {
   title?: string;
-  content?: string; // 에디터 JSON 내용
   color?: string;
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
@@ -59,11 +58,6 @@ export type NodeView = {
   isHovered?: boolean; // 드래그 중 hover 상태
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   onChange?: (nodeId: string, value: string) => void;
-  onContentChange?: (
-    nodeId: string,
-    jsonBody: string,
-    markdownBody: string,
-  ) => void; // 에디터 내용 저장 콜백
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {
@@ -86,9 +80,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   // 부모가 없는 서브 노드는 양쪽에 핸들 표시
   const PLACEHOLDER = isMain ? "중심 노드" : "서브 노드";
 
-  // content에서 첫 텍스트를 추출, 없으면 text 필드로 fallback
-  const label =
-    extractLabelFromContent(nodeData.content) || nodeData.title || "";
+  const label = nodeData.title || "";
   const isEmpty = label === "";
 
   // 핸들 구성이 바뀌면 React Flow 내부 핸들 bounds를 즉시 갱신
@@ -124,8 +116,6 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
       {showInputBox && (
         <NodeEditorPanel
           nodeId={id}
-          initialContent={nodeData.content}
-          onSave={nodeData.onContentChange}
           borderColor={EDGE_COLOR}
           handleSide={sideRelativeToParent}
           onExpandClick={() =>
