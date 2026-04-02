@@ -1,44 +1,51 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { NodeEditorPanel } from "@/features/editor/NodeEditorPanel";
-import { getNode, updateNodeContent } from "@/features/graph/api/nodes";
+import { getNode } from "@/features/graph/api/nodes";
 import { useGraphLayout } from "@/app/graph/context";
+import { useYjsProvider } from "@/hooks/useYjsProvider";
+import { COLOR_PALETTE } from "@/features/graph/constants/colors";
+
+function getUserCursorColor(userId: string): string {
+  if (!userId) return COLOR_PALETTE[0].text;
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length].text;
+}
 
 export default function NodeFullscreenPage() {
   const router = useRouter();
   const params = useParams<{ nodeId: string }>();
   const searchParams = useSearchParams();
 
-  const { sidebarWidth } = useGraphLayout();
+  const { sidebarWidth, userMe } = useGraphLayout();
   const nodeId = params.nodeId;
   const workspaceId = searchParams.get("workspaceId") ?? "";
 
   const [title, setTitle] = useState<string>("");
-  const [initialContent, setInitialContent] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const userName = userMe?.username ?? "Anonymous";
+  const cursorColor = getUserCursorColor(userMe?.userId ?? "");
+
+  const { provider: collabProvider } = useYjsProvider({
+    nodeId: !loading && !error ? nodeId : null,
+    userName,
+    userColor: cursorColor,
+  });
 
   useEffect(() => {
     if (!workspaceId || !nodeId) return;
     getNode(workspaceId, nodeId)
-      .then((node) => {
-        setTitle(node.title);
-        setInitialContent(node.content?.jsonBody ?? "");
-      })
+      .then((node) => setTitle(node.title))
       .catch(() => setError("노드를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
   }, [workspaceId, nodeId]);
-
-  const handleSave = useCallback(
-    (_nodeId: string, content: string) => {
-      updateNodeContent(workspaceId, nodeId, {
-        body: { markdownBody: "", jsonBody: content, color: "", textColor: "" },
-      }).catch(console.error);
-    },
-    [workspaceId, nodeId],
-  );
 
   return (
     <div
@@ -90,9 +97,11 @@ export default function NodeFullscreenPage() {
         {!loading && !error && (
           <NodeEditorPanel
             nodeId={nodeId}
-            initialContent={initialContent}
-            onSave={handleSave}
             fullscreen
+            collabProvider={collabProvider}
+            username={userName}
+            cursorColor={cursorColor}
+            onFirstLineChange={(nextTitle) => setTitle(nextTitle)}
           />
         )}
       </div>

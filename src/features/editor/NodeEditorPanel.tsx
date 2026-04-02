@@ -1,30 +1,48 @@
 "use client";
 
 import { NotionEditor } from "./NotionEditor";
+import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 
 interface NodeEditorPanelProps {
   nodeId: string;
-  initialContent?: string;
-  onSave?: (nodeId: string, jsonBody: string, markdownBody: string) => void;
   fullscreen?: boolean;
   onExpandClick?: () => void;
   borderColor?: string;
   handleSide?: "left" | "right";
+  collabProvider: SocketIoYjsProvider | null;
+  username?: string;
+  cursorColor?: string;
+  onFirstLineChange?: (text: string) => void;
 }
 
 export function NodeEditorPanel({
   nodeId,
-  initialContent,
-  onSave,
   fullscreen = false,
   onExpandClick,
   borderColor = "#D9D9D9",
   handleSide = "right",
+  collabProvider,
+  username,
+  cursorColor,
+  onFirstLineChange,
 }: NodeEditorPanelProps) {
   if (fullscreen) {
+    if (!collabProvider) {
+      return (
+        <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+          워크스페이스를 불러오는 중...
+        </div>
+      );
+    }
     return (
       <div className="w-full h-full bg-white flex flex-col overflow-hidden">
-        <NotionEditor nodeId={nodeId} initialContent={initialContent} onSave={onSave} />
+        <NotionEditor
+          nodeId={nodeId}
+          collabProvider={collabProvider}
+          username={username}
+          cursorColor={cursorColor}
+          onFirstLineChange={onFirstLineChange}
+        />
       </div>
     );
   }
@@ -45,12 +63,20 @@ export function NodeEditorPanel({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <NotionEditor
-        nodeId={nodeId}
-        initialContent={initialContent}
-        onSave={onSave}
-        onFullscreen={onExpandClick}
-      />
+      {!collabProvider ? (
+        <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+          워크스페이스를 불러오는 중...
+        </div>
+      ) : (
+        <NotionEditor
+          nodeId={nodeId}
+          onFullscreen={onExpandClick}
+          collabProvider={collabProvider}
+          username={username}
+          cursorColor={cursorColor}
+          onFirstLineChange={onFirstLineChange}
+        />
+      )}
     </div>
   );
 }

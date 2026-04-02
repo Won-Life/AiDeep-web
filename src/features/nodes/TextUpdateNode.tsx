@@ -9,41 +9,18 @@ import {
   useUpdateNodeInternals,
 } from '@xyflow/react';
 import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
+import { useYjsProvider } from '@/hooks/useYjsProvider';
+import { useGraphLayout } from '@/app/graph/context';
+import { COLOR_PALETTE } from '@/features/graph/constants/colors';
 
-// NOTE: 현재는 첫 non-empty line을 반환하며, h1 등 헤딩 식별 로직은 없음
-export function extractLabelFromContent(content: string | undefined): string {
-  if (!content) return '';
-  try {
-    const state = JSON.parse(content);
-    const children: Array<{
-      type?: string;
-      tag?: string;
-      text?: string;
-      children?: Array<{
-        type?: string;
-        tag?: string;
-        text?: string;
-        children?: Array<{ text?: string }>;
-      }>;
-    }> = state?.root?.children ?? [];
-
-    const collectText = (node: {
-      text?: string;
-      children?: Array<{ text?: string; children?: Array<{ text?: string }> }>;
-    }): string => {
-      if (node.text) return node.text;
-      if (!node.children?.length) return '';
-      return node.children.map(collectText).join('');
-    };
-
-    for (const node of children) {
-      const text = collectText(node).trim();
-      if (text) return text;
-    }
-    return '';
-  } catch {
-    return '';
+// 같은 userId는 항상 같은 커서 색상을 갖도록 보장 (협업 시 사용자 식별용)
+function getUserCursorColor(userId: string): string {
+  if (!userId) return COLOR_PALETTE[0].text;
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
   }
+  return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length].text;
 }
 
 export type NodeView = {
@@ -66,6 +43,17 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const nodeData = data as NodeView;
   const isMain = nodeData.isMain ?? false;
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
+  const showInputBox = nodeData.showInputBox ?? false;
+
+  const { userMe } = useGraphLayout();
+  const userName = userMe?.username ?? 'Anonymous';
+  const cursorColor = getUserCursorColor(userMe?.userId ?? '');
+
+  const { provider: collabProvider } = useYjsProvider({
+    nodeId: showInputBox ? id : null,
+    userName,
+    userColor: cursorColor,
+  });
 
   // sideRelativeToParent는 최초 생성 시점에만 설정되므로 handleSide를 사용
   const sideRelativeToParent = (nodeData.handleSide ??
@@ -73,7 +61,6 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
     'right') as 'left' | 'right';
   const sourceHandlePosition =
     sideRelativeToParent === 'left' ? Position.Left : Position.Right;
-  const showInputBox = nodeData.showInputBox ?? false;
   const isHovered = nodeData.isHovered ?? false;
   const [isNodeHovered, setIsNodeHovered] = useState(false);
 
@@ -123,6 +110,9 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
               `/graph/node/${id}?workspaceId=${nodeData.workspaceId ?? ''}`,
             )
           }
+          collabProvider={collabProvider}
+          username={userName}
+          cursorColor={cursorColor}
         />
       )}
 
