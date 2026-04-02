@@ -129,7 +129,6 @@ export function useWorkspaceWS({
         position: { x: e.node.position.x, y: e.node.position.y },
         data: {
           title: e.node.title,
-          body: e.node.data?.markdownBody ?? "",
           isMain: e.node.nodeType === "PROJECT",
           color: e.node.data?.color ?? DEFAULT_NODE_COLOR.bg,
           textColor: e.node.data?.textColor ?? DEFAULT_NODE_COLOR.text,
