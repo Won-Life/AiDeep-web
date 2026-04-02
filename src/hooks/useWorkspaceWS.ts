@@ -128,7 +128,7 @@ export function useWorkspaceWS({
         type: "textUpdater",
         position: { x: e.node.position.x, y: e.node.position.y },
         data: {
-          text: e.node.title,
+          title: e.node.title,
           body: e.node.data?.markdownBody ?? "",
           isMain: e.node.nodeType === "PROJECT",
           color: e.node.data?.color ?? DEFAULT_NODE_COLOR.bg,
@@ -172,9 +172,15 @@ export function useWorkspaceWS({
               ...updated,
               data: {
                 ...updated.data,
-                ...(e.patch.title !== undefined && { text: e.patch.title }),
+                ...(e.patch.title !== undefined && { title: e.patch.title }),
+                ...(e.patch.data?.jsonBody !== undefined && {
+                  content: e.patch.data.jsonBody,
+                }),
                 ...(e.patch.data?.markdownBody !== undefined && {
                   body: e.patch.data.markdownBody,
+                }),
+                ...(e.patch.data?.jsonBody !== undefined && {
+                  content: e.patch.data.jsonBody,
                 }),
                 ...(e.patch.data?.color !== undefined && {
                   color: e.patch.data.color,

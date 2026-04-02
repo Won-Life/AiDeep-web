@@ -1,15 +1,35 @@
 import { api } from "@/api/client";
 
+export const EMPTY_LEXICAL_JSON = JSON.stringify({
+  root: {
+    children: [
+      {
+        children: [],
+        direction: null,
+        format: "",
+        indent: 0,
+        type: "paragraph",
+        version: 1,
+      },
+    ],
+    direction: null,
+    format: "",
+    indent: 0,
+    type: "root",
+    version: 1,
+  },
+});
+
 interface Position {
   x: number;
   y: number;
 }
 
 interface MdBody {
-  markdownBody: string;
-  jsonBody: string;
-  color : string
-  textColor : string
+  markdownBody?: string;
+  jsonBody?: string;
+  color?: string;
+  textColor?: string;
 }
 
 interface CreateNodeResponse {
@@ -34,7 +54,6 @@ export async function createMdNode(
   body : MdBody
   // body: MdBody = { markdownBody: "", jsonBody: "" },
 ): Promise<CreateNodeResponse> {
-  console.log(body)
   return api<CreateNodeResponse>(`/workspace/${workspaceId}/node/md`, {
     method: "POST",
     body: JSON.stringify({ title, position, body }),
@@ -66,8 +85,28 @@ export async function updateNodeContent(
   nodeId: string,
   data: { title?: string; body?: MdBody },
 ): Promise<string> {
-  return api<string>(`/workspace/${workspaceId}/node/${nodeId}/md`, {
+  return api<string>(`/workspace/${workspaceId}/node/${nodeId}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
+}
+
+export interface NodeDetail {
+  node_id: string;
+  title: string;
+  node_type: string;
+  content: { markdownBody?: string; jsonBody?: string } | null;
+  version: number;
+  position_x: number;
+  position_y: number;
+  workspace_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getNode(
+  workspaceId: string,
+  nodeId: string,
+): Promise<NodeDetail> {
+  return api<NodeDetail>(`/workspace/${workspaceId}/node/${nodeId}`);
 }

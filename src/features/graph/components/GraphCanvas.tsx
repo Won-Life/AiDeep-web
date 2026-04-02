@@ -26,8 +26,13 @@ import "@xyflow/react/dist/style.css";
 import * as d3 from "d3";
 import { nodeTypes } from "@/types/nodeTypes";
 import { edgeTypes } from "@/types/edgeTypes";
-import { getNodes } from "../api/getNodes";
-import { createMdNode, moveNode, deleteNode } from "../api/nodes";
+import {
+  createMdNode,
+  moveNode,
+  deleteNode,
+  updateNodeContent,
+  EMPTY_LEXICAL_JSON,
+} from "../api/nodes";
 import { emitLivePosition, emitCursorMove } from "@/api/ws";
 import { createEdge } from "../api/edges";
 import type { EdgeDto, NodeDto } from "../types";
@@ -38,16 +43,6 @@ import { useCursors } from "@/hooks/useCursors";
 import { getCursorColor } from "@/utils/cursorColor";
 import CursorOverlay from "./CursorOverlay";
 import { MdBody } from "@/api/types";
-
-// DB 저장 함수 (예시)
-async function saveNodesToDB(nodes: Node[], edges: Edge[]) {
-  console.log("Saving to DB:", { nodes, edges });
-}
-
-// TODO: uuid로 변경
-function makeNodeId() {
-  return `node_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-}
 
 // TODO: 실제 노드 너비로 변경
 const NODE_WIDTH = 200;
@@ -101,10 +96,15 @@ function getGraphColor(
       .map((e) => nodes.find((n) => n.id === e.target))
       .filter((n): n is Node => n !== undefined);
 
-    if (children.length > 0 && children[0].data?.color) {
+    // 기본 색상이 아닌 커스텀 색상을 가진 첫 번째 자식의 색상을 사용
+    const coloredChild = children.find((child) =>
+      isCustomColorNode(child.id, nodes),
+    );
+    if (coloredChild) {
       return {
-        bg: children[0].data.color as string,
-        text: (children[0].data.textColor as string) || DEFAULT_NODE_COLOR.text,
+        bg: coloredChild.data.color as string,
+        text:
+          (coloredChild.data.textColor as string) || DEFAULT_NODE_COLOR.text,
       };
     }
 
@@ -119,19 +119,6 @@ function getGraphColor(
   }
 
   return getRandomColorPair();
-}
-
-function isStandaloneNode(
-  nodeId: string,
-  nodes: Node[],
-  edges: Edge[],
-): boolean {
-  const node = nodes.find((n) => n.id === nodeId);
-  if (!node || node.data?.isMain) return false;
-
-  const hasParent = getParentId(nodeId, edges) !== null;
-  const hasChildren = edges.some((edge) => edge.source === nodeId);
-  return !hasParent && !hasChildren;
 }
 
 function isCustomColorNode(nodeId: string, nodes: Node[]): boolean {
@@ -324,10 +311,6 @@ function findNonOverlappingPosition(
   return base;
 }
 
-function getHandleSide(node: Node, referenceX: number): "left" | "right" {
-  return node.position.x < referenceX ? "left" : "right";
-}
-
 function getForcedOutboundSideForSubNodeInMainGraph(
   node: Node,
   nodes: Node[],
@@ -345,7 +328,7 @@ function getForcedOutboundSideForSubNodeInMainGraph(
   const referenceX = parentNode?.position.x ?? mainNode.position.x;
 
   // main(또는 parent) 쪽의 반대 방향(바깥쪽)으로만 새 연결을 허용
-  return getHandleSide(node, referenceX);
+  return getTargetSideRelativeToParent(node.position.x, referenceX);
 }
 
 function resolveConnectSideFromSource(
@@ -365,7 +348,10 @@ function resolveConnectSideFromSource(
   if (sourceHandle?.includes("left")) return "left";
   if (sourceHandle?.includes("right")) return "right";
 
-  return getEdgeSide(sourceNode, targetNode);
+  return getTargetSideRelativeToParent(
+    targetNode.position.x,
+    sourceNode.position.x,
+  );
 }
 
 function resolveSideFromEdgeHandle(
@@ -376,11 +362,17 @@ function resolveSideFromEdgeHandle(
   if (edge.sourceHandle?.includes("left")) return "left";
   if (edge.sourceHandle?.includes("right")) return "right";
 
-  return getEdgeSide(sourceNode, targetNode);
+  return getTargetSideRelativeToParent(
+    targetNode.position.x,
+    sourceNode.position.x,
+  );
 }
 
-function getEdgeSide(source: Node, target: Node): "left" | "right" {
-  return target.position.x < source.position.x ? "left" : "right";
+function getTargetSideRelativeToParent(
+  targetX: number,
+  parentX: number,
+): "left" | "right" {
+  return targetX < parentX ? "left" : "right";
 }
 
 /**
@@ -418,11 +410,7 @@ function adjustPositionRelativeToSource(
       if (!targetNode) return null;
       return {
         node: targetNode,
-        edgeSide: resolveSideFromEdgeHandle(
-          edge,
-          sourceNode,
-          targetNode,
-        ),
+        edgeSide: resolveSideFromEdgeHandle(edge, sourceNode, targetNode),
       };
     })
     .filter(
@@ -460,12 +448,15 @@ function adjustPositionRelativeToSource(
 }
 
 function resolveHandleId(
-  _node: Node,
   role: "source" | "target",
   side: "left" | "right",
-  _edges: Edge[],
 ): string {
-  return `${role}-${side}`;
+  // source 핸들: side 방향 (예: side="right" → source-right)
+  // target 핸들: source의 반대 방향 (예: side="right"이면 target이 source 오른쪽에 있으므로 → target-left)
+  if (role === "target") {
+    return `target-${side === "left" ? "right" : "left"}`;
+  }
+  return `source-${side}`;
 }
 
 function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
@@ -478,9 +469,11 @@ function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
     nodes,
     edges,
   );
-  const side = forcedSourceSide ?? getEdgeSide(source, target);
-  const sourceHandle = resolveHandleId(source, "source", side, edges);
-  const targetHandle = resolveHandleId(target, "target", side, edges);
+  const side =
+    forcedSourceSide ??
+    getTargetSideRelativeToParent(target.position.x, source.position.x);
+  const sourceHandle = resolveHandleId("source", side);
+  const targetHandle = resolveHandleId("target", side);
   const sourceHandleX =
     source.position.x +
     (side === "right"
@@ -576,7 +569,7 @@ export function convertToReactFlow(
     type: "textUpdater",
     position: { x: n.position_x, y: n.position_y },
     data: {
-      text: n.title,
+      title: n.title,
       color: n.content?.color ?? DEFAULT_NODE_COLOR.bg,
       textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
       isMain: n.node_type === "PROJECT",
@@ -605,7 +598,10 @@ export function convertToReactFlow(
       ...node,
       data: {
         ...node.data,
-        handleSide: getHandleSide(node, parentNode.position.x),
+        handleSide: getTargetSideRelativeToParent(
+          node.position.x,
+          parentNode.position.x,
+        ),
         hasParent: true,
       },
     };
@@ -638,10 +634,44 @@ function GraphCanvasInner({
 
   const { screenToFlowPosition, setCenter } = useReactFlow();
 
+  // viewport 저장 (debounce)
+  const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedViewport = useRef<{ x: number; y: number; zoom: number } | null>(
+    (() => {
+      if (typeof window === "undefined") return null;
+      try {
+        const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    })(),
+  );
+
+  const handleViewportChange = useCallback(
+    (viewport: { x: number; y: number; zoom: number }) => {
+      if (viewportSaveTimer.current) clearTimeout(viewportSaveTimer.current);
+      viewportSaveTimer.current = setTimeout(() => {
+        try {
+          sessionStorage.setItem(
+            `graph_viewport_${workspaceId}`,
+            JSON.stringify(viewport),
+          );
+        } catch {}
+      }, 300);
+    },
+    [workspaceId],
+  );
+
   // D3 force simulation 관리
   const simulationRef = useRef<d3.Simulation<D3Node, undefined> | null>(null);
   const d3NodesRef = useRef<D3Node[]>([]);
   const isDraggingRef = useRef(false);
+  const nodesRef = useRef<Node[]>(nodes);
+  nodesRef.current = nodes;
+  const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
   const [isGrabbing, setIsGrabbing] = useState(false);
   const [isHoveringNode, setIsHoveringNode] = useState(false);
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -651,7 +681,9 @@ function GraphCanvasInner({
 
   // ─── Cursor sharing ──────────────────────────────────────
   const remoteCursors = useCursors(workspaceId);
-  const [selfCursor, setSelfCursor] = useState<import("@/api/ws").CursorPayload | null>(null);
+  const [selfCursor, setSelfCursor] = useState<
+    import("@/api/ws").CursorPayload | null
+  >(null);
   const lastCursorEmitRef = useRef(0);
   const CURSOR_EMIT_INTERVAL = 30; // ms
   const cursorColor = getCursorColor(currentUserId);
@@ -664,25 +696,59 @@ function GraphCanvasInner({
   // document 레벨 pointermove — 드래그/모든 마우스 동작에서도 동작
   const screenToFlowPositionRef = useRef(screenToFlowPosition);
   screenToFlowPositionRef.current = screenToFlowPosition;
-  const cursorMetaRef = useRef({ workspaceId, currentUserId, currentUserName, cursorColor });
-  cursorMetaRef.current = { workspaceId, currentUserId, currentUserName, cursorColor };
+  const cursorMetaRef = useRef({
+    workspaceId,
+    currentUserId,
+    currentUserName,
+    cursorColor,
+  });
+  cursorMetaRef.current = {
+    workspaceId,
+    currentUserId,
+    currentUserName,
+    cursorColor,
+  };
 
   useEffect(() => {
     const handler = (event: PointerEvent) => {
-      const { workspaceId, currentUserId, currentUserName, cursorColor } = cursorMetaRef.current;
-      const flowPos = screenToFlowPositionRef.current({ x: event.clientX, y: event.clientY });
+      const { workspaceId, currentUserId, currentUserName, cursorColor } =
+        cursorMetaRef.current;
+      const flowPos = screenToFlowPositionRef.current({
+        x: event.clientX,
+        y: event.clientY,
+      });
 
-      setSelfCursor({ userId: currentUserId, x: flowPos.x, y: flowPos.y, userName: currentUserName, color: cursorColor });
+      setSelfCursor({
+        userId: currentUserId,
+        x: flowPos.x,
+        y: flowPos.y,
+        userName: currentUserName,
+        color: cursorColor,
+      });
 
       const now = Date.now();
       if (now - lastCursorEmitRef.current < CURSOR_EMIT_INTERVAL) return;
       lastCursorEmitRef.current = now;
-      emitCursorMove(workspaceId, flowPos.x, flowPos.y, currentUserName, cursorColor);
+      emitCursorMove(
+        workspaceId,
+        flowPos.x,
+        flowPos.y,
+        currentUserName,
+        cursorColor,
+      );
     };
 
-    document.addEventListener('pointermove', handler);
-    return () => document.removeEventListener('pointermove', handler);
+    document.addEventListener("pointermove", handler);
+    return () => document.removeEventListener("pointermove", handler);
   }, []); // 마운트/언마운트 시 1회만 등록 — 최신 값은 ref로 접근
+
+  // contentSaveTimers cleanup on unmount
+  useEffect(() => {
+    return () => {
+      contentSaveTimers.current.forEach((timer) => clearTimeout(timer));
+      contentSaveTimers.current.clear();
+    };
+  }, []);
 
   /* =========================
      D3 Force Simulation 초기화
@@ -738,7 +804,7 @@ function GraphCanvasInner({
   /* =========================
      Node data update
      ========================= */
-  const handleNodeDataChange = useCallback(
+  const handleNodeViewChange = useCallback(
     (nodeId: string, newData: Record<string, unknown>) => {
       setNodes((snapshot) =>
         snapshot.map((node) =>
@@ -769,14 +835,36 @@ function GraphCanvasInner({
         ...node.data,
         handleSide: node.data?.isMain
           ? undefined
-          : getHandleSide(node, referenceX),
+          : getTargetSideRelativeToParent(node.position.x, referenceX),
         hasParent, // 부모 노드 존재 여부 전달
         showInputBox: selectedNodeId === node.id, // 선택된 노드에만 입력박스 표시
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
+        workspaceId, // 전체화면 이동 시 사용
         onChange: (nodeId: string, value: string) =>
-          handleNodeDataChange(nodeId, { text: value }),
-        onContentChange: (nodeId: string, content: string) =>
-          handleNodeDataChange(nodeId, { content }),
+          handleNodeViewChange(nodeId, { title: value }),
+        onContentChange: (
+          nodeId: string,
+          jsonBody: string,
+          markdownBody: string,
+        ) => {
+          handleNodeViewChange(nodeId, { content: jsonBody });
+
+          // const prev = contentSaveTimers.current.get(nodeId);
+          // if (prev) clearTimeout(prev);
+          // contentSaveTimers.current.set(
+          //   nodeId,
+          //   setTimeout(() => {
+          //     const currentNode = nodesRef.current.find((n) => n.id === nodeId);
+          //     updateNodeContent(workspaceId, nodeId, {
+          //       body: {
+          //         color: (currentNode?.data?.color as string) ?? "#ffffff",
+          //         textColor:
+          //           (currentNode?.data?.textColor as string) ?? "#000000",
+          //       },
+          //     }).catch(console.error);
+          //   }, 800),
+          // );
+        },
       },
     };
   });
@@ -1002,21 +1090,16 @@ function GraphCanvasInner({
     (params: Connection) => {
       if (!params.source || !params.target) return;
 
-      const sourceStandalone = isStandaloneNode(params.source, nodes, edges);
-      const targetStandalone = isStandaloneNode(params.target, nodes, edges);
-      const shouldAttachStandaloneToGraph =
-        sourceStandalone !== targetStandalone;
+      const sourceNode = nodes.find((n) => n.id === params.source);
+      const targetNode = nodes.find((n) => n.id === params.target);
+      const sourceIsMain = sourceNode?.data?.isMain === true;
+      const targetIsMain = targetNode?.data?.isMain === true;
 
-      const sourceId = shouldAttachStandaloneToGraph
-        ? sourceStandalone
-          ? params.target
-          : params.source
-        : params.source;
-      const targetId = shouldAttachStandaloneToGraph
-        ? sourceStandalone
-          ? params.source
-          : params.target
-        : params.target;
+      // main 노드가 포함된 경우에만 swap: main 노드가 항상 source(부모)가 되도록 강제
+      const shouldSwap = (sourceIsMain || targetIsMain) && !sourceIsMain;
+
+      const sourceId = shouldSwap ? params.target : params.source;
+      const targetId = shouldSwap ? params.source : params.target;
 
       // 연결된 target 노드 위치(및 subtree)와 색상을 source 기준으로 업데이트
       setNodes((currentNodes) => {
@@ -1066,11 +1149,7 @@ function GraphCanvasInner({
         const sourceHasCustomColor = isCustomColorNode(sourceId, currentNodes);
         const targetHasCustomColor = isCustomColorNode(targetId, currentNodes);
 
-        if (
-          !shouldAttachStandaloneToGraph &&
-          sourceHasCustomColor &&
-          targetHasCustomColor
-        ) {
+        if (!shouldSwap && sourceHasCustomColor && targetHasCustomColor) {
           return positionedNodes;
         }
 
@@ -1088,22 +1167,41 @@ function GraphCanvasInner({
       const swapped = sourceId !== params.source;
       const srcNode = nodes.find((n) => n.id === sourceId);
       const tgtNode = nodes.find((n) => n.id === targetId);
-      const fallbackSide = srcNode && tgtNode ? getEdgeSide(srcNode, tgtNode) : "right";
-      const resolvedSourceHandle = (swapped ? params.targetHandle : params.sourceHandle) ?? `source-${fallbackSide}`;
-      const resolvedTargetHandle = (swapped ? params.sourceHandle : params.targetHandle) ?? `target-${fallbackSide}`;
+      const targetNodeSideRelativeToParent =
+        srcNode && tgtNode
+          ? getTargetSideRelativeToParent(
+              tgtNode.position.x,
+              srcNode.position.x,
+            )
+          : "right";
+      const resolvedSourceHandle =
+        (swapped ? params.targetHandle : params.sourceHandle) ??
+        `source-${targetNodeSideRelativeToParent}`;
+      const resolvedTargetHandle =
+        (swapped ? params.sourceHandle : params.targetHandle) ??
+        `target-${targetNodeSideRelativeToParent === "left" ? "right" : "left"}`;
       createEdge(
         workspaceId,
         sourceId,
         targetId,
         resolvedSourceHandle,
         resolvedTargetHandle,
-      ).then(({ edgeId }) => {
-        setEdges((snapshot) => {
-          if (snapshot.some((e) => e.id === edgeId)) return snapshot;
-          const rawEdge: Edge = { id: edgeId, source: sourceId, target: targetId };
-          return [...snapshot, buildEdgePresentation(rawEdge, nodes, [...snapshot, rawEdge])];
-        });
-      }).catch((err) => console.error("[createEdge] failed", err));
+      )
+        .then(({ edgeId }) => {
+          setEdges((snapshot) => {
+            if (snapshot.some((e) => e.id === edgeId)) return snapshot;
+            const rawEdge: Edge = {
+              id: edgeId,
+              source: sourceId,
+              target: targetId,
+            };
+            return [
+              ...snapshot,
+              buildEdgePresentation(rawEdge, nodes, [...snapshot, rawEdge]),
+            ];
+          });
+        })
+        .catch((err) => console.error("[createEdge] failed", err));
     },
     [nodes, edges, workspaceId],
   );
@@ -1159,7 +1257,10 @@ function GraphCanvasInner({
           const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
           const referenceX =
             parentNode?.position.x ?? mainNode?.position.x ?? 0;
-          side = getHandleSide(sourceNode, referenceX);
+          side = getTargetSideRelativeToParent(
+            sourceNode.position.x,
+            referenceX,
+          );
         }
 
         // source 노드 기준으로 적절한 거리에 위치 조정
@@ -1184,7 +1285,12 @@ function GraphCanvasInner({
             workspaceId,
             "새 노드",
             adjustedPosition,
-            { markdownBody: "", jsonBody: "", color : colorPair.bg, textColor : colorPair.bg }
+            {
+              markdownBody: "",
+              jsonBody: EMPTY_LEXICAL_JSON,
+              color: colorPair.bg,
+              textColor: colorPair.text,
+            },
           );
 
           // 실제 UUID로 로컬 노드 추가
@@ -1193,10 +1299,12 @@ function GraphCanvasInner({
             type: "textUpdater",
             position: adjustedPosition,
             data: {
-              text: "",
+              title: "",
               isMain: false,
               color: colorPair.bg,
               textColor: colorPair.text,
+              hasParent: true,
+              sideRelativeToParent: side,
             },
           };
 
@@ -1210,7 +1318,7 @@ function GraphCanvasInner({
             connectionState.fromNode.id,
             realNodeId,
             fromHandle || `source-${side}`,
-            `target-${side}`,
+            `target-${side === "left" ? "right" : "left"}`,
           );
           setEdges((eds) => {
             if (eds.some((e) => e.id === edgeId)) return eds;
@@ -1219,7 +1327,14 @@ function GraphCanvasInner({
               source: connectionState.fromNode.id,
               target: realNodeId,
             };
-            return [...eds, buildEdgePresentation(rawEdge, [...nodes, newNode], [...eds, rawEdge])];
+            return [
+              ...eds,
+              buildEdgePresentation(
+                rawEdge,
+                [...nodes, newNode],
+                [...eds, rawEdge],
+              ),
+            ];
           });
         } catch (err) {
           console.error("[onConnectEnd] node/edge creation failed", err);
@@ -1266,24 +1381,25 @@ function GraphCanvasInner({
       });
 
       try {
-        const body = { markdownBody: "", jsonBody: "", color : DEFAULT_NODE_COLOR.bg, textColor : DEFAULT_NODE_COLOR.bg } as MdBody
+        const colorPair = getRandomColorPair();
+        const body = {
+          markdownBody: "",
+          jsonBody: EMPTY_LEXICAL_JSON,
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        } as MdBody;
 
-        const { nodeId } = await createMdNode(
-          workspaceId, 
-          "", 
-          position,
-          body
-          );
+        const { nodeId } = await createMdNode(workspaceId, "", position, body);
 
         const newNode: Node = {
           id: nodeId,
           type: "textUpdater",
           position,
           data: {
-            text: "",
+            title: "",
             isMain: false,
-            color: DEFAULT_NODE_COLOR.bg,
-            textColor: DEFAULT_NODE_COLOR.text,
+            color: colorPair.bg,
+            textColor: colorPair.text,
           },
         };
 
@@ -1330,7 +1446,7 @@ function GraphCanvasInner({
   );
 
   const onDrop = useCallback(
-    (event: DragEvent) => {
+    async (event: DragEvent) => {
       const raw = event.dataTransfer.getData("application/resource-subitem");
       if (!raw) return;
       event.preventDefault();
@@ -1378,12 +1494,27 @@ function GraphCanvasInner({
         ? getGraphColor(targetParent.id, nodes, edges)
         : DEFAULT_NODE_COLOR;
 
+      let nodeId: string;
+      try {
+        const res = await createMdNode(workspaceId, payload.name, position, {
+          markdownBody: "",
+          jsonBody: EMPTY_LEXICAL_JSON,
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        });
+        nodeId = res.nodeId;
+      } catch (err) {
+        console.error("[onDrop] createMdNode failed", err);
+        setHoveredNodeId(null);
+        return;
+      }
+
       const newNode: Node = {
-        id: makeNodeId(),
+        id: nodeId,
         type: "textUpdater",
         position,
         data: {
-          text: payload.name,
+          title: payload.name,
           isMain: false,
           color: colorPair.bg,
           textColor: colorPair.text,
@@ -1393,24 +1524,52 @@ function GraphCanvasInner({
       setNodes((prev) => [...prev, newNode]);
 
       if (shouldConnect && targetParent) {
-        setEdges((prev) => {
-          const rawEdge: Edge = {
-            id: `e-${targetParent.id}-${newNode.id}-${Date.now()}`,
-            source: targetParent.id,
-            target: newNode.id,
-          };
-          const nextEdge = buildEdgePresentation(
-            rawEdge,
-            [...nodes, newNode],
-            [...prev, rawEdge],
-          );
-          return [...prev, nextEdge];
-        });
+        const sideRelativeToParent = resolveConnectSideFromSource(
+          targetParent,
+          newNode,
+          undefined,
+          nodes,
+          edges,
+        );
+        createEdge(
+          workspaceId,
+          targetParent.id,
+          nodeId,
+          `source-${sideRelativeToParent}`,
+          `target-${sideRelativeToParent === "left" ? "right" : "left"}`,
+        )
+          .then(({ edgeId }) => {
+            setEdges((prev) => {
+              if (prev.some((e) => e.id === edgeId)) return prev;
+              const rawEdge: Edge = {
+                id: edgeId,
+                source: targetParent.id,
+                target: nodeId,
+              };
+              return [
+                ...prev,
+                buildEdgePresentation(
+                  rawEdge,
+                  [...nodes, newNode],
+                  [...prev, rawEdge],
+                ),
+              ];
+            });
+          })
+          .catch((err) => console.error("[onDrop] createEdge failed", err));
       }
 
       setHoveredNodeId(null);
     },
-    [screenToFlowPosition, setNodes, setEdges, nodes, edges, hoveredNodeId],
+    [
+      screenToFlowPosition,
+      setNodes,
+      setEdges,
+      nodes,
+      edges,
+      hoveredNodeId,
+      workspaceId,
+    ],
   );
 
   const onDragLeave = useCallback((event: DragEvent) => {
@@ -1614,7 +1773,7 @@ function GraphCanvasInner({
           );
 
           // 2. 연결 방향 결정
-          const side = resolveConnectSideFromSource(
+          const sideRelativeToParent = resolveConnectSideFromSource(
             parentNode,
             childNode,
             undefined,
@@ -1626,7 +1785,7 @@ function GraphCanvasInner({
           const adjustedPosition = adjustPositionRelativeToSource(
             parentNode,
             childNode.position.y,
-            side,
+            sideRelativeToParent,
             nodes,
             edges,
             childNode.id,
@@ -1674,7 +1833,7 @@ function GraphCanvasInner({
               ) / childNodes.length;
 
             const needsMirror =
-              side === "right"
+              sideRelativeToParent === "right"
                 ? avgChildCenterX < adjustedCenterX
                 : avgChildCenterX > adjustedCenterX;
 
@@ -1703,15 +1862,26 @@ function GraphCanvasInner({
             workspaceId,
             newParent.id,
             draggedNode.id,
-            `source-${side}`,
-            `target-${side}`,
-          ).then(({ edgeId }) => {
-            setEdges((prev) => {
-              if (prev.some((e) => e.id === edgeId)) return prev;
-              const rawEdge: Edge = { id: edgeId, source: newParent.id, target: draggedNode.id };
-              return [...prev, buildEdgePresentation(rawEdge, nodes, [...prev, rawEdge])];
-            });
-          }).catch((err) => console.error("[createEdge re-parent] failed", err));
+            `source-${sideRelativeToParent}`,
+            `target-${sideRelativeToParent === "left" ? "right" : "left"}`,
+          )
+            .then(({ edgeId }) => {
+              setEdges((prev) => {
+                if (prev.some((e) => e.id === edgeId)) return prev;
+                const rawEdge: Edge = {
+                  id: edgeId,
+                  source: newParent.id,
+                  target: draggedNode.id,
+                };
+                return [
+                  ...prev,
+                  buildEdgePresentation(rawEdge, nodes, [...prev, rawEdge]),
+                ];
+              });
+            })
+            .catch((err) =>
+              console.error("[createEdge re-parent] failed", err),
+            );
 
           // 7. childNode 서브트리 색상을 parentNode 색상으로 업데이트
           setNodes((currentNodes) => {
@@ -1850,11 +2020,19 @@ function GraphCanvasInner({
         onDrop={onDrop}
         onDragLeave={onDragLeave}
         isValidConnection={isValidConnection}
-        fitView
+        onViewportChange={handleViewportChange}
+        {...(savedViewport.current
+          ? { defaultViewport: savedViewport.current }
+          : { fitView: true })}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
-      <CursorOverlay cursors={cursors} currentUserId={currentUserId} isGrabbing={isGrabbing} isHoveringNode={isHoveringNode} />
+      <CursorOverlay
+        cursors={cursors}
+        currentUserId={currentUserId}
+        isGrabbing={isGrabbing}
+        isHoveringNode={isHoveringNode}
+      />
       {isArchiveModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[360px] rounded-xl border border-gray-200 bg-white p-5 shadow-xl">

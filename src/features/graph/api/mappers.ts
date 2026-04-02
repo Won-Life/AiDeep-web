@@ -9,7 +9,8 @@ export function toFlowNode(dto: NodeDto): Node {
     type: "textUpdater",
     position: { x: dto.position_x, y: dto.position_y },
     data: {
-      text: dto.title,
+      title: dto.title,
+      content: dto.content?.jsonBody ?? undefined,
       body: dto.content?.markdownBody ?? "",
       isMain: dto.node_type === "PROJECT",
       color: dto.content?.color ?? DEFAULT_NODE_COLOR.bg,
