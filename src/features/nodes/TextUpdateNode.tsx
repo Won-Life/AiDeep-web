@@ -113,6 +113,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           collabProvider={collabProvider}
           username={userName}
           cursorColor={cursorColor}
+          onFirstLineChange={(text) => nodeData.onChange?.(id, text)}
         />
       )}
 
