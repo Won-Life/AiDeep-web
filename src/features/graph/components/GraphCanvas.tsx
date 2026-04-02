@@ -816,6 +816,28 @@ function GraphCanvasInner({
     },
     [],
   );
+
+  const titleDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const handleTitleChange = useCallback(
+    (nodeId: string, value: string) => {
+      handleNodeViewChange(nodeId, { title: value });
+
+      const existing = titleDebounceRef.current.get(nodeId);
+      if (existing) clearTimeout(existing);
+
+      titleDebounceRef.current.set(
+        nodeId,
+        setTimeout(() => {
+          updateNodeContent(workspaceId, nodeId, { title: value }).catch(
+            console.error,
+          );
+          titleDebounceRef.current.delete(nodeId);
+        }, 500),
+      );
+    },
+    [workspaceId, handleNodeViewChange],
+  );
   const nodesWithCallbacks = nodes.map((node) => {
     const parentId = getParentId(node.id, edges);
     const parentNode = parentId
@@ -840,8 +862,7 @@ function GraphCanvasInner({
         showInputBox: selectedNodeId === node.id, // 선택된 노드에만 입력박스 표시
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
-        onChange: (nodeId: string, value: string) =>
-          handleNodeViewChange(nodeId, { title: value }),
+        onChange: handleTitleChange,
       },
     };
   });
