@@ -11,7 +11,6 @@ export function toFlowNode(dto: NodeDto): Node {
     data: {
       title: dto.title,
       content: dto.content?.jsonBody ?? undefined,
-      body: dto.content?.markdownBody ?? "",
       isMain: dto.node_type === "PROJECT",
       color: dto.content?.color ?? DEFAULT_NODE_COLOR.bg,
       textColor: dto.content?.textColor ?? DEFAULT_NODE_COLOR.text,
