@@ -264,10 +264,17 @@ export interface WsEdgeCreateEvent {
     targetHandle: string;
   };
 }
+export interface WsEdgeDeletedEvent {
+  type: 'EDGE_DELETED';
+  workspaceId: string;
+  userId: string;
+  edgeId: string;
+}
 
 export type WsEvent =
   | WsNodeMoveEvent
   | WsNodeCreateEvent
   | WsNodeDeleteEvent
   | WsNodeUpdateEvent
-  | WsEdgeCreateEvent;
+  | WsEdgeCreateEvent
+  | WsEdgeDeletedEvent;

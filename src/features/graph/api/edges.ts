@@ -12,3 +12,12 @@ export async function createEdge(
     body: JSON.stringify({ sourceId, targetId, sourceHandle, targetHandle }),
   });
 }
+
+export async function deleteEdge(
+  workspaceId: string,
+  edgeId: string,
+): Promise<void> {
+  await api<void>(`/workspace/${workspaceId}/edge/${edgeId}`, {
+    method: "DELETE",
+  });
+}
