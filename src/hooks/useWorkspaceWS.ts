@@ -1,7 +1,7 @@
-"use client";
-import { useEffect, useRef } from "react";
-import { subscribeToWorkspace, onLivePosition } from "@/api/ws";
-import type { LivePositionPayload } from "@/api/ws";
+'use client';
+import { useEffect, useRef } from 'react';
+import { subscribeToWorkspace, onLivePosition } from '@/api/ws';
+import type { LivePositionPayload } from '@/api/ws';
 import type {
   WsEvent,
   WsNodeMoveEvent,
@@ -9,11 +9,12 @@ import type {
   WsNodeDeleteEvent,
   WsNodeUpdateEvent,
   WsEdgeCreateEvent,
-} from "@/api/types";
-import type { Node, Edge } from "@xyflow/react";
-import type { Dispatch, SetStateAction, RefObject } from "react";
-import { DEFAULT_NODE_COLOR } from "@/features/graph/constants/colors";
-import { getDescendantIds } from "@/features/graph/utils/graphUtils";
+  WsEdgeDeletedEvent,
+} from '@/api/types';
+import type { Node, Edge } from '@xyflow/react';
+import type { Dispatch, SetStateAction, RefObject } from 'react';
+import { DEFAULT_NODE_COLOR } from '@/features/graph/constants/colors';
+import { getDescendantIds } from '@/features/graph/utils/graphUtils';
 
 const TRANSITION_DURATION = 300;
 const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;
@@ -49,20 +50,23 @@ export function useWorkspaceWS({
 
     const handleEvent = (event: WsEvent) => {
       switch (event.type) {
-        case "NODE_MOVE":
+        case 'NODE_MOVE':
           handleNodeMove(event);
           break;
-        case "NODE_CREATE":
+        case 'NODE_CREATE':
           handleNodeCreate(event);
           break;
-        case "NODE_DELETE":
+        case 'NODE_DELETE':
           handleNodeDelete(event);
           break;
-        case "NODE_UPDATE":
+        case 'NODE_UPDATE':
           handleNodeUpdate(event);
           break;
-        case "EDGE_CREATE":
+        case 'EDGE_CREATE':
           handleEdgeCreate(event);
+          break;
+        case 'EDGE_DELETED':
+          handleEdgeDelete(event);
           break;
       }
     };
@@ -125,11 +129,11 @@ export function useWorkspaceWS({
     const handleNodeCreate = (e: WsNodeCreateEvent) => {
       const newNode: Node = {
         id: e.node.nodeId,
-        type: "textUpdater",
+        type: 'textUpdater',
         position: { x: e.node.position.x, y: e.node.position.y },
         data: {
           title: e.node.title,
-          isMain: e.node.nodeType === "PROJECT",
+          isMain: e.node.nodeType === 'PROJECT',
           color: e.node.data?.color ?? DEFAULT_NODE_COLOR.bg,
           textColor: e.node.data?.textColor ?? DEFAULT_NODE_COLOR.text,
         },
@@ -146,6 +150,12 @@ export function useWorkspaceWS({
     const handleNodeDelete = (e: WsNodeDeleteEvent) => {
       setNodesRef.current((prev) =>
         prev.filter((node) => node.id !== e.nodeId),
+      );
+    };
+
+    const handleEdgeDelete = (e: WsEdgeDeletedEvent) => {
+      setEdgesRef.current((prev) =>
+        prev.filter((edge) => edge.id !== e.edgeId),
       );
     };
 
@@ -202,7 +212,7 @@ export function useWorkspaceWS({
     };
 
     const handleError = (err: unknown) => {
-      console.error("[useWorkspaceWS] connection error", err);
+      console.error('[useWorkspaceWS] connection error', err);
     };
 
     const cleanup = subscribeToWorkspace(workspaceId, handleEvent, handleError);
