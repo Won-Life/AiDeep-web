@@ -34,7 +34,7 @@ import {
   EMPTY_LEXICAL_JSON,
 } from '../api/nodes';
 import { emitLivePosition, emitCursorMove } from '@/api/ws';
-import { createEdge } from '../api/edges';
+import { createEdge, deleteEdge } from '../api/edges';
 import type { EdgeDto, NodeDto } from '../types';
 import { rectCollide } from '../layout/rectCollide';
 import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
@@ -1002,6 +1002,12 @@ function GraphCanvasInner({
         const updatedEdges = applyEdgeChanges(changes, snapshot);
 
         if (removedEdges.length > 0) {
+          removedEdges.forEach((edge) => {
+            deleteEdge(workspaceId, edge.id).catch((err) =>
+              console.error('[deleteEdge] failed', err),
+            );
+          });
+
           setNodes((currentNodes) => {
             let updatedNodes = currentNodes;
 
