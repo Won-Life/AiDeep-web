@@ -488,12 +488,17 @@ function TitleTrackerPlugin({
   onChange: (text: string) => void;
 }) {
   const [editor] = useLexicalComposerContext();
+  const prevTitleRef = useRef<string | null>(null);
 
   useEffect(() => {
     return editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         const firstChild = $getRoot().getFirstChild();
-        onChange(firstChild ? firstChild.getTextContent().trim() : "");
+        const title = firstChild ? firstChild.getTextContent().trim() : "";
+        if (title !== prevTitleRef.current) {
+          prevTitleRef.current = title;
+          onChange(title);
+        }
       });
     });
   }, [editor, onChange]);
