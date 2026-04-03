@@ -10,13 +10,12 @@ import {
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
-import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  $getRoot,
   $getSelection,
   $isRangeSelection,
   FORMAT_TEXT_COMMAND,
@@ -24,7 +23,6 @@ import {
   $createParagraphNode,
   COMMAND_PRIORITY_LOW,
   DecoratorNode,
-  type EditorState,
   type NodeKey,
   type SerializedLexicalNode,
 } from "lexical";
@@ -51,9 +49,13 @@ import {
   $isCodeNode,
 } from "@lexical/code";
 import { LinkNode, AutoLinkNode } from "@lexical/link";
-import { TRANSFORMERS, $convertToMarkdownString } from "@lexical/markdown";
+import { TRANSFORMERS } from "@lexical/markdown";
 import { $setBlocksType } from "@lexical/selection";
 import { $getNearestNodeOfType, mergeRegister } from "@lexical/utils";
+import { CollaborationPlugin } from "@lexical/react/LexicalCollaborationPlugin";
+import { LexicalCollaboration } from "@lexical/react/LexicalCollaborationContext";
+import * as Y from "yjs";
+import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,9 +71,11 @@ type BlockType =
 
 export interface NotionEditorProps {
   nodeId: string;
-  initialContent?: string;
-  onSave?: (nodeId: string, jsonBody: string, markdownBody: string) => void;
   onFullscreen?: () => void;
+  collabProvider: SocketIoYjsProvider | null;
+  username?: string;
+  cursorColor?: string;
+  onFirstLineChange?: (text: string) => void;
 }
 
 // ─── Image Node ───────────────────────────────────────────────────────────────
@@ -476,40 +480,63 @@ function ToolbarPlugin({
   );
 }
 
+// ─── Title Tracker Plugin ─────────────────────────────────────────────────────
+
+function TitleTrackerPlugin({
+  onChange,
+}: {
+  onChange: (text: string) => void;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        const firstChild = $getRoot().getFirstChild();
+        onChange(firstChild ? firstChild.getTextContent().trim() : "");
+      });
+    });
+  }, [editor, onChange]);
+
+  return null;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function NotionEditor({
   nodeId,
-  initialContent,
-  onSave,
   onFullscreen,
+  collabProvider,
+  username,
+  cursorColor,
+  onFirstLineChange,
 }: NotionEditorProps) {
-
   const initialConfig = {
     namespace: `ne-${nodeId}`,
     theme: EDITOR_THEME,
     nodes: REGISTERED_NODES,
     onError: (error: Error) => console.error("[NotionEditor]", error),
-    editorState: initialContent || MOCK_INITIAL_STATE,
+    // YJS 모드 전용 — CollaborationPlugin이 Y.Doc에서 상태를 가져오므로 null
+    editorState: null,
   };
 
-  const handleChange = useCallback(
-    (editorState: EditorState) => {
-      const json = JSON.stringify(editorState.toJSON(), null, 2);
-      let markdown = "";
-      editorState.read(() => {
-        markdown = $convertToMarkdownString(TRANSFORMERS);
-      });
-      onSave?.(nodeId, json, markdown);
+  // CollaborationPlugin에 Y.Doc과 provider를 주입하는 factory
+  const providerFactory = useCallback(
+    (id: string, yjsDocMap: Map<string, Y.Doc>) => {
+      if (!collabProvider) return null as never;
+      yjsDocMap.set(id, collabProvider.doc);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return collabProvider as any;
     },
-    [nodeId, onSave],
+    [collabProvider],
   );
 
   return (
     // flex-1 + min-h-0: flex child가 부모의 max-height 안에서 제대로 수축되도록 함
     <div className="flex flex-col flex-1 min-h-0 bg-white rounded-b-lg">
-      <LexicalComposer initialConfig={initialConfig}>
-        <ToolbarPlugin onFullscreen={onFullscreen} />
+      <LexicalCollaboration>
+        <LexicalComposer initialConfig={initialConfig}>
+          <ToolbarPlugin onFullscreen={onFullscreen} />
 
         {/* min-h-0: flex child가 컨텐츠 크기 이하로 수축 가능 → overflow-y-auto 작동 */}
         <div className="relative flex-1 min-h-0 overflow-y-auto">
@@ -533,11 +560,24 @@ export function NotionEditor({
           />
         </div>
 
-        <HistoryPlugin />
         <ListPlugin />
         <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
-        <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
+
+        {onFirstLineChange && (
+          <TitleTrackerPlugin onChange={onFirstLineChange} />
+        )}
+
+        {collabProvider && (
+          <CollaborationPlugin
+            id={`yjs-${nodeId}`}
+            providerFactory={providerFactory}
+            shouldBootstrap={false}
+            username={username}
+            cursorColor={cursorColor}
+          />
+        )}
       </LexicalComposer>
+      </LexicalCollaboration>
     </div>
   );
 }

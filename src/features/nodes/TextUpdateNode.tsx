@@ -1,69 +1,40 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Handle,
   Position,
   type NodeProps,
   useUpdateNodeInternals,
-} from "@xyflow/react";
-import { NodeEditorPanel } from "@/features/editor/NodeEditorPanel";
+} from '@xyflow/react';
+import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
+import { useYjsProvider } from '@/hooks/useYjsProvider';
+import { useGraphLayout } from '@/app/graph/context';
+import { COLOR_PALETTE } from '@/features/graph/constants/colors';
 
-// NOTE: 현재는 첫 non-empty line을 반환하며, h1 등 헤딩 식별 로직은 없음
-export function extractLabelFromContent(content: string | undefined): string {
-  if (!content) return "";
-  try {
-    const state = JSON.parse(content);
-    const children: Array<{
-      type?: string;
-      tag?: string;
-      text?: string;
-      children?: Array<{
-        type?: string;
-        tag?: string;
-        text?: string;
-        children?: Array<{ text?: string }>;
-      }>;
-    }> = state?.root?.children ?? [];
-
-    const collectText = (node: {
-      text?: string;
-      children?: Array<{ text?: string; children?: Array<{ text?: string }> }>;
-    }): string => {
-      if (node.text) return node.text;
-      if (!node.children?.length) return "";
-      return node.children.map(collectText).join("");
-    };
-
-    for (const node of children) {
-      const text = collectText(node).trim();
-      if (text) return text;
-    }
-    return "";
-  } catch {
-    return "";
+// 같은 userId는 항상 같은 커서 색상을 갖도록 보장 (협업 시 사용자 식별용)
+function getUserCursorColor(userId: string): string {
+  if (!userId) return COLOR_PALETTE[0].text;
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
   }
+  return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length].text;
 }
 
 export type NodeView = {
   title?: string;
-  content?: string; // 에디터 JSON 내용
   color?: string;
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
-  sideRelativeToParent?: "left" | "right";
-  handleSide?: "left" | "right"; // Canvas가 위치 변경마다 재계산하는 핸들 방향
+  sideRelativeToParent?: 'left' | 'right';
+  handleSide?: 'left' | 'right'; // Canvas가 위치 변경마다 재계산하는 핸들 방향
   hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
   isHovered?: boolean; // 드래그 중 hover 상태
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   onChange?: (nodeId: string, value: string) => void;
-  onContentChange?: (
-    nodeId: string,
-    jsonBody: string,
-    markdownBody: string,
-  ) => void; // 에디터 내용 저장 콜백
 };
 
 export function TextUpdaterNode({ data, id }: NodeProps) {
@@ -72,24 +43,32 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const nodeData = data as NodeView;
   const isMain = nodeData.isMain ?? false;
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
+  const showInputBox = nodeData.showInputBox ?? false;
+
+  const { userMe } = useGraphLayout();
+  const userName = userMe?.username ?? 'Anonymous';
+  const cursorColor = getUserCursorColor(userMe?.userId ?? '');
+
+  const { provider: collabProvider } = useYjsProvider({
+    nodeId: showInputBox ? id : null,
+    userName,
+    userColor: cursorColor,
+  });
 
   // sideRelativeToParent는 최초 생성 시점에만 설정되므로 handleSide를 사용
   const sideRelativeToParent = (nodeData.handleSide ??
     nodeData.sideRelativeToParent ??
-    "right") as "left" | "right";
+    'right') as 'left' | 'right';
   const sourceHandlePosition =
-    sideRelativeToParent === "left" ? Position.Left : Position.Right;
-  const showInputBox = nodeData.showInputBox ?? false;
+    sideRelativeToParent === 'left' ? Position.Left : Position.Right;
   const isHovered = nodeData.isHovered ?? false;
   const [isNodeHovered, setIsNodeHovered] = useState(false);
 
   // 부모가 없는 서브 노드는 양쪽에 핸들 표시
-  const PLACEHOLDER = isMain ? "중심 노드" : "서브 노드";
+  const PLACEHOLDER = isMain ? '중심 노드' : '서브 노드';
 
-  // content에서 첫 텍스트를 추출, 없으면 text 필드로 fallback
-  const label =
-    extractLabelFromContent(nodeData.content) || nodeData.title || "";
-  const isEmpty = label === "";
+  const label = nodeData.title || '';
+  const isEmpty = label === '';
 
   // 핸들 구성이 바뀌면 React Flow 내부 핸들 bounds를 즉시 갱신
   useEffect(() => {
@@ -101,21 +80,21 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
   const containerClasses = isMain
-    ? "text-updater-node rounded-lg border"
-    : "text-updater-node rounded-full";
+    ? 'text-updater-node rounded-lg border'
+    : 'text-updater-node rounded-full';
 
   // React Flow 기본 엣지 색상과 동일한 회색 (#b1b1b7)
-  const EDGE_COLOR = "#D9D9D9";
+  const EDGE_COLOR = '#D9D9D9';
 
   const containerStyle = isMain
     ? {
-        backgroundColor: nodeData.color || "#ffffff",
-        borderColor: isHovered ? "#93C5FD" : EDGE_COLOR,
-        borderWidth: isHovered ? "3px" : "1px",
+        backgroundColor: nodeData.color || '#ffffff',
+        borderColor: isHovered ? '#93C5FD' : EDGE_COLOR,
+        borderWidth: isHovered ? '3px' : '1px',
       }
     : {
-        backgroundColor: nodeData.color || "#ffffff",
-        border: isHovered ? "3px solid #93C5FD" : "none", // hover 시 연한 파란색 테두리
+        backgroundColor: nodeData.color || '#ffffff',
+        border: isHovered ? '3px solid #93C5FD' : 'none', // hover 시 연한 파란색 테두리
       };
 
   return (
@@ -124,15 +103,17 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
       {showInputBox && (
         <NodeEditorPanel
           nodeId={id}
-          initialContent={nodeData.content}
-          onSave={nodeData.onContentChange}
           borderColor={EDGE_COLOR}
           handleSide={sideRelativeToParent}
           onExpandClick={() =>
             router.push(
-              `/graph/node/${id}?workspaceId=${nodeData.workspaceId ?? ""}`,
+              `/graph/node/${id}?workspaceId=${nodeData.workspaceId ?? ''}`,
             )
           }
+          collabProvider={collabProvider}
+          username={userName}
+          cursorColor={cursorColor}
+          onFirstLineChange={(text) => nodeData.onChange?.(id, text)}
         />
       )}
 
@@ -141,11 +122,11 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
         className={containerClasses}
         style={{
           ...containerStyle,
-          position: "relative",
+          position: 'relative',
           zIndex: 10,
-          maxWidth: "200px",
+          maxWidth: '200px',
           minWidth: `${PLACEHOLDER.length}em`,
-          padding: isMain ? "26px 36px" : "6px 12px",
+          padding: isMain ? '26px 36px' : '6px 12px',
         }}
         onMouseEnter={() => setIsNodeHovered(true)}
         onMouseLeave={() => setIsNodeHovered(false)}
@@ -154,15 +135,15 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           className="text-center select-none"
           style={{
             color: isEmpty
-              ? "rgb(var(--ds-gray-500))"
-              : nodeData.textColor || "rgb(var(--foreground))",
-            display: "-webkit-box",
+              ? 'rgb(var(--ds-gray-500))'
+              : nodeData.textColor || 'rgb(var(--foreground))',
+            display: '-webkit-box',
             WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-            wordBreak: "break-word",
-            lineHeight: "1.4em",
-            maxHeight: "2.8em",
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            wordBreak: 'break-word',
+            lineHeight: '1.4em',
+            maxHeight: '2.8em',
           }}
         >
           {isEmpty ? PLACEHOLDER : label}
@@ -199,14 +180,14 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
             <Handle
               type="target"
               position={
-                sideRelativeToParent === "right"
+                sideRelativeToParent === 'right'
                   ? Position.Left
                   : Position.Right
               }
               id={
-                sideRelativeToParent === "right"
-                  ? "target-left"
-                  : "target-right"
+                sideRelativeToParent === 'right'
+                  ? 'target-left'
+                  : 'target-right'
               }
               style={{ opacity: isNodeHovered ? 1 : 0 }}
             />

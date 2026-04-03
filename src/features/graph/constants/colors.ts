@@ -3,6 +3,12 @@ export const DEFAULT_NODE_COLOR = {
   text: "rgb(var(--ds-text-gray))",
 };
 
+export const MAIN_NODE_COLOR = {
+  name: "white",
+  bg: "rgb(var(--ds-sub-white))",
+  text: "rgb(var(--ds-text-white))",
+};
+
 export const COLOR_PALETTE = [
   {
     name: "gray",

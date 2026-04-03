@@ -41,6 +41,7 @@
     --ds-sub-blue: 208 238 251;   /* #D0EEFB */
     --ds-sub-purple: 238 219 250; /* #EEDBFA */
     --ds-sub-pink: 251 218 235;   /* #FBDAEB */
+    --ds-sub-white: 255 255 255;  /* #FFFFFF */
 
     /* ---------- Text (Dark accents) ---------- */
     --ds-text-gray: 44 44 44;     /* #2C2C2C */
@@ -52,6 +53,7 @@
     --ds-text-blue: 37 71 86;     /* #254756 */
     --ds-text-purple: 86 59 104;  /* #563B68 */
     --ds-text-pink: 104 59 82;    /* #683B52 */
+    --ds-text-white: 0 0 0;       /* #000000 */
 
     /* ---------- Semantic (what components should use) ---------- */
     --background: var(--ds-white);
@@ -168,6 +170,7 @@
   --color-sub-blue: rgb(var(--ds-sub-blue));
   --color-sub-purple: rgb(var(--ds-sub-purple));
   --color-sub-pink: rgb(var(--ds-sub-pink));
+  --color-sub-white: rgb(var(--ds-sub-white));
 
   /* =========================
      Text (Dark accents)
@@ -181,6 +184,7 @@
   --color-text-blue: rgb(var(--ds-text-blue));
   --color-text-purple: rgb(var(--ds-text-purple));
   --color-text-pink: rgb(var(--ds-text-pink));
+  --color-text-white: rgb(var(--ds-text-white));
 
   /* =========================
      Fonts (optional)
@@ -318,6 +322,27 @@
   }
   .ne-root p {
     margin: 1px 0;
+  }
+
+  /* ── Collaboration cursors ── */
+  .collaboration-cursor-caret {
+    border-left: 2px solid;
+    margin-left: -1px;
+    pointer-events: none;
+    position: relative;
+  }
+  .collaboration-cursor-label {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: white;
+    white-space: nowrap;
+    position: absolute;
+    top: -20px;
+    left: -1px;
+    pointer-events: none;
+    user-select: none;
   }
 }
 

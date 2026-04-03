@@ -27,7 +27,7 @@ export default function ChipHeader({
   const [user, setUser] = useState<UserMeResponse | null>(null);
 
   useEffect(() => {
-    getMe<UserMeResponse>().then(setUser).catch(() => {});
+    getMe().then(setUser).catch(() => {});
   }, []);
 
   async function handleLogout() {
