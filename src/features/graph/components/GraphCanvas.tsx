@@ -817,7 +817,9 @@ function GraphCanvasInner({
     [],
   );
 
-  const titleDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const titleDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
 
   const handleTitleChange = useCallback(
     (nodeId: string, value: string) => {
@@ -1025,6 +1027,14 @@ function GraphCanvasInner({
                 updatedEdges,
                 color,
               );
+
+              updateNodeContent(workspaceId, edge.target, {
+                color: color.bg,
+                textColor: color.text,
+                propagateToChildren: true,
+              }).catch((err) =>
+                console.error('[updateNodeContent after edge delete] failed', err),
+              );
             });
 
             return updatedNodes;
@@ -1166,6 +1176,15 @@ function GraphCanvasInner({
         );
       });
 
+      // 색상 전파 여부 판단 (setNodes 내부 로직과 동일 조건)
+      const sourceHasCustomColor = isCustomColorNode(sourceId, nodes);
+      const targetHasCustomColor = isCustomColorNode(targetId, nodes);
+      const shouldSkipColor =
+        !shouldSwap && sourceHasCustomColor && targetHasCustomColor;
+      const colorToPropagate = shouldSkipColor
+        ? null
+        : getGraphColor(sourceId, nodes, edges);
+
       // API: 엣지 생성 → BE가 발급한 edgeId로 추가
       // source/target이 swap된 경우 핸들도 교차 적용
       const swapped = sourceId !== params.source;
@@ -1205,6 +1224,14 @@ function GraphCanvasInner({
               buildEdgePresentation(rawEdge, nodes, [...snapshot, rawEdge]),
             ];
           });
+
+          if (colorToPropagate) {
+            updateNodeContent(workspaceId, targetId, {
+              color: colorToPropagate.bg,
+              textColor: colorToPropagate.text,
+              propagateToChildren: true,
+            }).catch((err) => console.error('[updateNodeColor] failed', err));
+          }
         })
         .catch((err) => console.error('[createEdge] failed', err));
     },
@@ -1862,6 +1889,7 @@ function GraphCanvasInner({
           );
 
           // API: BE가 발급한 edgeId로 새 부모 연결 추가
+          const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
           createEdge(
             workspaceId,
             newParent.id,
@@ -1882,6 +1910,14 @@ function GraphCanvasInner({
                   buildEdgePresentation(rawEdge, nodes, [...prev, rawEdge]),
                 ];
               });
+
+              updateNodeContent(workspaceId, childNode.id, {
+                color: dragStopColor.bg,
+                textColor: dragStopColor.text,
+                propagateToChildren: true,
+              }).catch((err) =>
+                console.error('[updateNodeColor drag] failed', err),
+              );
             })
             .catch((err) =>
               console.error('[createEdge re-parent] failed', err),
