@@ -8,6 +8,7 @@ export default function GraphPage() {
     focusedNodeId, setFocusedNodeId,
     userMe,
     workspaceId,
+    workspaceRole,
     nodes, setNodes,
     edges, setEdges,
     synced,
@@ -29,6 +30,7 @@ export default function GraphPage() {
       workspaceId={workspaceId}
       currentUserId={currentUserId}
       currentUserName={currentUserName}
+      currentUserRole={workspaceRole ?? 'VIEWER'}
       focusedNodeId={focusedNodeId}
       onFocusComplete={() => setFocusedNodeId(null)}
       nodes={nodes}

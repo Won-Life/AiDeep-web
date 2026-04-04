@@ -115,3 +115,27 @@ export function onCursorLeave(
     socket?.off('cursor_leave', handler);
   };
 }
+
+// ─── Workspace Awareness (YJS) ──────────────────────────────────────
+
+export interface WsAwarenessPayload {
+  workspaceId: string;
+  data: ArrayLike<number>;
+}
+
+export function emitWsAwareness(
+  workspaceId: string,
+  data: Uint8Array,
+): void {
+  socket?.emit('yjs:ws:awareness', { workspaceId, data });
+}
+
+export function onWsAwareness(
+  handler: (payload: WsAwarenessPayload) => void,
+): () => void {
+  if (!socket) return () => {};
+  socket.on('yjs:ws:awareness', handler);
+  return () => {
+    socket?.off('yjs:ws:awareness', handler);
+  };
+}

@@ -6,6 +6,7 @@ import { NodeEditorPanel } from "@/features/editor/NodeEditorPanel";
 import { getNode } from "@/features/graph/api/nodes";
 import { useGraphLayout } from "@/app/graph/context";
 import { useYjsProvider } from "@/hooks/useYjsProvider";
+import { useWorkspaceAwareness } from "@/hooks/useWorkspaceAwareness";
 import { COLOR_PALETTE } from "@/features/graph/constants/colors";
 
 function getUserCursorColor(userId: string): string {
@@ -22,7 +23,7 @@ export default function NodeFullscreenPage() {
   const params = useParams<{ nodeId: string }>();
   const searchParams = useSearchParams();
 
-  const { sidebarWidth, userMe } = useGraphLayout();
+  const { sidebarWidth, userMe, workspaceRole } = useGraphLayout();
   const nodeId = params.nodeId;
   const workspaceId = searchParams.get("workspaceId") ?? "";
 
@@ -38,6 +39,21 @@ export default function NodeFullscreenPage() {
     userName,
     userColor: cursorColor,
   });
+
+  // 워크스페이스 awareness — 전체화면 에디터에서도 "이 노드를 보는 중" 상태 전파
+  const { setFocusedNodeId } = useWorkspaceAwareness({
+    workspaceId,
+    userName,
+    userColor: cursorColor,
+    role: workspaceRole ?? 'VIEWER',
+  });
+
+  useEffect(() => {
+    if (!loading && !error && nodeId) {
+      setFocusedNodeId(nodeId);
+    }
+    return () => setFocusedNodeId(null);
+  }, [nodeId, loading, error, setFocusedNodeId]);
 
   useEffect(() => {
     if (!workspaceId || !nodeId) return;

@@ -73,6 +73,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
     setSidebarWidth,
     workspaceId,
     setWorkspaceId,
+    setWorkspaceRole,
     setNodes,
     setEdges,
     nodes,
@@ -125,9 +126,10 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
     getWorkspaces()
       .then((list) => {
         if (!list.length) return;
-        const id = list[0].workspaceId;
-        setWorkspaceId(id);
-        return getNodes(id);
+        const ws = list[0];
+        setWorkspaceId(ws.workspaceId);
+        setWorkspaceRole(ws.role);
+        return getNodes(ws.workspaceId);
       })
       .then((data) => {
         if (!data) return;
