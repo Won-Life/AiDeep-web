@@ -986,65 +986,90 @@ function GraphCanvasInner({
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
+      const removeChanges = changes.filter((change) => change.type === 'remove');
+      const nonRemoveChanges = changes.filter(
+        (change) => change.type !== 'remove',
+      );
+
       if (isArchiveModalOpen) {
-        const nonRemoveChanges = changes.filter(
-          (change) => change.type !== 'remove',
-        );
         if (nonRemoveChanges.length === 0) return;
         setEdges((snapshot) => applyEdgeChanges(nonRemoveChanges, snapshot));
         return;
       }
 
-      setEdges((snapshot) => {
-        const removedEdges = changes
-          .filter((change) => change.type === 'remove')
-          .map((change) => snapshot.find((edge) => edge.id === change.id))
-          .filter((edge): edge is Edge => edge !== undefined);
+      // non-remove 변경은 즉시 적용
+      if (nonRemoveChanges.length > 0) {
+        setEdges((snapshot) => applyEdgeChanges(nonRemoveChanges, snapshot));
+      }
 
-        const updatedEdges = applyEdgeChanges(changes, snapshot);
+      // remove 변경은 API 호출 성공 후에만 state 업데이트
+      if (removeChanges.length > 0) {
+        setEdges((snapshot) => {
+          const removedEdges = removeChanges
+            .map((change) => snapshot.find((edge) => edge.id === change.id))
+            .filter((edge): edge is Edge => edge !== undefined);
 
-        if (removedEdges.length > 0) {
-          removedEdges.forEach((edge) => {
-            deleteEdge(workspaceId, edge.id).catch((err) =>
-              console.error('[deleteEdge] failed', err),
-            );
-          });
+          if (removedEdges.length === 0) return snapshot;
 
-          setNodes((currentNodes) => {
-            let updatedNodes = currentNodes;
+          Promise.all(
+            removedEdges.map((edge) => deleteEdge(workspaceId, edge.id)),
+          )
+            .then(() => {
+              setEdges((prev) => {
+                const updatedEdges = applyEdgeChanges(removeChanges, prev);
 
-            removedEdges.forEach((edge) => {
-              const remainingParentId = getParentId(edge.target, updatedEdges);
-              const remainingParent = remainingParentId
-                ? updatedNodes.find((n) => n.id === remainingParentId)
-                : null;
-              const color = remainingParent
-                ? getGraphColor(remainingParentId!, updatedNodes, updatedEdges)
-                : DEFAULT_NODE_COLOR;
-              updatedNodes = updateSubtreeColors(
-                edge.target,
-                updatedNodes,
-                updatedEdges,
-                color,
-              );
+                setNodes((currentNodes) => {
+                  let updatedNodes = currentNodes;
 
-              updateNodeContent(workspaceId, edge.target, {
-                color: color.bg,
-                textColor: color.text,
-                propagateToChildren: true,
-              }).catch((err) =>
-                console.error('[updateNodeContent after edge delete] failed', err),
-              );
+                  removedEdges.forEach((edge) => {
+                    const remainingParentId = getParentId(
+                      edge.target,
+                      updatedEdges,
+                    );
+                    const remainingParent = remainingParentId
+                      ? updatedNodes.find((n) => n.id === remainingParentId)
+                      : null;
+                    const color = remainingParent
+                      ? getGraphColor(
+                          remainingParentId!,
+                          updatedNodes,
+                          updatedEdges,
+                        )
+                      : DEFAULT_NODE_COLOR;
+                    updatedNodes = updateSubtreeColors(
+                      edge.target,
+                      updatedNodes,
+                      updatedEdges,
+                      color,
+                    );
+
+                    updateNodeContent(workspaceId, edge.target, {
+                      color: color.bg,
+                      textColor: color.text,
+                      propagateToChildren: true,
+                    }).catch((err) =>
+                      console.error(
+                        '[updateNodeContent after edge delete] failed',
+                        err,
+                      ),
+                    );
+                  });
+
+                  return updatedNodes;
+                });
+
+                return updatedEdges;
+              });
+            })
+            .catch((err) => {
+              console.error('[deleteEdge] failed', err);
             });
 
-            return updatedNodes;
-          });
-        }
-
-        return updatedEdges;
-      });
+          return snapshot; // API 응답 전까지 state 유지
+        });
+      }
     },
-    [isArchiveModalOpen],
+    [isArchiveModalOpen, workspaceId, setEdges, setNodes],
   );
 
   const isValidConnection = useCallback(
