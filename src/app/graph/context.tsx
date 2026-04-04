@@ -11,7 +11,7 @@ import {
   type SetStateAction,
 } from "react";
 import type { Edge, Node } from "@xyflow/react";
-import type { UserMeResponse } from "@/api/types";
+import type { UserMeResponse, WorkspaceRole } from "@/api/types";
 
 interface GraphLayoutContextValue {
   // 유저
@@ -22,9 +22,12 @@ interface GraphLayoutContextValue {
   setFocusedNodeId: (id: string | null) => void;
   sidebarWidth: number;
   setSidebarWidth: (w: number) => void;
-  // 그래프 데이터 (페이지 이동 시 유지)
+  // 워크스페이스
   workspaceId: string | null;
   setWorkspaceId: Dispatch<SetStateAction<string | null>>;
+  workspaceRole: WorkspaceRole | null;
+  setWorkspaceRole: Dispatch<SetStateAction<WorkspaceRole | null>>;
+  // 그래프 데이터 (페이지 이동 시 유지)
   nodes: Node[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   edges: Edge[];
@@ -43,6 +46,7 @@ export function GraphLayoutProvider({ children }: { children: ReactNode }) {
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(0);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [synced, setSynced] = useState(false);
@@ -57,6 +61,7 @@ export function GraphLayoutProvider({ children }: { children: ReactNode }) {
         focusedNodeId, setFocusedNodeId,
         sidebarWidth, setSidebarWidth,
         workspaceId, setWorkspaceId,
+        workspaceRole, setWorkspaceRole,
         nodes, setNodes,
         edges, setEdges,
         edgesRef,

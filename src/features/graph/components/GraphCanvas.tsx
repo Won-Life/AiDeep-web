@@ -40,9 +40,10 @@ import { rectCollide } from '../layout/rectCollide';
 import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
 import { getDescendantIds } from '../utils/graphUtils';
 import { useCursors } from '@/hooks/useCursors';
+import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
 import { getCursorColor } from '@/utils/cursorColor';
 import CursorOverlay from './CursorOverlay';
-import { MdBody } from '@/api/types';
+import { MdBody, type WorkspaceRole } from '@/api/types';
 
 // TODO: 실제 노드 너비로 변경
 const NODE_WIDTH = 200;
@@ -552,6 +553,7 @@ interface GraphCanvasInnerProps {
   workspaceId: string;
   currentUserId: string;
   currentUserName: string;
+  currentUserRole: WorkspaceRole;
   focusedNodeId: string | null;
   onFocusComplete?: () => void;
   nodes: Node[];
@@ -618,6 +620,7 @@ function GraphCanvasInner({
   workspaceId,
   currentUserId,
   currentUserName,
+  currentUserRole,
   focusedNodeId,
   onFocusComplete,
   nodes,
@@ -625,7 +628,8 @@ function GraphCanvasInner({
   setNodes,
   setEdges,
 }: GraphCanvasInnerProps) {
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [openNodeIds, setOpenNodeIds] = useState<string[]>([]);
+  const [localFocusedNodeId, setLocalFocusedNodeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [pendingArchiveNodeIds, setPendingArchiveNodeIds] = useState<string[]>(
@@ -633,6 +637,33 @@ function GraphCanvasInner({
   );
 
   const { screenToFlowPosition, setCenter } = useReactFlow();
+
+  // ─── Workspace Awareness ─────────────────────────────────────────
+  const cursorColor = getCursorColor(currentUserId);
+
+  // Remote toggle: only open (add to openNodeIds + focus), never close
+  const handleRemoteToggle = useCallback(
+    (event: { nodeId: string | null; isOpen: boolean }) => {
+      if (!event.isOpen || !event.nodeId) return;
+      const nodeId = event.nodeId;
+      setOpenNodeIds((prev) => (prev.includes(nodeId) ? prev : [...prev, nodeId]));
+      setLocalFocusedNodeId(nodeId);
+    },
+    [],
+  );
+
+  const { nodeViewers, setFocusedNodeId } = useWorkspaceAwareness({
+    workspaceId,
+    userName: currentUserName,
+    userColor: cursorColor,
+    role: currentUserRole,
+    onRemoteToggle: handleRemoteToggle,
+  });
+
+  // Sync localFocusedNodeId → awareness
+  useEffect(() => {
+    setFocusedNodeId(localFocusedNodeId);
+  }, [localFocusedNodeId, setFocusedNodeId]);
 
   // viewport 저장 (debounce)
   const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -686,7 +717,6 @@ function GraphCanvasInner({
   >(null);
   const lastCursorEmitRef = useRef(0);
   const CURSOR_EMIT_INTERVAL = 30; // ms
-  const cursorColor = getCursorColor(currentUserId);
 
   // 타인 커서 + 본인 커서 합산
   const cursors = selfCursor
@@ -821,6 +851,15 @@ function GraphCanvasInner({
     new Map(),
   );
 
+  const handleClosePanel = useCallback((nodeId: string) => {
+    setOpenNodeIds((prev) => prev.filter((id) => id !== nodeId));
+    setLocalFocusedNodeId((prev) => (prev === nodeId ? null : prev));
+  }, []);
+
+  const handleFocusPanel = useCallback((nodeId: string) => {
+    setLocalFocusedNodeId(nodeId);
+  }, []);
+
   const handleTitleChange = useCallback(
     (nodeId: string, value: string) => {
       handleNodeViewChange(nodeId, { title: value });
@@ -861,9 +900,13 @@ function GraphCanvasInner({
           ? undefined
           : getTargetSideRelativeToParent(node.position.x, referenceX),
         hasParent, // 부모 노드 존재 여부 전달
-        showInputBox: selectedNodeId === node.id, // 선택된 노드에만 입력박스 표시
+        showInputBox: openNodeIds.includes(node.id), // 열린 노드에 입력박스 표시
+        panelZIndex: node.id === localFocusedNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
+        viewers: nodeViewers[node.id] ?? [], // 현재 이 노드를 보고 있는 다른 유저들
+        onClosePanel: handleClosePanel,
+        onFocusPanel: handleFocusPanel,
         onChange: handleTitleChange,
       },
     };
@@ -884,7 +927,6 @@ function GraphCanvasInner({
 
       setPendingArchiveNodeIds(Array.from(subtreeNodeIds));
       setIsArchiveModalOpen(true);
-      setSelectedNodeId(null);
     },
     [edges],
   );
@@ -958,7 +1000,8 @@ function GraphCanvasInner({
       snapshot.filter((node) => !idsToArchive.has(node.id)),
     );
     setHoveredNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
-    setSelectedNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
+    setOpenNodeIds((prev) => prev.filter((id) => !idsToArchive.has(id)));
+    setLocalFocusedNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
     setPendingArchiveNodeIds([]);
     setIsArchiveModalOpen(false);
   }, [pendingArchiveNodeIds, workspaceId]);
@@ -1408,9 +1451,14 @@ function GraphCanvasInner({
      Node click → toggle input box
      ========================= */
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    console.log('[onNodeClick] node.data', node.data);
-    // 같은 노드를 다시 클릭하면 닫기 (토글)
-    setSelectedNodeId((prev) => (prev === node.id ? null : node.id));
+    setOpenNodeIds((prev) => {
+      if (prev.includes(node.id)) {
+        // 이미 열려 있으면 포커스만 이동
+        return prev;
+      }
+      return [...prev, node.id];
+    });
+    setLocalFocusedNodeId(node.id);
   }, []);
 
   /* =========================
@@ -1421,9 +1469,10 @@ function GraphCanvasInner({
       // 연결 드래그 중이면 노드 생성하지 않음
       if (isConnectingRef.current) return;
 
-      // 입력박스가 열려 있으면 우선 닫고, 같은 클릭으로 노드 생성은 하지 않음
-      if (selectedNodeId !== null) {
-        setSelectedNodeId(null);
+      // 패널이 열려 있으면 우선 모두 닫고, 같은 클릭으로 노드 생성은 하지 않음
+      if (openNodeIds.length > 0) {
+        setOpenNodeIds([]);
+        setLocalFocusedNodeId(null);
         return;
       }
 
@@ -1467,7 +1516,7 @@ function GraphCanvasInner({
         console.error('[onPaneClick] createMdNode failed', err);
       }
     },
-    [screenToFlowPosition, selectedNodeId, workspaceId],
+    [screenToFlowPosition, openNodeIds, workspaceId],
   );
 
   const onDragOver = useCallback(
@@ -2103,6 +2152,7 @@ interface GraphCanvasProps {
   workspaceId: string;
   currentUserId: string;
   currentUserName: string;
+  currentUserRole: WorkspaceRole;
   focusedNodeId?: string | null;
   onFocusComplete?: () => void;
   nodes: Node[];
@@ -2115,6 +2165,7 @@ export default function GraphCanvas({
   workspaceId,
   currentUserId,
   currentUserName,
+  currentUserRole,
   focusedNodeId = null,
   onFocusComplete,
   nodes,
@@ -2128,6 +2179,7 @@ export default function GraphCanvas({
         workspaceId={workspaceId}
         currentUserId={currentUserId}
         currentUserName={currentUserName}
+        currentUserRole={currentUserRole}
         focusedNodeId={focusedNodeId}
         onFocusComplete={onFocusComplete}
         nodes={nodes}

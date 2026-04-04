@@ -7,6 +7,9 @@ interface NodeEditorPanelProps {
   nodeId: string;
   fullscreen?: boolean;
   onExpandClick?: () => void;
+  onClose?: () => void;
+  onFocus?: () => void;
+  panelZIndex?: number;
   borderColor?: string;
   handleSide?: "left" | "right";
   collabProvider: SocketIoYjsProvider | null;
@@ -19,6 +22,9 @@ export function NodeEditorPanel({
   nodeId,
   fullscreen = false,
   onExpandClick,
+  onClose,
+  onFocus,
+  panelZIndex,
   borderColor = "#D9D9D9",
   handleSide = "right",
   collabProvider,
@@ -58,11 +64,31 @@ export function NodeEditorPanel({
         marginTop: "4px",
         borderColor,
         ...(handleSide === "left" ? { right: 0 } : { left: 0 }),
-        zIndex: 0,
+        zIndex: panelZIndex ?? 0,
       }}
       onClick={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+        onFocus?.();
+      }}
     >
+      {/* 닫기 버튼 */}
+      {onClose && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="absolute top-1 right-1 z-10 flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
+          style={{ width: 22, height: 22 }}
+          title="닫기"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M1 1L9 9M9 1L1 9" />
+          </svg>
+        </button>
+      )}
       {!collabProvider ? (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">
           워크스페이스를 불러오는 중...
