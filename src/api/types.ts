@@ -141,8 +141,8 @@ export interface CreateProjectNodeRequest {
 export interface MdBody {
   markdownBody: string;
   jsonBody: string;
-  color : string
-  textColor : string
+  color: string;
+  textColor: string;
 }
 
 export interface CreateMdNodeRequest {
@@ -153,7 +153,8 @@ export interface CreateMdNodeRequest {
 
 export interface UpdateMdNodeRequest {
   title?: string;
-  body?: MdBody;
+  color?: string;
+  textColor?: string;
 }
 
 export interface MoveNodeRequest {
@@ -202,7 +203,12 @@ export interface UploadResponse {
 
 // ─── WS (WebSocket Events) ───────────────────────────────────────────
 
-export type WsEventType = 'NODE_MOVE' | 'NODE_CREATE' | 'NODE_DELETE' | 'NODE_UPDATE' | 'EDGE_CREATE';
+export type WsEventType =
+  | 'NODE_MOVE'
+  | 'NODE_CREATE'
+  | 'NODE_DELETE'
+  | 'NODE_UPDATE'
+  | 'EDGE_CREATE';
 
 export interface WsNodeMoveEvent {
   type: 'NODE_MOVE';
@@ -258,10 +264,17 @@ export interface WsEdgeCreateEvent {
     targetHandle: string;
   };
 }
+export interface WsEdgeDeletedEvent {
+  type: 'EDGE_DELETED';
+  workspaceId: string;
+  userId: string;
+  edgeId: string;
+}
 
 export type WsEvent =
   | WsNodeMoveEvent
   | WsNodeCreateEvent
   | WsNodeDeleteEvent
   | WsNodeUpdateEvent
-  | WsEdgeCreateEvent;
+  | WsEdgeCreateEvent
+  | WsEdgeDeletedEvent;

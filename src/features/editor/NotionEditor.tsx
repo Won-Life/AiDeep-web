@@ -10,13 +10,12 @@ import {
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
-import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
+  $getRoot,
   $getSelection,
   $isRangeSelection,
   FORMAT_TEXT_COMMAND,
@@ -24,7 +23,6 @@ import {
   $createParagraphNode,
   COMMAND_PRIORITY_LOW,
   DecoratorNode,
-  type EditorState,
   type NodeKey,
   type SerializedLexicalNode,
 } from "lexical";
@@ -51,9 +49,13 @@ import {
   $isCodeNode,
 } from "@lexical/code";
 import { LinkNode, AutoLinkNode } from "@lexical/link";
-import { TRANSFORMERS, $convertToMarkdownString } from "@lexical/markdown";
+import { TRANSFORMERS } from "@lexical/markdown";
 import { $setBlocksType } from "@lexical/selection";
 import { $getNearestNodeOfType, mergeRegister } from "@lexical/utils";
+import { CollaborationPlugin } from "@lexical/react/LexicalCollaborationPlugin";
+import { LexicalCollaboration } from "@lexical/react/LexicalCollaborationContext";
+import * as Y from "yjs";
+import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,8 +71,11 @@ type BlockType =
 
 export interface NotionEditorProps {
   nodeId: string;
-  initialContent?: string;
-  onSave?: (nodeId: string, content: string) => void;
+  onFullscreen?: () => void;
+  collabProvider: SocketIoYjsProvider | null;
+  username?: string;
+  cursorColor?: string;
+  onFirstLineChange?: (text: string) => void;
 }
 
 // ─── Image Node ───────────────────────────────────────────────────────────────
@@ -137,119 +142,6 @@ class ImageNode extends DecoratorNode<ReactNode> {
   }
 }
 
-// ─── Mock Initial State ───────────────────────────────────────────────────────
-
-const MOCK_INITIAL_STATE = JSON.stringify({
-  root: {
-    children: [
-      {
-        children: [
-          {
-            detail: 0,
-            format: 0,
-            mode: "normal",
-            style: "",
-            text: "🌌 야경",
-            type: "text",
-            version: 1,
-          },
-        ],
-        direction: "ltr",
-        format: "",
-        indent: 0,
-        tag: "h2",
-        type: "heading",
-        version: 1,
-      },
-      {
-        type: "image",
-        version: 1,
-        src: "https://littledeep.com/wp-content/uploads/2019/04/littledeep_nightsky_sns.png",
-        alt: "Night sky",
-      },
-      {
-        children: [
-          {
-            detail: 0,
-            format: 0,
-            mode: "normal",
-            style: "",
-            text: "아름다운 밤하늘 사진입니다.",
-            type: "text",
-            version: 1,
-          },
-        ],
-        direction: "ltr",
-        format: "",
-        indent: 0,
-        type: "paragraph",
-        version: 1,
-      },
-    ],
-    direction: "ltr",
-    format: "",
-    indent: 0,
-    type: "root",
-    version: 1,
-  },
-});
-
-// ─── Debug Panel Plugin ───────────────────────────────────────────────────────
-
-function DebugPanel() {
-  const [editor] = useLexicalComposerContext();
-  const [json, setJson] = useState<string>("");
-
-  useEffect(() => {
-    // Capture initial state
-    editor.getEditorState().read(() => {
-      setJson(JSON.stringify(editor.getEditorState().toJSON(), null, 2));
-    });
-
-    return editor.registerUpdateListener(({ editorState }) => {
-      setJson(JSON.stringify(editorState.toJSON(), null, 2));
-    });
-  }, [editor]);
-
-  return (
-    <div
-      className="nodrag nowheel shrink-0 overflow-y-auto"
-      style={{
-        borderTop: "1px solid #EBEBEB",
-        maxHeight: 200,
-        background: "#FAFAFA",
-      }}
-    >
-      <div
-        style={{
-          padding: "4px 8px 2px",
-          fontSize: 9,
-          color: "#AAA",
-          fontWeight: 600,
-          letterSpacing: "0.05em",
-          textTransform: "uppercase",
-        }}
-      >
-        Editor State JSON
-      </div>
-      <pre
-        style={{
-          margin: 0,
-          padding: "0 10px 10px",
-          fontSize: 10,
-          lineHeight: 1.6,
-          color: "#555",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-all",
-          fontFamily: "ui-monospace, monospace",
-        }}
-      >
-        {json}
-      </pre>
-    </div>
-  );
-}
-
 // ─── Editor Theme ─────────────────────────────────────────────────────────────
 // Class names are defined in globals.css under @layer components
 
@@ -301,11 +193,11 @@ const BLOCK_OPTIONS = [
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
 
 function ToolbarPlugin({
-  showDebug,
-  onDebugToggle,
+  onFullscreen,
 }: {
-  showDebug: boolean;
-  onDebugToggle: () => void;
+  showDebug?: boolean;
+  onDebugToggle?: () => void;
+  onFullscreen?: () => void;
 }) {
   const [editor] = useLexicalComposerContext();
   const [isBold, setIsBold] = useState(false);
@@ -558,73 +450,98 @@ function ToolbarPlugin({
         </button>
       ))}
 
-      {/* ── Debug toggle ── */}
-      <div style={{ marginLeft: "auto" }}>
-        <button
-          type="button"
-          title="데이터 구조 보기"
-          onClick={onDebugToggle}
-          className="flex items-center justify-center rounded cursor-pointer transition-colors font-mono"
-          style={{
-            width: 26,
-            height: 26,
-            fontSize: 9,
-            background: showDebug ? "#E8E8E8" : "transparent",
-            color: showDebug ? "#1A1A1A" : "#CCCCCC",
-          }}
-          onMouseEnter={(e) => {
-            if (!showDebug)
-              (e.currentTarget as HTMLElement).style.background = "#F3F3F3";
-          }}
-          onMouseLeave={(e) => {
-            if (!showDebug)
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-          }}
-        >
-          {"{}"}
-        </button>
-      </div>
+      {/* ── Fullscreen toggle ── */}
+      {onFullscreen && (
+        <div style={{ marginLeft: "auto" }}>
+          <button
+            type="button"
+            title="전체화면으로 보기"
+            onClick={onFullscreen}
+            onMouseDown={(e) => e.preventDefault()}
+            className="flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[#F3F3F3]"
+            style={{ width: 26, height: 26 }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="#CCCCCC"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M1 4.5V1H4.5M7.5 1H11V4.5M11 7.5V11H7.5M4.5 11H1V7.5" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
+}
+
+// ─── Title Tracker Plugin ─────────────────────────────────────────────────────
+
+function TitleTrackerPlugin({
+  onChange,
+}: {
+  onChange: (text: string) => void;
+}) {
+  const [editor] = useLexicalComposerContext();
+  const prevTitleRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        const firstChild = $getRoot().getFirstChild();
+        const title = firstChild ? firstChild.getTextContent().trim() : "";
+        if (title !== prevTitleRef.current) {
+          prevTitleRef.current = title;
+          onChange(title);
+        }
+      });
+    });
+  }, [editor, onChange]);
+
+  return null;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function NotionEditor({
   nodeId,
-  initialContent,
-  onSave,
+  onFullscreen,
+  collabProvider,
+  username,
+  cursorColor,
+  onFirstLineChange,
 }: NotionEditorProps) {
-  const [showDebug, setShowDebug] = useState(false);
-
   const initialConfig = {
     namespace: `ne-${nodeId}`,
     theme: EDITOR_THEME,
     nodes: REGISTERED_NODES,
     onError: (error: Error) => console.error("[NotionEditor]", error),
-    editorState: initialContent ?? MOCK_INITIAL_STATE,
+    // YJS 모드 전용 — CollaborationPlugin이 Y.Doc에서 상태를 가져오므로 null
+    editorState: null,
   };
 
-  const handleChange = useCallback(
-    (editorState: EditorState) => {
-      const json = JSON.stringify(editorState.toJSON(), null, 2);
-      editorState.read(() => {
-        const markdown = $convertToMarkdownString(TRANSFORMERS);
-        console.log(`[NotionEditor:${nodeId}] markdown:\n`, markdown);
-      });
-      onSave?.(nodeId, json);
+  // CollaborationPlugin에 Y.Doc과 provider를 주입하는 factory
+  const providerFactory = useCallback(
+    (id: string, yjsDocMap: Map<string, Y.Doc>) => {
+      if (!collabProvider) return null as never;
+      yjsDocMap.set(id, collabProvider.doc);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return collabProvider as any;
     },
-    [nodeId, onSave],
+    [collabProvider],
   );
 
   return (
     // flex-1 + min-h-0: flex child가 부모의 max-height 안에서 제대로 수축되도록 함
     <div className="flex flex-col flex-1 min-h-0 bg-white rounded-b-lg">
-      <LexicalComposer initialConfig={initialConfig}>
-        <ToolbarPlugin
-          showDebug={showDebug}
-          onDebugToggle={() => setShowDebug((v) => !v)}
-        />
+      <LexicalCollaboration>
+        <LexicalComposer initialConfig={initialConfig}>
+          <ToolbarPlugin onFullscreen={onFullscreen} />
 
         {/* min-h-0: flex child가 컨텐츠 크기 이하로 수축 가능 → overflow-y-auto 작동 */}
         <div className="relative flex-1 min-h-0 overflow-y-auto">
@@ -648,13 +565,24 @@ export function NotionEditor({
           />
         </div>
 
-        {showDebug && <DebugPanel />}
-
-        <HistoryPlugin />
         <ListPlugin />
         <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
-        <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
+
+        {onFirstLineChange && (
+          <TitleTrackerPlugin onChange={onFirstLineChange} />
+        )}
+
+        {collabProvider && (
+          <CollaborationPlugin
+            id={`yjs-${nodeId}`}
+            providerFactory={providerFactory}
+            shouldBootstrap={false}
+            username={username}
+            cursorColor={cursorColor}
+          />
+        )}
       </LexicalComposer>
+      </LexicalCollaboration>
     </div>
   );
 }

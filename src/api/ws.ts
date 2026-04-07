@@ -7,6 +7,10 @@ export type WsErrorHandler = (error: unknown) => void;
 
 let socket: Socket | null = null;
 
+export function getSocket(): Socket | null {
+  return socket;
+}
+
 export function subscribeToWorkspace(
   workspaceId: string,
   onEvent: WsEventHandler,
@@ -109,5 +113,29 @@ export function onCursorLeave(
   socket.on('cursor_leave', handler);
   return () => {
     socket?.off('cursor_leave', handler);
+  };
+}
+
+// ─── Workspace Awareness (YJS) ──────────────────────────────────────
+
+export interface WsAwarenessPayload {
+  workspaceId: string;
+  data: ArrayLike<number>;
+}
+
+export function emitWsAwareness(
+  workspaceId: string,
+  data: Uint8Array,
+): void {
+  socket?.emit('yjs:ws:awareness', { workspaceId, data });
+}
+
+export function onWsAwareness(
+  handler: (payload: WsAwarenessPayload) => void,
+): () => void {
+  if (!socket) return () => {};
+  socket.on('yjs:ws:awareness', handler);
+  return () => {
+    socket?.off('yjs:ws:awareness', handler);
   };
 }
