@@ -629,8 +629,13 @@ function GraphCanvasInner({
   setEdges,
 }: GraphCanvasInnerProps) {
   const [openNodeIds, setOpenNodeIds] = useState<string[]>([]);
-  const [localFocusedNodeId, setLocalFocusedNodeId] = useState<string | null>(null);
+  const [localFocusedNodeId, setLocalFocusedNodeId] = useState<string | null>(
+    null,
+  );
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [contextMenuNodeId, setContextMenuNodeId] = useState<string | null>(
+    null,
+  );
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [pendingArchiveNodeIds, setPendingArchiveNodeIds] = useState<string[]>(
     [],
@@ -646,7 +651,9 @@ function GraphCanvasInner({
     (event: { nodeId: string | null; isOpen: boolean }) => {
       if (!event.isOpen || !event.nodeId) return;
       const nodeId = event.nodeId;
-      setOpenNodeIds((prev) => (prev.includes(nodeId) ? prev : [...prev, nodeId]));
+      setOpenNodeIds((prev) =>
+        prev.includes(nodeId) ? prev : [...prev, nodeId],
+      );
       setLocalFocusedNodeId(nodeId);
     },
     [],
@@ -892,8 +899,12 @@ function GraphCanvasInner({
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시
     const hasParent = parentId !== null;
 
+    const isContextMenuOpen = contextMenuNodeId === node.id;
+    const isEditorOpen = openNodeIds.includes(node.id);
+
     return {
       ...node,
+      zIndex: isContextMenuOpen ? 1000 : isEditorOpen ? 100 : undefined,
       data: {
         ...node.data,
         handleSide: node.data?.isMain
@@ -901,6 +912,7 @@ function GraphCanvasInner({
           : getTargetSideRelativeToParent(node.position.x, referenceX),
         hasParent, // 부모 노드 존재 여부 전달
         showInputBox: openNodeIds.includes(node.id), // 열린 노드에 입력박스 표시
+        isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
         panelZIndex: node.id === localFocusedNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
@@ -1001,7 +1013,9 @@ function GraphCanvasInner({
     );
     setHoveredNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
     setOpenNodeIds((prev) => prev.filter((id) => !idsToArchive.has(id)));
-    setLocalFocusedNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
+    setLocalFocusedNodeId((prev) =>
+      prev && idsToArchive.has(prev) ? null : prev,
+    );
     setPendingArchiveNodeIds([]);
     setIsArchiveModalOpen(false);
   }, [pendingArchiveNodeIds, workspaceId]);
@@ -1029,7 +1043,9 @@ function GraphCanvasInner({
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      const removeChanges = changes.filter((change) => change.type === 'remove');
+      const removeChanges = changes.filter(
+        (change) => change.type === 'remove',
+      );
       const nonRemoveChanges = changes.filter(
         (change) => change.type !== 'remove',
       );
@@ -1448,6 +1464,17 @@ function GraphCanvasInner({
   );
 
   /* =========================
+     Node right-click → open context menu
+     ========================= */
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault();
+      setContextMenuNodeId(node.id);
+    },
+    [],
+  );
+
+  /* =========================
      Node click → toggle input box
      ========================= */
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
@@ -1469,10 +1496,9 @@ function GraphCanvasInner({
       // 연결 드래그 중이면 노드 생성하지 않음
       if (isConnectingRef.current) return;
 
-      // 패널이 열려 있으면 우선 모두 닫고, 같은 클릭으로 노드 생성은 하지 않음
-      if (openNodeIds.length > 0) {
-        setOpenNodeIds([]);
-        setLocalFocusedNodeId(null);
+      // 컨텍스트 메뉴가 열려 있으면 닫기
+      if (contextMenuNodeId) {
+        setContextMenuNodeId(null);
         return;
       }
 
@@ -1516,7 +1542,7 @@ function GraphCanvasInner({
         console.error('[onPaneClick] createMdNode failed', err);
       }
     },
-    [screenToFlowPosition, openNodeIds, workspaceId],
+    [screenToFlowPosition, workspaceId, contextMenuNodeId],
   );
 
   const onDragOver = useCallback(
@@ -2094,6 +2120,7 @@ function GraphCanvasInner({
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
         onNodeClick={onNodeClick}
+        onNodeContextMenu={onNodeContextMenu}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
         onNodeDragStart={onNodeDragStart}

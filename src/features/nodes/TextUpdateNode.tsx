@@ -12,6 +12,7 @@ import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
 import { useGraphLayout } from '@/app/graph/context';
 import { COLOR_PALETTE } from '@/features/graph/constants/colors';
+import NodeContextMenu from '@/components/ui/NodeContextMenu';
 
 // 같은 userId는 항상 같은 커서 색상을 갖도록 보장 (협업 시 사용자 식별용)
 function getUserCursorColor(userId: string): string {
@@ -42,6 +43,7 @@ export type NodeView = {
   isHovered?: boolean; // 드래그 중 hover 상태
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
+  isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
   onClosePanel?: (nodeId: string) => void; // 패널 닫기
   onFocusPanel?: (nodeId: string) => void; // 패널 포커스
   onChange?: (nodeId: string, value: string) => void;
@@ -54,6 +56,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const isMain = nodeData.isMain ?? false;
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
   const showInputBox = nodeData.showInputBox ?? false;
+  const isContextMenuOpen = nodeData.isContextMenuOpen ?? false;
 
   const { userMe } = useGraphLayout();
   const userName = userMe?.username ?? 'Anonymous';
@@ -164,6 +167,22 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
               +{overflowCount}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 컨텍스트 메뉴 - 노드 위에 배치 */}
+      {isContextMenuOpen && (
+        <div
+          className="absolute"
+          style={{
+            bottom: '100%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            marginBottom: 8,
+            zIndex: 50,
+          }}
+        >
+          <NodeContextMenu />
         </div>
       )}
 
