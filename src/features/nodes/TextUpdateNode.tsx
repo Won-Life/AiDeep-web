@@ -185,7 +185,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           <NodeContextMenu />
         </div>
       )}
-
+      
       {/* 노션 에디터 패널 - 노드 뒤에 배치 */}
       {showInputBox && (
         <NodeEditorPanel
