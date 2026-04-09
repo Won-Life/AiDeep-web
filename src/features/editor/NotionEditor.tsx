@@ -13,6 +13,7 @@ import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
+import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import {
   $getRoot,
@@ -75,6 +76,7 @@ export interface NotionEditorProps {
   username?: string;
   cursorColor?: string;
   onFirstLineChange?: (text: string) => void;
+  toolbarSlot?: ReactNode;
 }
 
 // ─── Image Node ───────────────────────────────────────────────────────────────
@@ -150,6 +152,8 @@ const EDITOR_THEME = {
     ul: "ne-ul",
     ol: "ne-ol",
     listitem: "ne-li",
+    listitemChecked: "ne-li-checked",
+    listitemUnchecked: "ne-li-unchecked",
     nested: { listitem: "ne-nested-li" },
   },
   quote: "ne-quote",
@@ -191,7 +195,7 @@ const BLOCK_OPTIONS = [
 
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
 
-function ToolbarPlugin() {
+export function ToolbarPlugin() {
   const [editor] = useLexicalComposerContext();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
@@ -481,6 +485,7 @@ export function NotionEditor({
   username,
   cursorColor,
   onFirstLineChange,
+  toolbarSlot,
 }: NotionEditorProps) {
   const initialConfig = {
     namespace: `ne-${nodeId}`,
@@ -507,10 +512,10 @@ export function NotionEditor({
     <div className="flex flex-col flex-1 min-h-0 bg-white rounded-b-lg">
       <LexicalCollaboration>
         <LexicalComposer initialConfig={initialConfig}>
-          <ToolbarPlugin />
+          {toolbarSlot}
 
         {/* min-h-0: flex child가 컨텐츠 크기 이하로 수축 가능 → overflow-y-auto 작동 */}
-        <div className="relative flex-1 min-h-0 overflow-y-auto">
+        <div className="relative flex-1 min-h-0 overflow-y-auto scrollbar-hide">
           <RichTextPlugin
             contentEditable={
               <ContentEditable
@@ -532,6 +537,7 @@ export function NotionEditor({
         </div>
 
         <ListPlugin />
+        <CheckListPlugin />
         <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
 
         {onFirstLineChange && (
