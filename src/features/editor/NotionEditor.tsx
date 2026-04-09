@@ -71,7 +71,6 @@ type BlockType =
 
 export interface NotionEditorProps {
   nodeId: string;
-  onFullscreen?: () => void;
   collabProvider: SocketIoYjsProvider | null;
   username?: string;
   cursorColor?: string;
@@ -192,13 +191,7 @@ const BLOCK_OPTIONS = [
 
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
 
-function ToolbarPlugin({
-  onFullscreen,
-}: {
-  showDebug?: boolean;
-  onDebugToggle?: () => void;
-  onFullscreen?: () => void;
-}) {
+function ToolbarPlugin() {
   const [editor] = useLexicalComposerContext();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
@@ -450,32 +443,6 @@ function ToolbarPlugin({
         </button>
       ))}
 
-      {/* ── Fullscreen toggle ── */}
-      {onFullscreen && (
-        <div style={{ marginLeft: "auto" }}>
-          <button
-            type="button"
-            title="전체화면으로 보기"
-            onClick={onFullscreen}
-            onMouseDown={(e) => e.preventDefault()}
-            className="flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[#F3F3F3]"
-            style={{ width: 26, height: 26 }}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 12 12"
-              fill="none"
-              stroke="#CCCCCC"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M1 4.5V1H4.5M7.5 1H11V4.5M11 7.5V11H7.5M4.5 11H1V7.5" />
-            </svg>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -510,7 +477,6 @@ function TitleTrackerPlugin({
 
 export function NotionEditor({
   nodeId,
-  onFullscreen,
   collabProvider,
   username,
   cursorColor,
@@ -541,7 +507,7 @@ export function NotionEditor({
     <div className="flex flex-col flex-1 min-h-0 bg-white rounded-b-lg">
       <LexicalCollaboration>
         <LexicalComposer initialConfig={initialConfig}>
-          <ToolbarPlugin onFullscreen={onFullscreen} />
+          <ToolbarPlugin />
 
         {/* min-h-0: flex child가 컨텐츠 크기 이하로 수축 가능 → overflow-y-auto 작동 */}
         <div className="relative flex-1 min-h-0 overflow-y-auto">

@@ -72,23 +72,41 @@ export function NodeEditorPanel({
         onFocus?.();
       }}
     >
-      {/* 닫기 버튼 */}
-      {onClose && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          className="absolute top-1 right-1 z-10 flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
-          style={{ width: 22, height: 22 }}
-          title="닫기"
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M1 1L9 9M9 1L1 9" />
-          </svg>
-        </button>
-      )}
+      {/* 전체화면 / 닫기 버튼 */}
+      <div className="absolute top-1 right-1 z-10 flex items-center gap-0.5">
+        {onExpandClick && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onExpandClick();
+            }}
+            className="flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
+            style={{ width: 22, height: 22 }}
+            title="전체화면으로 보기"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#858585" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 11L11 1M8 1H11V4M4 11H1V8" />
+            </svg>
+          </button>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
+            style={{ width: 22, height: 22 }}
+            title="닫기"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#858585" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M1 1L9 9M9 1L1 9" />
+            </svg>
+          </button>
+        )}
+      </div>
       {!collabProvider ? (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">
           워크스페이스를 불러오는 중...
@@ -96,7 +114,6 @@ export function NodeEditorPanel({
       ) : (
         <NotionEditor
           nodeId={nodeId}
-          onFullscreen={onExpandClick}
           collabProvider={collabProvider}
           username={username}
           cursorColor={cursorColor}
