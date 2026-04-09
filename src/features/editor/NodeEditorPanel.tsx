@@ -1,6 +1,6 @@
 "use client";
 
-import { NotionEditor } from "./NotionEditor";
+import { NotionEditor, ToolbarPlugin } from "./NotionEditor";
 import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 
 interface NodeEditorPanelProps {
@@ -42,13 +42,17 @@ export function NodeEditorPanel({
     }
     return (
       <div className="w-full h-full bg-white flex flex-col overflow-hidden">
-        <NotionEditor
-          nodeId={nodeId}
-          collabProvider={collabProvider}
-          username={username}
-          cursorColor={cursorColor}
-          onFirstLineChange={onFirstLineChange}
-        />
+        {/* 사이드바 제외 너비 기준 중앙정렬 — Figma 비율: 콘텐츠 50%, 좌우 여백 각 25% */}
+        <div className="w-[62.5%] min-w-[300px] mx-auto flex flex-col flex-1 min-h-0">
+          <NotionEditor
+            nodeId={nodeId}
+            collabProvider={collabProvider}
+            username={username}
+            cursorColor={cursorColor}
+            onFirstLineChange={onFirstLineChange}
+            toolbarSlot={<ToolbarPlugin />}
+          />
+        </div>
       </div>
     );
   }
