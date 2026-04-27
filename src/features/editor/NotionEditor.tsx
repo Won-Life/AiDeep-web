@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   useCallback,
@@ -6,15 +6,15 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from "react";
-import { LexicalComposer } from "@lexical/react/LexicalComposer";
-import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
-import { ContentEditable } from "@lexical/react/LexicalContentEditable";
-import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
-import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
-import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+} from 'react';
+import { LexicalComposer } from '@lexical/react/LexicalComposer';
+import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { ContentEditable } from '@lexical/react/LexicalContentEditable';
+import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
+import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
+import { ListPlugin } from '@lexical/react/LexicalListPlugin';
+import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
   $getRoot,
   $getSelection,
@@ -26,7 +26,7 @@ import {
   DecoratorNode,
   type NodeKey,
   type SerializedLexicalNode,
-} from "lexical";
+} from 'lexical';
 import {
   HeadingNode,
   QuoteNode,
@@ -34,7 +34,7 @@ import {
   $isHeadingNode,
   $createQuoteNode,
   $isQuoteNode,
-} from "@lexical/rich-text";
+} from '@lexical/rich-text';
 import {
   ListNode,
   ListItemNode,
@@ -42,33 +42,36 @@ import {
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
   REMOVE_LIST_COMMAND,
-} from "@lexical/list";
+} from '@lexical/list';
 import {
   CodeNode,
   CodeHighlightNode,
   $createCodeNode,
   $isCodeNode,
-} from "@lexical/code";
-import { LinkNode, AutoLinkNode } from "@lexical/link";
-import { TRANSFORMERS } from "@lexical/markdown";
-import { $setBlocksType } from "@lexical/selection";
-import { $getNearestNodeOfType, mergeRegister } from "@lexical/utils";
-import { CollaborationPlugin } from "@lexical/react/LexicalCollaborationPlugin";
-import { LexicalCollaboration } from "@lexical/react/LexicalCollaborationContext";
-import * as Y from "yjs";
-import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
+} from '@lexical/code';
+import { LinkNode, AutoLinkNode } from '@lexical/link';
+import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
+import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
+import { TRANSFORMERS } from '@lexical/markdown';
+import { MarkdownPastePlugin } from './plugins/MarkdownPastePlugin';
+import { $setBlocksType } from '@lexical/selection';
+import { $getNearestNodeOfType, mergeRegister } from '@lexical/utils';
+import { CollaborationPlugin } from '@lexical/react/LexicalCollaborationPlugin';
+import { LexicalCollaboration } from '@lexical/react/LexicalCollaborationContext';
+import * as Y from 'yjs';
+import type { SocketIoYjsProvider } from '@/lib/SocketIoYjsProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type BlockType =
-  | "paragraph"
-  | "h1"
-  | "h2"
-  | "h3"
-  | "quote"
-  | "code"
-  | "bullet"
-  | "number";
+  | 'paragraph'
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'quote'
+  | 'code'
+  | 'bullet'
+  | 'number';
 
 export interface NotionEditorProps {
   nodeId: string;
@@ -91,7 +94,7 @@ class ImageNode extends DecoratorNode<ReactNode> {
   __alt: string;
 
   static getType(): string {
-    return "image";
+    return 'image';
   }
 
   static clone(node: ImageNode): ImageNode {
@@ -102,14 +105,14 @@ class ImageNode extends DecoratorNode<ReactNode> {
     return new ImageNode(serialized.src, serialized.alt);
   }
 
-  constructor(src: string, alt = "", key?: NodeKey) {
+  constructor(src: string, alt = '', key?: NodeKey) {
     super(key);
     this.__src = src;
     this.__alt = alt;
   }
 
   exportJSON(): SerializedImageNode {
-    return { type: "image", version: 1, src: this.__src, alt: this.__alt };
+    return { type: 'image', version: 1, src: this.__src, alt: this.__alt };
   }
 
   isInline(): boolean {
@@ -117,8 +120,8 @@ class ImageNode extends DecoratorNode<ReactNode> {
   }
 
   createDOM(): HTMLElement {
-    const div = document.createElement("div");
-    div.style.display = "contents";
+    const div = document.createElement('div');
+    div.style.display = 'contents';
     return div;
   }
 
@@ -133,10 +136,10 @@ class ImageNode extends DecoratorNode<ReactNode> {
         alt={this.__alt}
         draggable={false}
         style={{
-          maxWidth: "100%",
+          maxWidth: '100%',
           borderRadius: 6,
-          margin: "6px 0",
-          display: "block",
+          margin: '6px 0',
+          display: 'block',
         }}
       />
     );
@@ -147,24 +150,27 @@ class ImageNode extends DecoratorNode<ReactNode> {
 // Class names are defined in globals.css under @layer components
 
 const EDITOR_THEME = {
-  heading: { h1: "ne-h1", h2: "ne-h2", h3: "ne-h3" },
+  heading: { h1: 'ne-h1', h2: 'ne-h2', h3: 'ne-h3' },
   list: {
-    ul: "ne-ul",
-    ol: "ne-ol",
-    listitem: "ne-li",
-    listitemChecked: "ne-li-checked",
-    listitemUnchecked: "ne-li-unchecked",
-    nested: { listitem: "ne-nested-li" },
+    ul: 'ne-ul',
+    ol: 'ne-ol',
+    listitem: 'ne-li',
+    listitemChecked: 'ne-li-checked',
+    listitemUnchecked: 'ne-li-unchecked',
+    nested: { listitem: 'ne-nested-li' },
   },
-  quote: "ne-quote",
-  code: "ne-code-block",
+  quote: 'ne-quote',
+  code: 'ne-code-block',
+  table: 'ne-table',
+  tableCell: 'ne-table-cell',
+  tableCellHeader: 'ne-table-cell-header',
   text: {
-    bold: "ne-bold",
-    italic: "ne-italic",
-    underline: "ne-underline",
-    strikethrough: "ne-strike",
-    underlineStrikethrough: "ne-underline ne-strike",
-    code: "ne-inline-code",
+    bold: 'ne-bold',
+    italic: 'ne-italic',
+    underline: 'ne-underline',
+    strikethrough: 'ne-strike',
+    underlineStrikethrough: 'ne-underline ne-strike',
+    code: 'ne-inline-code',
   },
 };
 
@@ -178,19 +184,22 @@ const REGISTERED_NODES = [
   LinkNode,
   AutoLinkNode,
   ImageNode,
+  TableNode,
+  TableRowNode,
+  TableCellNode,
 ];
 
 // ─── Block type metadata ──────────────────────────────────────────────────────
 
 const BLOCK_OPTIONS = [
-  { label: "텍스트", value: "paragraph" as BlockType, icon: "T" },
-  { label: "제목 1", value: "h1" as BlockType, icon: "H1" },
-  { label: "제목 2", value: "h2" as BlockType, icon: "H2" },
-  { label: "제목 3", value: "h3" as BlockType, icon: "H3" },
-  { label: "인용", value: "quote" as BlockType, icon: "❝" },
-  { label: "코드", value: "code" as BlockType, icon: "</>" },
-  { label: "글머리 목록", value: "bullet" as BlockType, icon: "•" },
-  { label: "번호 목록", value: "number" as BlockType, icon: "1." },
+  { label: '텍스트', value: 'paragraph' as BlockType, icon: 'T' },
+  { label: '제목 1', value: 'h1' as BlockType, icon: 'H1' },
+  { label: '제목 2', value: 'h2' as BlockType, icon: 'H2' },
+  { label: '제목 3', value: 'h3' as BlockType, icon: 'H3' },
+  { label: '인용', value: 'quote' as BlockType, icon: '❝' },
+  { label: '코드', value: 'code' as BlockType, icon: '</>' },
+  { label: '글머리 목록', value: 'bullet' as BlockType, icon: '•' },
+  { label: '번호 목록', value: 'number' as BlockType, icon: '1.' },
 ] as const;
 
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
@@ -202,7 +211,7 @@ export function ToolbarPlugin() {
   const [isUnderline, setIsUnderline] = useState(false);
   const [isStrikethrough, setIsStrikethrough] = useState(false);
   const [isCode, setIsCode] = useState(false);
-  const [blockType, setBlockType] = useState<BlockType>("paragraph");
+  const [blockType, setBlockType] = useState<BlockType>('paragraph');
   const [showBlockMenu, setShowBlockMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -210,30 +219,30 @@ export function ToolbarPlugin() {
     const selection = $getSelection();
     if (!$isRangeSelection(selection)) return;
 
-    setIsBold(selection.hasFormat("bold"));
-    setIsItalic(selection.hasFormat("italic"));
-    setIsUnderline(selection.hasFormat("underline"));
-    setIsStrikethrough(selection.hasFormat("strikethrough"));
-    setIsCode(selection.hasFormat("code"));
+    setIsBold(selection.hasFormat('bold'));
+    setIsItalic(selection.hasFormat('italic'));
+    setIsUnderline(selection.hasFormat('underline'));
+    setIsStrikethrough(selection.hasFormat('strikethrough'));
+    setIsCode(selection.hasFormat('code'));
 
     const anchorNode = selection.anchor.getNode();
     const element =
-      anchorNode.getKey() === "root"
+      anchorNode.getKey() === 'root'
         ? anchorNode
         : anchorNode.getTopLevelElementOrThrow();
 
     if ($isListNode(element)) {
       const parentList = $getNearestNodeOfType<ListNode>(anchorNode, ListNode);
       const listType = parentList?.getListType() ?? element.getListType();
-      setBlockType(listType === "bullet" ? "bullet" : "number");
+      setBlockType(listType === 'bullet' ? 'bullet' : 'number');
     } else if ($isHeadingNode(element)) {
       setBlockType(element.getTag() as BlockType);
     } else if ($isQuoteNode(element)) {
-      setBlockType("quote");
+      setBlockType('quote');
     } else if ($isCodeNode(element)) {
-      setBlockType("code");
+      setBlockType('code');
     } else {
-      setBlockType("paragraph");
+      setBlockType('paragraph');
     }
   }, []);
 
@@ -260,20 +269,20 @@ export function ToolbarPlugin() {
         setShowBlockMenu(false);
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const dispatchFormat = (
-    format: "bold" | "italic" | "underline" | "strikethrough" | "code",
+    format: 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code',
   ) => editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
 
   const applyBlockType = (type: BlockType) => {
     setShowBlockMenu(false);
 
-    if (type === "bullet") {
+    if (type === 'bullet') {
       editor.dispatchCommand(
-        blockType === "bullet"
+        blockType === 'bullet'
           ? REMOVE_LIST_COMMAND
           : INSERT_UNORDERED_LIST_COMMAND,
         undefined,
@@ -281,9 +290,9 @@ export function ToolbarPlugin() {
       return;
     }
 
-    if (type === "number") {
+    if (type === 'number') {
       editor.dispatchCommand(
-        blockType === "number"
+        blockType === 'number'
           ? REMOVE_LIST_COMMAND
           : INSERT_ORDERED_LIST_COMMAND,
         undefined,
@@ -295,25 +304,25 @@ export function ToolbarPlugin() {
       const selection = $getSelection();
       if (!$isRangeSelection(selection)) return;
 
-      if (type === "paragraph") {
+      if (type === 'paragraph') {
         $setBlocksType(selection, () => $createParagraphNode());
-      } else if (type === "h1" || type === "h2" || type === "h3") {
+      } else if (type === 'h1' || type === 'h2' || type === 'h3') {
         $setBlocksType(selection, () => $createHeadingNode(type));
-      } else if (type === "quote") {
+      } else if (type === 'quote') {
         $setBlocksType(selection, () => $createQuoteNode());
-      } else if (type === "code") {
+      } else if (type === 'code') {
         $setBlocksType(selection, () => $createCodeNode());
       }
     });
   };
 
   const currentLabel =
-    BLOCK_OPTIONS.find((b) => b.value === blockType)?.label ?? "텍스트";
+    BLOCK_OPTIONS.find((b) => b.value === blockType)?.label ?? '텍스트';
 
   return (
     <div
       className="nodrag nowheel flex items-center gap-0.5 px-2 py-1.5 shrink-0 select-none"
-      style={{ borderBottom: "1px solid #EBEBEB" }}
+      style={{ borderBottom: '1px solid #EBEBEB' }}
       onMouseDown={(e) => e.preventDefault()} // keep editor focus
     >
       {/* ── Block type dropdown ── */}
@@ -322,7 +331,7 @@ export function ToolbarPlugin() {
           type="button"
           onClick={() => setShowBlockMenu((v) => !v)}
           className="flex items-center gap-1 px-2 h-6 rounded cursor-pointer transition-colors hover:bg-[#F3F3F3]"
-          style={{ fontSize: 11, color: "#555", fontWeight: 500 }}
+          style={{ fontSize: 11, color: '#555', fontWeight: 500 }}
         >
           {currentLabel}
           <svg
@@ -342,9 +351,9 @@ export function ToolbarPlugin() {
           <div
             className="absolute top-full left-0 mt-0.5 bg-white rounded-lg py-1 z-[9999]"
             style={{
-              border: "1px solid #E8E8E8",
+              border: '1px solid #E8E8E8',
               width: 160,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.09)",
+              boxShadow: '0 4px 16px rgba(0,0,0,0.09)',
             }}
           >
             {BLOCK_OPTIONS.map(({ label, value, icon }) => (
@@ -353,11 +362,11 @@ export function ToolbarPlugin() {
                 type="button"
                 onClick={() => applyBlockType(value)}
                 className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left cursor-pointer hover:bg-[#F5F5F5] transition-colors"
-                style={{ color: blockType === value ? "#111" : "#555" }}
+                style={{ color: blockType === value ? '#111' : '#555' }}
               >
                 <span
                   className="shrink-0 flex items-center justify-center font-mono"
-                  style={{ width: 18, fontSize: 10, color: "#AAA" }}
+                  style={{ width: 18, fontSize: 10, color: '#AAA' }}
                 >
                   {icon}
                 </span>
@@ -377,46 +386,46 @@ export function ToolbarPlugin() {
 
       {/* ── Divider ── */}
       <div
-        style={{ width: 1, height: 14, background: "#E0E0E0", margin: "0 4px" }}
+        style={{ width: 1, height: 14, background: '#E0E0E0', margin: '0 4px' }}
       />
 
       {/* ── Text format buttons ── */}
       {(
         [
           {
-            format: "bold" as const,
-            label: "B",
+            format: 'bold' as const,
+            label: 'B',
             active: isBold,
-            title: "굵게 ⌘B",
+            title: '굵게 ⌘B',
             extraStyle: { fontWeight: 700 },
           },
           {
-            format: "italic" as const,
-            label: "I",
+            format: 'italic' as const,
+            label: 'I',
             active: isItalic,
-            title: "기울임 ⌘I",
-            extraStyle: { fontStyle: "italic" },
+            title: '기울임 ⌘I',
+            extraStyle: { fontStyle: 'italic' },
           },
           {
-            format: "underline" as const,
-            label: "U",
+            format: 'underline' as const,
+            label: 'U',
             active: isUnderline,
-            title: "밑줄 ⌘U",
-            extraStyle: { textDecoration: "underline" },
+            title: '밑줄 ⌘U',
+            extraStyle: { textDecoration: 'underline' },
           },
           {
-            format: "strikethrough" as const,
-            label: "S",
+            format: 'strikethrough' as const,
+            label: 'S',
             active: isStrikethrough,
-            title: "취소선",
-            extraStyle: { textDecoration: "line-through" },
+            title: '취소선',
+            extraStyle: { textDecoration: 'line-through' },
           },
           {
-            format: "code" as const,
-            label: "<>",
+            format: 'code' as const,
+            label: '<>',
             active: isCode,
-            title: "인라인 코드",
-            extraStyle: { fontFamily: "monospace", fontSize: 10 },
+            title: '인라인 코드',
+            extraStyle: { fontFamily: 'monospace', fontSize: 10 },
           },
         ] as const
       ).map(({ format, label, active, title, extraStyle }) => (
@@ -430,23 +439,22 @@ export function ToolbarPlugin() {
             width: 26,
             height: 26,
             fontSize: 11,
-            background: active ? "#E8E8E8" : "transparent",
-            color: active ? "#1A1A1A" : "#AAAAAA",
+            background: active ? '#E8E8E8' : 'transparent',
+            color: active ? '#1A1A1A' : '#AAAAAA',
             ...extraStyle,
           }}
           onMouseEnter={(e) => {
             if (!active)
-              (e.currentTarget as HTMLElement).style.background = "#F3F3F3";
+              (e.currentTarget as HTMLElement).style.background = '#F3F3F3';
           }}
           onMouseLeave={(e) => {
             if (!active)
-              (e.currentTarget as HTMLElement).style.background = "transparent";
+              (e.currentTarget as HTMLElement).style.background = 'transparent';
           }}
         >
           {label}
         </button>
       ))}
-
     </div>
   );
 }
@@ -465,7 +473,7 @@ function TitleTrackerPlugin({
     return editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         const firstChild = $getRoot().getFirstChild();
-        const title = firstChild ? firstChild.getTextContent().trim() : "";
+        const title = firstChild ? firstChild.getTextContent().trim() : '';
         if (title !== prevTitleRef.current) {
           prevTitleRef.current = title;
           onChange(title);
@@ -491,7 +499,7 @@ export function NotionEditor({
     namespace: `ne-${nodeId}`,
     theme: EDITOR_THEME,
     nodes: REGISTERED_NODES,
-    onError: (error: Error) => console.error("[NotionEditor]", error),
+    onError: (error: Error) => console.error('[NotionEditor]', error),
     // YJS 모드 전용 — CollaborationPlugin이 Y.Doc에서 상태를 가져오므로 null
     editorState: null,
   };
@@ -514,46 +522,49 @@ export function NotionEditor({
         <LexicalComposer initialConfig={initialConfig}>
           {toolbarSlot}
 
-        {/* min-h-0: flex child가 컨텐츠 크기 이하로 수축 가능 → overflow-y-auto 작동 */}
-        <div className="relative flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-          <RichTextPlugin
-            contentEditable={
-              <ContentEditable
-                className="ne-root nodrag nowheel px-4 py-3"
-                spellCheck
-              />
-            }
-            placeholder={
-              <div
-                className="absolute top-3 left-4 pointer-events-none select-none"
-                style={{ color: "#C4C4C4", fontSize: 13 }}
-              >
-                노트를 작성하세요…&nbsp;
-                <span style={{ color: "#D5D5D5" }}>(마크다운 단축키 지원)</span>
-              </div>
-            }
-            ErrorBoundary={LexicalErrorBoundary}
-          />
-        </div>
+          {/* min-h-0: flex child가 컨텐츠 크기 이하로 수축 가능 → overflow-y-auto 작동 */}
+          <div className="relative flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+            <RichTextPlugin
+              contentEditable={
+                <ContentEditable
+                  className="ne-root nodrag nowheel px-4 py-3"
+                  spellCheck
+                />
+              }
+              placeholder={
+                <div
+                  className="absolute top-3 left-4 pointer-events-none select-none"
+                  style={{ color: '#C4C4C4', fontSize: 13 }}
+                >
+                  노트를 작성하세요…&nbsp;
+                  <span style={{ color: '#D5D5D5' }}>
+                    (마크다운 단축키 지원)
+                  </span>
+                </div>
+              }
+              ErrorBoundary={LexicalErrorBoundary}
+            />
+          </div>
+          <TablePlugin />
+          <ListPlugin />
+          <CheckListPlugin />
+          <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+          <MarkdownPastePlugin />
 
-        <ListPlugin />
-        <CheckListPlugin />
-        <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+          {onFirstLineChange && (
+            <TitleTrackerPlugin onChange={onFirstLineChange} />
+          )}
 
-        {onFirstLineChange && (
-          <TitleTrackerPlugin onChange={onFirstLineChange} />
-        )}
-
-        {collabProvider && (
-          <CollaborationPlugin
-            id={`yjs-${nodeId}`}
-            providerFactory={providerFactory}
-            shouldBootstrap={false}
-            username={username}
-            cursorColor={cursorColor}
-          />
-        )}
-      </LexicalComposer>
+          {collabProvider && (
+            <CollaborationPlugin
+              id={`yjs-${nodeId}`}
+              providerFactory={providerFactory}
+              shouldBootstrap={false}
+              username={username}
+              cursorColor={cursorColor}
+            />
+          )}
+        </LexicalComposer>
       </LexicalCollaboration>
     </div>
   );
