@@ -353,6 +353,27 @@
     color: #D44;
   }
 
+  /* ── Table ── */
+  .ne-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+    table-layout: fixed;
+  }
+  .ne-table-cell {
+    border: 1px solid rgb(var(--ds-gray-800));
+    padding: 6px 12px;
+    vertical-align: top;
+    min-width: 60px;
+  }
+  .ne-table-cell-header {
+    border: 1px solid rgb(var(--ds-gray-700));
+    padding: 6px 12px;
+    vertical-align: top;
+    background: rgb(var(--ds-gray-900));
+    font-weight: 600;
+  }
+
   /* ── Editor root ── */
   .ne-root {
     outline: none;
