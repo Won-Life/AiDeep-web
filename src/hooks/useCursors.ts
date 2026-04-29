@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { onCursorMove, onCursorLeave } from "@/api/ws";
 import type { CursorPayload } from "@/api/ws";
 
@@ -11,15 +11,18 @@ export type CursorsMap = Record<string, CursorPayload>;
  *
  * Must be called AFTER subscribeToWorkspace (socket must exist).
  */
-export function useCursors(workspaceId: string): CursorsMap {
+export function useCursors(
+  workspaceId: string,
+  currentUserId: string,
+): CursorsMap {
   const [cursors, setCursors] = useState<CursorsMap>({});
-  const cursorsRef = useRef(cursors);
-  cursorsRef.current = cursors;
 
   useEffect(() => {
     if (!workspaceId) return;
 
     const cleanupMove = onCursorMove((payload: CursorPayload) => {
+      if (payload.userId === currentUserId) return;
+
       setCursors((prev) => ({
         ...prev,
         [payload.userId]: payload,
@@ -39,7 +42,7 @@ export function useCursors(workspaceId: string): CursorsMap {
       cleanupLeave();
       setCursors({});
     };
-  }, [workspaceId]);
+  }, [workspaceId, currentUserId]);
 
   return cursors;
 }

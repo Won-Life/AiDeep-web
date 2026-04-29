@@ -710,57 +710,43 @@ function GraphCanvasInner({
   const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
-  const [isGrabbing, setIsGrabbing] = useState(false);
-  const [isHoveringNode, setIsHoveringNode] = useState(false);
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
   const isConnectingRef = useRef(false);
   const lastLiveEmitRef = useRef(0);
   const LIVE_EMIT_INTERVAL = 50; // ms
 
   // ─── Cursor sharing ──────────────────────────────────────
-  const remoteCursors = useCursors(workspaceId);
-  const [selfCursor, setSelfCursor] = useState<
-    import('@/api/ws').CursorPayload | null
-  >(null);
+  const cursors = useCursors(workspaceId, currentUserId);
   const lastCursorEmitRef = useRef(0);
   const CURSOR_EMIT_INTERVAL = 30; // ms
 
-  // 타인 커서 + 본인 커서 합산
-  const cursors = selfCursor
-    ? { ...remoteCursors, [currentUserId]: selfCursor }
-    : remoteCursors;
-
   // document 레벨 pointermove — 드래그/모든 마우스 동작에서도 동작
   const screenToFlowPositionRef = useRef(screenToFlowPosition);
-  screenToFlowPositionRef.current = screenToFlowPosition;
   const cursorMetaRef = useRef({
     workspaceId,
-    currentUserId,
     currentUserName,
     cursorColor,
   });
-  cursorMetaRef.current = {
-    workspaceId,
-    currentUserId,
-    currentUserName,
-    cursorColor,
-  };
+
+  useEffect(() => {
+    screenToFlowPositionRef.current = screenToFlowPosition;
+  }, [screenToFlowPosition]);
+
+  useEffect(() => {
+    cursorMetaRef.current = {
+      workspaceId,
+      currentUserName,
+      cursorColor,
+    };
+  }, [workspaceId, currentUserName, cursorColor]);
 
   useEffect(() => {
     const handler = (event: PointerEvent) => {
-      const { workspaceId, currentUserId, currentUserName, cursorColor } =
+      const { workspaceId, currentUserName, cursorColor } =
         cursorMetaRef.current;
       const flowPos = screenToFlowPositionRef.current({
         x: event.clientX,
         y: event.clientY,
-      });
-
-      setSelfCursor({
-        userId: currentUserId,
-        x: flowPos.x,
-        y: flowPos.y,
-        userName: currentUserName,
-        color: cursorColor,
       });
 
       const now = Date.now();
@@ -1709,23 +1695,13 @@ function GraphCanvasInner({
     setHoveredNodeId(null);
   }, []);
 
-  const onNodeMouseEnter = useCallback(() => {
-    if (!isDraggingRef.current) setIsHoveringNode(true);
-  }, []);
-
-  const onNodeMouseLeave = useCallback(() => {
-    setIsHoveringNode(false);
-  }, []);
-
   const onNodeDragStart = useCallback(
     (event: React.MouseEvent, draggedNode: Node) => {
       // hover 상태 초기화
       setHoveredNodeId(null);
-      setIsHoveringNode(false);
 
       // D3 force simulation 시작
       isDraggingRef.current = true;
-      setIsGrabbing(true);
 
       // 드래그 노드와 자식들을 함께 고정
       const childrenIds = getDescendantIds(draggedNode.id, edges);
@@ -2042,7 +2018,6 @@ function GraphCanvasInner({
 
       // D3 시뮬레이션 종료: fx, fy 해제 및 alphaTarget(0) 설정
       isDraggingRef.current = false;
-      setIsGrabbing(false);
 
       // 드래그 노드와 자식들의 fx, fy 모두 해제
       const childrenIds = getDescendantIds(draggedNode.id, edges);
@@ -2107,7 +2082,7 @@ function GraphCanvasInner({
   }, [focusedNodeId, nodes, setCenter]);
 
   return (
-    <div className="relative w-full h-full bg-background cursor-none">
+    <div className="relative w-full h-full bg-background">
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
@@ -2121,8 +2096,6 @@ function GraphCanvasInner({
         onConnectEnd={onConnectEnd}
         onNodeClick={onNodeClick}
         onNodeContextMenu={onNodeContextMenu}
-        onNodeMouseEnter={onNodeMouseEnter}
-        onNodeMouseLeave={onNodeMouseLeave}
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
@@ -2138,12 +2111,7 @@ function GraphCanvasInner({
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
-      <CursorOverlay
-        cursors={cursors}
-        currentUserId={currentUserId}
-        isGrabbing={isGrabbing}
-        isHoveringNode={isHoveringNode}
-      />
+      <CursorOverlay cursors={cursors} />
       {isArchiveModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[360px] rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
