@@ -716,11 +716,17 @@ function GraphCanvasInner({
   const LIVE_EMIT_INTERVAL = 50; // ms
 
   // ─── Cursor sharing ──────────────────────────────────────
+  /*
+    CONTEXT:
+      본인 커서: 브라우저 기본 커서를 그대로 사용.
+               WS round-trip을 거치면 필연적으로 지연이 발생하고, 손 아이콘 등 커스텀 상태를 오버레이로 그리는 복잡성 대비 실익이 없어 제거함.
+      상대방 커서: WS로 수신한 위치를 CursorOverlay에서 PointerIcon + 이름 뱃지로 렌더링.
+  */
   const cursors = useCursors(workspaceId, currentUserId);
   const lastCursorEmitRef = useRef(0);
   const CURSOR_EMIT_INTERVAL = 30; // ms
 
-  // document 레벨 pointermove — 드래그/모든 마우스 동작에서도 동작
+  // TODO: 워크스페이스에 혼자 있을 때는 emit을 끊는 최적화 가능 (현재는 항상 emit)
   const screenToFlowPositionRef = useRef(screenToFlowPosition);
   const cursorMetaRef = useRef({
     workspaceId,
@@ -760,7 +766,7 @@ function GraphCanvasInner({
         cursorColor,
       );
     };
-
+    // document 레벨 pointermove > 캔버스 외부로 드래그 및 다른 마우스 동작에서도 상대방 커서 추적 가능하도록
     document.addEventListener('pointermove', handler);
     return () => document.removeEventListener('pointermove', handler);
   }, []); // 마운트/언마운트 시 1회만 등록 — 최신 값은 ref로 접근
