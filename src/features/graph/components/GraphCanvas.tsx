@@ -589,7 +589,7 @@ export function convertToReactFlow(
     data: {},
   }));
 
-  // 각 노드의 handleSide를 부모 위치 기준으로 설정
+  // 각 노드의 handleSide를 부모 노드 위치 기준으로 설정
   const nodesWithHandleSide: Node[] = nodes.map((node) => {
     if (node.data?.isMain) return node;
     const parentEdge = rawEdges.find((e) => e.target === node.id);
@@ -1266,7 +1266,7 @@ function GraphCanvasInner({
       const swapped = sourceId !== params.source;
       const srcNode = nodes.find((n) => n.id === sourceId);
       const tgtNode = nodes.find((n) => n.id === targetId);
-      //Q: 이 부분 동작 무엇? fallback은 뭘 의미? resolvedSourceHandle은 무슨 뜻? swapped는 무슨 뜻?
+
       const targetNodeSideRelativeToParent =
         srcNode && tgtNode
           ? getTargetSideRelativeToParent(
