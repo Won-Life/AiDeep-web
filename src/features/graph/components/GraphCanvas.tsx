@@ -452,8 +452,8 @@ function resolveHandleId(
   role: 'source' | 'target',
   side: 'left' | 'right',
 ): string {
-  // source 핸들: side 방향 (예: side="right" → source-right)
-  // target 핸들: source의 반대 방향 (예: side="right"이면 target이 source 오른쪽에 있으므로 → target-left)
+  // source 핸들: side 방향과 같은 방향에 위치 (예: side="right" → source-right)
+  // target 핸들: source의 반대 방향에 위치 (예: side="right"이면 target이 source 오른쪽에 있으므로 → target-left)
   if (role === 'target') {
     return `target-${side === 'left' ? 'right' : 'left'}`;
   }
