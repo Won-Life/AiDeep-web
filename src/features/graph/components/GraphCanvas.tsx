@@ -328,7 +328,7 @@ function getForcedOutboundSideForSubNodeInMainGraph(
     : undefined;
   const referenceX = parentNode?.position.x ?? mainNode.position.x;
 
-  // main(또는 parent) 쪽의 반대 방향(바깥쪽)으로만 새 연결을 허용
+  // root 노드의 반대 방향(바깥쪽)으로만 새 연결을 허용
   return getTargetSideRelativeToParent(node.position.x, referenceX);
 }
 
