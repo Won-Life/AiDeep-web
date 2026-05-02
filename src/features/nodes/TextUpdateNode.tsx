@@ -35,8 +35,7 @@ export type NodeView = {
   color?: string;
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
-  sideRelativeToParent?: 'left' | 'right';
-  handleSide?: 'left' | 'right'; // Canvas가 위치 변경마다 재계산하는 핸들 방향
+  handleSide?: 'left' | 'right';
   hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
   panelZIndex?: number; // 패널 z-index (포커스된 패널이 위)
@@ -67,11 +66,9 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
     userName,
     userColor: cursorColor,
   });
-
-  // sideRelativeToParent는 최초 생성 시점에만 설정되므로 handleSide를 사용
-  const sideRelativeToParent = (nodeData.handleSide ??
-    nodeData.sideRelativeToParent ??
-    'right') as 'left' | 'right';
+  const sideRelativeToParent = (nodeData.handleSide ?? 'right') as
+    | 'left'
+    | 'right';
   const sourceHandlePosition =
     sideRelativeToParent === 'left' ? Position.Left : Position.Right;
   const viewers = (nodeData.viewers ?? []) as NodeViewer[];
@@ -105,9 +102,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const containerStyle = isMain
     ? {
         backgroundColor: nodeData.color || '#ffffff',
-        borderColor: isHovered
-          ? '#93C5FD'
-          : viewerBorderColor ?? EDGE_COLOR,
+        borderColor: isHovered ? '#93C5FD' : (viewerBorderColor ?? EDGE_COLOR),
         borderWidth: isHovered || viewerBorderColor ? '2px' : '1px',
       }
     : {
@@ -185,7 +180,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           <NodeContextMenu />
         </div>
       )}
-      
+
       {/* 노션 에디터 패널 - 노드 뒤에 배치 */}
       {showInputBox && (
         <NodeEditorPanel
