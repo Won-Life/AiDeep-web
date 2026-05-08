@@ -245,7 +245,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
               type="target"
               position={Position.Left}
               id="target-left"
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              isConnectableStart={false}
+              style={{ opacity: 0 }}
             />
             <Handle
               type="source"
@@ -257,7 +258,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
               type="target"
               position={Position.Right}
               id="target-right"
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              isConnectableStart={false}
+              style={{ opacity: 0 }}
             />
           </>
         ) : (
@@ -274,7 +276,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
                   ? 'target-left'
                   : 'target-right'
               }
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              isConnectableStart={false}
+              style={{ opacity: 0 }}
             />
             <Handle
               type="source"
