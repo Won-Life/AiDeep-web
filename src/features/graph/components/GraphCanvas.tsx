@@ -2020,27 +2020,6 @@ function GraphCanvasInner({
         }
       }
 
-      // hover-snap 없이 드래그가 끝난 경우 최종 위치 기준으로 handleSide 갱신
-      if (!hoveredNodeId && !draggedNode.data?.isMain) {
-        const parentId = getParentId(draggedNode.id, edges);
-        const parentNode = parentId
-          ? nodes.find((n) => n.id === parentId)
-          : null;
-        if (parentNode) {
-          const newSide = getTargetSideRelativeToParent(
-            draggedNode.position.x,
-            parentNode.position.x,
-          );
-          setNodes((currentNodes) =>
-            currentNodes.map((node) =>
-              node.id === draggedNode.id
-                ? { ...node, data: { ...node.data, handleSide: newSide } }
-                : node,
-            ),
-          );
-        }
-      }
-
       // D3 시뮬레이션 종료: fx, fy 해제 및 alphaTarget(0) 설정
       isDraggingRef.current = false;
 
