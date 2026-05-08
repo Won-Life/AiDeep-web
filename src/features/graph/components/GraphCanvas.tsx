@@ -1130,6 +1130,13 @@ function GraphCanvasInner({
         return false;
       }
 
+      // 같은 그래프 내 노드끼리는 연결 불가 (main ↔ 서브 재연결 방지)
+      const sourceMain = getMainNodeForSubtree(connection.source, nodes, edges);
+      const targetMain = getMainNodeForSubtree(connection.target, nodes, edges);
+      if (sourceMain && targetMain && sourceMain.id === targetMain.id) {
+        return false;
+      }
+
       return true;
     },
     [nodes, edges],
