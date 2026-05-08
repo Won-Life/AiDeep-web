@@ -393,14 +393,16 @@ function adjustPositionRelativeToSource(
   nodes: Node[],
   edges: Edge[],
   excludeNodeId?: string,
+  targetNode?: Node | null,
 ): { x: number; y: number } {
-  const sourceWidth = sourceNode.width ?? NODE_WIDTH;
+  const sourceWidth = sourceNode?.width ?? NODE_WIDTH;
+  const targetWidth = targetNode?.width ?? NODE_WIDTH;
 
   // 연결 방향에 따라 X 좌표 계산
   const targetX =
     side === 'right'
       ? sourceNode.position.x + sourceWidth + DEFAULT_NODE_DISTANCE
-      : sourceNode.position.x - NODE_WIDTH - DEFAULT_NODE_DISTANCE;
+      : sourceNode.position.x - targetWidth - DEFAULT_NODE_DISTANCE;
 
   const siblingYs = edges
     .filter(
