@@ -472,7 +472,11 @@ function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
     nodes,
     edges,
   );
+  // target.data.handleSide는 topology 변경 시점(connect/drag-stop)에만 갱신되므로
+  // 드래그 중 position이 바뀌어도 sourceHandle/targetHandle이 유지되도록 한다.
+  const storedSide = target.data?.handleSide as 'left' | 'right' | undefined;
   const side =
+    storedSide ??
     forcedSourceSide ??
     getTargetSideRelativeToParent(target.position.x, source.position.x);
   const sourceHandle = resolveHandleId('source', side);
@@ -540,6 +544,42 @@ function mirrorSubtree(
   return next;
 }
 
+function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
+  return nodes.map((node) => {
+    if (node.data?.isMain) return node;
+
+    // Case 1: target 노드 (부모가 있음) → incoming edge의 sourceHandle로 방향 결정
+    const incomingEdge = edges.find((e) => e.target === node.id);
+    if (incomingEdge) {
+      const side: 'left' | 'right' | undefined =
+        incomingEdge.sourceHandle?.includes('right')
+          ? 'right'
+          : incomingEdge.sourceHandle?.includes('left')
+            ? 'left'
+            : undefined;
+      return {
+        ...node,
+        data: { ...node.data, handleSide: side, hasParent: true },
+      };
+    }
+
+    // Case 2: source 전용 노드 (부모 없음) → outgoing edges의 sourceHandle로 방향 결정
+    const outgoingEdges = edges.filter((e) => e.source === node.id);
+    if (outgoingEdges.length === 0) return node;
+
+    const sides = outgoingEdges.map((e) =>
+      e.sourceHandle?.includes('right')
+        ? ('right' as const)
+        : ('left' as const),
+    );
+    const allSame = sides.every((s) => s === sides[0]);
+    return {
+      ...node,
+      data: { ...node.data, handleSide: allSame ? sides[0] : undefined },
+    };
+  });
+}
+
 // D3 force simulation용 노드 타입
 interface D3Node extends d3.SimulationNodeDatum {
   id: string;
@@ -591,25 +631,7 @@ export function convertToReactFlow(
     data: {},
   }));
 
-  // 각 노드의 handleSide를 부모 노드 위치 기준으로 설정
-  const nodesWithHandleSide: Node[] = nodes.map((node) => {
-    if (node.data?.isMain) return node;
-    const parentEdge = rawEdges.find((e) => e.target === node.id);
-    if (!parentEdge) return node;
-    const parentNode = nodes.find((n) => n.id === parentEdge.source);
-    if (!parentNode) return node;
-    return {
-      ...node,
-      data: {
-        ...node.data,
-        handleSide: getTargetSideRelativeToParent(
-          node.position.x,
-          parentNode.position.x,
-        ),
-        hasParent: true,
-      },
-    };
-  });
+  const nodesWithHandleSide = initializeHandleSides(nodes, rawEdges);
 
   const edges: Edge[] = rawEdges.map((edge) =>
     buildEdgePresentation(edge, nodesWithHandleSide, rawEdges),
@@ -882,13 +904,6 @@ function GraphCanvasInner({
   );
   const nodesWithCallbacks = nodes.map((node) => {
     const parentId = getParentId(node.id, edges);
-    const parentNode = parentId
-      ? nodes.find((item) => item.id === parentId)
-      : undefined;
-
-    const mainNode = getMainNodeForSubtree(node.id, nodes, edges);
-    // 자신이 속한 그래프의 main 노드 찾기
-    const referenceX = parentNode?.position.x ?? mainNode?.position.x ?? 0;
 
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시
     const hasParent = parentId !== null;
@@ -901,9 +916,7 @@ function GraphCanvasInner({
       zIndex: isContextMenuOpen ? 1000 : isEditorOpen ? 100 : undefined,
       data: {
         ...node.data,
-        handleSide: node.data?.isMain
-          ? undefined
-          : getTargetSideRelativeToParent(node.position.x, referenceX),
+        handleSide: node.data?.isMain ? undefined : node.data?.handleSide,
         hasParent, // 부모 노드 존재 여부 전달
         showInputBox: openNodeIds.includes(node.id), // 열린 노드에 입력박스 표시
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
