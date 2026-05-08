@@ -16,7 +16,7 @@ import { getMe } from "@/api/user";
 import { logout } from "@/api/auth";
 import { getWorkspaces } from "@/api/workspace";
 import { getNodes } from "@/features/graph/api/getNodes";
-import { toFlowEdge, toFlowNode } from "@/features/graph/api/mappers";
+import { convertToReactFlow } from "@/features/graph/components/GraphCanvas";
 import { useWorkspaceWS } from "@/hooks/useWorkspaceWS";
 import { type NodeView } from "@/features/nodes/TextUpdateNode";
 import { GraphLayoutProvider, useGraphLayout } from "./context";
@@ -133,8 +133,12 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
       })
       .then((data) => {
         if (!data) return;
-        if (data.nodes?.length) setNodes(data.nodes.map(toFlowNode));
-        if (data.edges?.length) setEdges(data.edges.map(toFlowEdge));
+        const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
+          data.nodes ?? [],
+          data.edges ?? [],
+        );
+        setNodes(flowNodes);
+        setEdges(flowEdges);
         setSynced(true);
       })
       .catch((err) => {
