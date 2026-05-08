@@ -332,28 +332,6 @@ function getForcedOutboundSideForSubNodeInMainGraph(
   return getTargetSideRelativeToParent(node.position.x, referenceX);
 }
 
-function resolveConnectSideFromSource(
-  sourceNode: Node,
-  targetNode: Node,
-  sourceHandle: string | null | undefined,
-  nodes: Node[],
-  edges: Edge[],
-): 'left' | 'right' {
-  const forcedSide = getForcedOutboundSideForSubNodeInMainGraph(
-    sourceNode,
-    nodes,
-    edges,
-  );
-  if (forcedSide) return forcedSide;
-
-  if (sourceHandle?.includes('left')) return 'left';
-  if (sourceHandle?.includes('right')) return 'right';
-
-  return getTargetSideRelativeToParent(
-    targetNode.position.x,
-    sourceNode.position.x,
-  );
-}
 
 function resolveSideFromEdgeHandle(
   edge: Edge,
@@ -1152,40 +1130,6 @@ function GraphCanvasInner({
         return false;
       }
 
-      // Source 노드가 부모가 있는 서브 노드인 경우, 해당 방향 핸들만 허용
-      const sourceParentId = getParentId(sourceNode.id, edges);
-      if (!sourceNode.data?.isMain && sourceParentId !== null) {
-        const sourceHandle = connection.sourceHandle;
-        const expectedHandle = `source-${sourceNode.data?.handleSide ?? 'right'}`;
-        if (sourceHandle !== expectedHandle) {
-          return false;
-        }
-      }
-
-      // main 그래프 소속 서브 노드는 main 반대 방향 핸들에서만 연결 허용
-      const forcedSourceSide = getForcedOutboundSideForSubNodeInMainGraph(
-        sourceNode,
-        nodes,
-        edges,
-      );
-      if (forcedSourceSide && connection.sourceHandle) {
-        const disallowedHandle =
-          forcedSourceSide === 'left' ? 'source-right' : 'source-left';
-        if (connection.sourceHandle === disallowedHandle) {
-          return false;
-        }
-      }
-
-      // Target 노드가 부모가 있는 서브 노드인 경우, 해당 방향 핸들만 허용
-      const targetParentId = getParentId(targetNode.id, edges);
-      if (!targetNode.data?.isMain && targetParentId !== null) {
-        const targetHandle = connection.targetHandle;
-        const expectedHandle = `target-${targetNode.data?.handleSide ?? 'right'}`;
-        if (targetHandle !== expectedHandle) {
-          return false;
-        }
-      }
-
       return true;
     },
     [nodes, edges],
@@ -1200,11 +1144,57 @@ function GraphCanvasInner({
       const sourceIsMain = sourceNode?.data?.isMain === true;
       const targetIsMain = targetNode?.data?.isMain === true;
 
-      // main 노드가 포함된 경우에만 swap: main 노드가 항상 source(부모)가 되도록 강제
-      const shouldSwap = (sourceIsMain || targetIsMain) && !sourceIsMain;
+      // 케이스 2: target은 main 그래프 하위, source는 어떤 main 그래프에도 속하지 않음
+      const targetInMainGraph =
+        getMainNodeForSubtree(params.target, nodes, edges) !== undefined;
+      const sourceInMainGraph =
+        getMainNodeForSubtree(params.source, nodes, edges) !== undefined;
+
+      // 케이스 3: source는 엣지가 없는 단독 노드, target은 1개 이상 연결됨
+      const sourceEdgeCount = edges.filter(
+        (e) => e.source === params.source || e.target === params.source,
+      ).length;
+      const targetEdgeCount = edges.filter(
+        (e) => e.source === params.target || e.target === params.target,
+      ).length;
+
+      const shouldSwap =
+        // 케이스 1: main 노드는 항상 부모
+        ((sourceIsMain || targetIsMain) && !sourceIsMain) ||
+        // 케이스 2: main 그래프에 속한 노드가 부모
+        (targetInMainGraph && !sourceInMainGraph) ||
+        // 케이스 3: 1개 이상의 연결된 노드를 가지는 노드가 부모
+        (sourceEdgeCount === 0 && targetEdgeCount > 0);
 
       const sourceId = shouldSwap ? params.target : params.source;
       const targetId = shouldSwap ? params.source : params.target;
+
+      const srcNode = nodes.find((n) => n.id === sourceId);
+      const tgtNode = nodes.find((n) => n.id === targetId);
+      const targetNodeSideRelativeToParent =
+        srcNode && tgtNode
+          ? getTargetSideRelativeToParent(
+              tgtNode.position.x,
+              srcNode.position.x,
+            )
+          : 'right';
+      // swap 후 source쪽 핸들 (loose mode: source-*, strict: source-* 또는 target-*)
+      const rawSourceHandle = shouldSwap
+        ? params.targetHandle
+        : params.sourceHandle;
+      // 핸들 이름에서 side 추출 — loose/strict/swap 조합 무관하게 'right'/'left' 포함 여부로 판별
+      const sideFromHandle: 'left' | 'right' | null = rawSourceHandle?.includes(
+        'right',
+      )
+        ? 'right'
+        : rawSourceHandle?.includes('left')
+          ? 'left'
+          : null;
+      const computedSide: 'left' | 'right' =
+        sideFromHandle ?? targetNodeSideRelativeToParent;
+      // 항상 올바른 source-*/target-* 형태로 정규화 (loose mode의 source-to-source 대응)
+      const resolvedSourceHandle = `source-${computedSide}`;
+      const resolvedTargetHandle = resolveHandleId('target', computedSide);
 
       // 연결된 target 노드 위치(및 subtree)와 색상을 source 기준으로 업데이트
       setNodes((currentNodes) => {
@@ -1213,23 +1203,14 @@ function GraphCanvasInner({
 
         let positionedNodes = currentNodes;
         if (sourceNode && targetNode) {
-          const sourceHandle =
-            sourceId === params.source ? params.sourceHandle : undefined;
-          const side = resolveConnectSideFromSource(
-            sourceNode,
-            targetNode,
-            sourceHandle,
-            currentNodes,
-            edges,
-          );
-
           const adjustedPosition = adjustPositionRelativeToSource(
             sourceNode,
             targetNode.position.y,
-            side,
+            computedSide,
             currentNodes,
             edges,
             targetNode.id,
+            targetNode,
           );
 
           const deltaX = adjustedPosition.x - targetNode.position.x;
@@ -1249,6 +1230,13 @@ function GraphCanvasInner({
                 : node,
             );
           }
+
+          // 연결 방향이 확정된 시점에 handleSide를 node.data에 저장
+          positionedNodes = positionedNodes.map((node) =>
+            node.id === targetId
+              ? { ...node, data: { ...node.data, handleSide: computedSide } }
+              : node,
+          );
         }
 
         const sourceHasCustomColor = isCustomColorNode(sourceId, currentNodes);
@@ -1275,26 +1263,6 @@ function GraphCanvasInner({
       const colorToPropagate = shouldSkipColor
         ? null
         : getGraphColor(sourceId, nodes, edges);
-
-      // API: 엣지 생성 → BE가 발급한 edgeId로 추가
-      // source/target이 swap된 경우 핸들도 교차 적용
-      const swapped = sourceId !== params.source;
-      const srcNode = nodes.find((n) => n.id === sourceId);
-      const tgtNode = nodes.find((n) => n.id === targetId);
-
-      const targetNodeSideRelativeToParent =
-        srcNode && tgtNode
-          ? getTargetSideRelativeToParent(
-              tgtNode.position.x,
-              srcNode.position.x,
-            )
-          : 'right';
-      const resolvedSourceHandle =
-        (swapped ? params.targetHandle : params.sourceHandle) ??
-        `source-${targetNodeSideRelativeToParent}`;
-      const resolvedTargetHandle =
-        (swapped ? params.sourceHandle : params.targetHandle) ??
-        `target-${targetNodeSideRelativeToParent === 'left' ? 'right' : 'left'}`;
       createEdge(
         workspaceId,
         sourceId,
@@ -1607,22 +1575,27 @@ function GraphCanvasInner({
       const shouldConnect =
         targetParent && !isInvalidConnection(targetParent.id, '__new__', edges);
 
-      const position =
+      // root 노드 → 위치 기반, depth>0 노드 → 부모의 handleSide 계승
+      const dropSide: 'left' | 'right' | undefined =
         shouldConnect && targetParent
+          ? getParentId(targetParent.id, edges) !== null
+            ? ((targetParent.data?.handleSide as 'left' | 'right' | undefined) ??
+                getTargetSideRelativeToParent(
+                  basePosition.x,
+                  targetParent.position.x,
+                ))
+            : getTargetSideRelativeToParent(
+                basePosition.x,
+                targetParent.position.x,
+              )
+          : undefined;
+
+      const position =
+        shouldConnect && targetParent && dropSide
           ? adjustPositionRelativeToSource(
               targetParent,
               basePosition.y,
-              resolveConnectSideFromSource(
-                targetParent,
-                {
-                  id: '__new__',
-                  position: basePosition,
-                  data: {},
-                } as Node,
-                undefined,
-                nodes,
-                edges,
-              ),
+              dropSide,
               nodes,
               edges,
             )
@@ -1661,20 +1634,13 @@ function GraphCanvasInner({
 
       setNodes((prev) => [...prev, newNode]);
 
-      if (shouldConnect && targetParent) {
-        const sideRelativeToParent = resolveConnectSideFromSource(
-          targetParent,
-          newNode,
-          undefined,
-          nodes,
-          edges,
-        );
+      if (shouldConnect && targetParent && dropSide) {
         createEdge(
           workspaceId,
           targetParent.id,
           nodeId,
-          `source-${sideRelativeToParent}`,
-          `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`,
+          `source-${dropSide}`,
+          `target-${dropSide === 'left' ? 'right' : 'left'}`,
         )
           .then(({ edgeId }) => {
             setEdges((prev) => {
@@ -1901,13 +1867,19 @@ function GraphCanvasInner({
           );
 
           // 2. 연결 방향 결정
-          const sideRelativeToParent = resolveConnectSideFromSource(
-            parentNode,
-            childNode,
-            undefined,
-            nodes,
-            edges,
-          );
+          // 부모 노드가 root인 경우: 자식 노드의 위치 기준 (부모 좌우 어디에 있나)
+          // 부모 노드가 depth>0 인 경우: 자식 노드는 부모 노드의 handleSide 계승 (같은 방향으로 뻗어나감)
+          const parentHasParent = getParentId(parentNode.id, edges) !== null;
+          const sideRelativeToParent: 'left' | 'right' = parentHasParent
+            ? ((parentNode.data?.handleSide as 'left' | 'right' | undefined) ??
+                getTargetSideRelativeToParent(
+                  childNode.position.x,
+                  parentNode.position.x,
+                ))
+            : getTargetSideRelativeToParent(
+                childNode.position.x,
+                parentNode.position.x,
+              );
 
           // 3. childNode 위치를 parentNode 기준으로 조정
           const adjustedPosition = adjustPositionRelativeToSource(
@@ -1917,6 +1889,7 @@ function GraphCanvasInner({
             nodes,
             edges,
             childNode.id,
+            childNode,
           );
 
           // draggedNode가 child인 경우에만 finalPosition 갱신
@@ -1933,6 +1906,16 @@ function GraphCanvasInner({
             const affectedNodeIds = new Set([childNode.id, ...childrenIds]);
 
             return currentNodes.map((node) => {
+              if (node.id === childNode.id) {
+                return {
+                  ...node,
+                  position: {
+                    x: node.position.x + deltaX,
+                    y: node.position.y + deltaY,
+                  },
+                  data: { ...node.data, handleSide: sideRelativeToParent },
+                };
+              }
               if (affectedNodeIds.has(node.id)) {
                 return {
                   ...node,
@@ -1989,8 +1972,8 @@ function GraphCanvasInner({
           const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
           createEdge(
             workspaceId,
-            newParent.id,
-            draggedNode.id,
+            parentNode.id,
+            childNode.id,
             `source-${sideRelativeToParent}`,
             `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`,
           )
@@ -1999,8 +1982,8 @@ function GraphCanvasInner({
                 if (prev.some((e) => e.id === edgeId)) return prev;
                 const rawEdge: Edge = {
                   id: edgeId,
-                  source: newParent.id,
-                  target: draggedNode.id,
+                  source: parentNode.id,
+                  target: childNode.id,
                 };
                 return [
                   ...prev,
@@ -2034,6 +2017,27 @@ function GraphCanvasInner({
               graphColor,
             );
           });
+        }
+      }
+
+      // hover-snap 없이 드래그가 끝난 경우 최종 위치 기준으로 handleSide 갱신
+      if (!hoveredNodeId && !draggedNode.data?.isMain) {
+        const parentId = getParentId(draggedNode.id, edges);
+        const parentNode = parentId
+          ? nodes.find((n) => n.id === parentId)
+          : null;
+        if (parentNode) {
+          const newSide = getTargetSideRelativeToParent(
+            draggedNode.position.x,
+            parentNode.position.x,
+          );
+          setNodes((currentNodes) =>
+            currentNodes.map((node) =>
+              node.id === draggedNode.id
+                ? { ...node, data: { ...node.data, handleSide: newSide } }
+                : node,
+            ),
+          );
         }
       }
 
