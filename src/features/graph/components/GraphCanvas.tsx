@@ -332,7 +332,6 @@ function getForcedOutboundSideForSubNodeInMainGraph(
   return getTargetSideRelativeToParent(node.position.x, referenceX);
 }
 
-
 function resolveSideFromEdgeHandle(
   edge: Edge,
   sourceNode: Node,
@@ -1586,11 +1585,14 @@ function GraphCanvasInner({
       const dropSide: 'left' | 'right' | undefined =
         shouldConnect && targetParent
           ? getParentId(targetParent.id, edges) !== null
-            ? ((targetParent.data?.handleSide as 'left' | 'right' | undefined) ??
-                getTargetSideRelativeToParent(
-                  basePosition.x,
-                  targetParent.position.x,
-                ))
+            ? ((targetParent.data?.handleSide as
+                | 'left'
+                | 'right'
+                | undefined) ??
+              getTargetSideRelativeToParent(
+                basePosition.x,
+                targetParent.position.x,
+              ))
             : getTargetSideRelativeToParent(
                 basePosition.x,
                 targetParent.position.x,
@@ -1745,51 +1747,129 @@ function GraphCanvasInner({
         isInvalidConnection(closestNode.id, draggedNode.id, edges);
       setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
 
-      // 좌우 전환 시 서브트리 대칭 이동 (드래그 노드 기준, 반대편 핸들 방향)
+      // 좌우 전환 시 서브트리 대칭 이동 + 노드/엣지 핸들 및 hub 정보 업데이트
+      // dragged node 자체는 사용자가 드래그하는 위치를 따라가므로 위치 변경 없음
       let didMirrorSubtree = false;
-      const previousPosition = previousDragPositionRef.current; //드래그 노드
+      const previousPosition = previousDragPositionRef.current;
       if (previousPosition && !draggedNode.data?.isMain) {
         const mainNode = getMainNodeForSubtree(draggedNode.id, nodes, edges);
-        if (mainNode) {
+        const isDirectChildOfMain =
+          mainNode && getParentId(draggedNode.id, edges) === mainNode.id;
+        if (mainNode && isDirectChildOfMain) {
           const mainAxisX = mainNode.position.x + NODE_WIDTH / 2;
           const nodeWidth = draggedNode.width ?? NODE_WIDTH;
           const nodeHeight = draggedNode.height ?? NODE_HEIGHT;
-          const beforeCenterX = previousPosition.x + nodeWidth / 2; //드래그 노드의 중앙값
+          const beforeCenterX = previousPosition.x + nodeWidth / 2;
           const afterCenterX = draggedNode.position.x + nodeWidth / 2;
+          const afterCenterY = draggedNode.position.y + nodeHeight / 2;
           const beforeSide = beforeCenterX < mainAxisX ? 'left' : 'right';
           const afterSide = afterCenterX < mainAxisX ? 'left' : 'right';
 
           if (beforeSide !== afterSide) {
+            const newSide: 'left' | 'right' = afterSide;
             const subtreeIds = getDescendantIds(draggedNode.id, edges);
-
-            // 이전 프레임 드래그 노드의 중심점 (D3 좌표)
-            const beforeDraggedCenterX = beforeCenterX;
             const beforeDraggedCenterY = previousPosition.y + nodeHeight / 2;
 
-            // 현재 프레임 드래그 노드의 중심점 (D3 좌표)
-            const afterDraggedCenterX = afterCenterX;
-            const afterDraggedCenterY = draggedNode.position.y + nodeHeight / 2;
+            // 1. 서브트리 노드들: dragged node 기준 거리 유지 + 방향 반전
+            const newSubtreeCenters = new Map<
+              string,
+              { x: number; y: number }
+            >();
 
             d3NodesRef.current.forEach((d3Node) => {
               if (!subtreeIds.has(d3Node.id)) return;
-
-              // 이전 프레임에서 드래그 노드와 자식 노드 사이의 거리
-              const distanceX = (d3Node.x ?? 0) - beforeDraggedCenterX;
+              const distanceX = (d3Node.x ?? 0) - beforeCenterX; // 이전 프레임 subtree 노드 - dragged 사이 거리
               const distanceY = (d3Node.y ?? 0) - beforeDraggedCenterY;
-
-              // 현재 프레임 드래그 노드 기준으로 거리 유지 (x는 대칭, y는 동일)
-              const mirroredCenterX = afterDraggedCenterX - distanceX;
-              const mirroredCenterY = afterDraggedCenterY + distanceY;
-
-              d3Node.x = mirroredCenterX;
-              d3Node.y = mirroredCenterY;
-              if (d3Node.fx != null) {
-                d3Node.fx = mirroredCenterX;
-              }
-              if (d3Node.fy != null) {
-                d3Node.fy = mirroredCenterY;
-              }
+              const newCenterX = afterCenterX - distanceX;
+              const newCenterY = afterCenterY + distanceY;
+              d3Node.x = newCenterX;
+              d3Node.y = newCenterY;
+              if (d3Node.fx != null) d3Node.fx = newCenterX;
+              if (d3Node.fy != null) d3Node.fy = newCenterY;
+              newSubtreeCenters.set(d3Node.id, {
+                x: newCenterX,
+                y: newCenterY,
+              });
             });
+
+            // 2. handleSide 업데이트: dragged node + 서브트리 모두 newSide로
+            setNodes((currentNodes) =>
+              currentNodes.map((node) => {
+                if (node.id === draggedNode.id || subtreeIds.has(node.id)) {
+                  return {
+                    ...node,
+                    data: { ...node.data, handleSide: newSide },
+                  };
+                }
+                return node;
+              }),
+            );
+
+            // 3. 엣지 업데이트
+            const newSourceHandle = resolveHandleId('source', newSide);
+            const newTargetHandle = resolveHandleId('target', newSide);
+
+            setEdges((currentEdges) =>
+              currentEdges.map((edge) => {
+                // mainNode와 draggedNode 사이 엣지 정보 업데이트: source 노드는 mainNode (위치 불변), 사용하는 source handle side만 바뀜
+                if (
+                  edge.source === mainNode.id &&
+                  edge.target === draggedNode.id
+                ) {
+                  const srcWidth = mainNode.width ?? NODE_WIDTH;
+                  // position.x 기준: right → position.x + width, left → position.x
+                  const srcHandleX =
+                    mainNode.position.x + (newSide === 'right' ? srcWidth : 0);
+                  return {
+                    ...edge,
+                    sourceHandle: newSourceHandle,
+                    targetHandle: newTargetHandle,
+                    data: {
+                      ...edge.data,
+                      hubX:
+                        srcHandleX +
+                        (newSide === 'right' ? HUB_OFFSET : -HUB_OFFSET),
+                      hubY: mainNode.position.y + NODE_HEIGHT / 2,
+                    },
+                  };
+                }
+
+                // 서브트리 엣지: sourceHandle/targetHandle은 newSide 재사용,
+                // hubX/Y는 이동한 source의 새 center 기반으로 재계산
+                const isSourceDragged = edge.source === draggedNode.id;
+                const isSourceInSubtree = subtreeIds.has(edge.source);
+                if (isSourceDragged || isSourceInSubtree) {
+                  const srcCenter = isSourceDragged
+                    ? { x: afterCenterX, y: afterCenterY }
+                    : newSubtreeCenters.get(edge.source);
+                  if (!srcCenter) return edge;
+
+                  const srcNode = nodes.find((n) => n.id === edge.source);
+                  const srcWidth = srcNode?.width ?? NODE_WIDTH;
+                  // d3 center → position.x: centerX - width/2
+                  // right handle: position.x + width = centerX + width/2
+                  // left handle: position.x = centerX - width/2
+                  const srcHandleX =
+                    srcCenter.x +
+                    (newSide === 'right' ? srcWidth / 2 : -srcWidth / 2);
+                  return {
+                    ...edge,
+                    sourceHandle: newSourceHandle,
+                    targetHandle: newTargetHandle,
+                    data: {
+                      ...edge.data,
+                      hubX:
+                        srcHandleX +
+                        (newSide === 'right' ? HUB_OFFSET : -HUB_OFFSET),
+                      hubY: srcCenter.y,
+                    },
+                  };
+                }
+
+                return edge;
+              }),
+            );
+
             didMirrorSubtree = true;
           }
         }
@@ -1879,10 +1959,10 @@ function GraphCanvasInner({
           const parentHasParent = getParentId(parentNode.id, edges) !== null;
           const sideRelativeToParent: 'left' | 'right' = parentHasParent
             ? ((parentNode.data?.handleSide as 'left' | 'right' | undefined) ??
-                getTargetSideRelativeToParent(
-                  childNode.position.x,
-                  parentNode.position.x,
-                ))
+              getTargetSideRelativeToParent(
+                childNode.position.x,
+                parentNode.position.x,
+              ))
             : getTargetSideRelativeToParent(
                 childNode.position.x,
                 parentNode.position.x,
