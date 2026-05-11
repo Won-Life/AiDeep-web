@@ -18,6 +18,7 @@ import { getWorkspaces } from "@/api/workspace";
 import { getNodes } from "@/features/graph/api/getNodes";
 import { convertToReactFlow } from "@/features/graph/components/GraphCanvas";
 import { useWorkspaceWS } from "@/hooks/useWorkspaceWS";
+import { useCursors } from "@/hooks/useCursors";
 import { type NodeView } from "@/features/nodes/TextUpdateNode";
 import { GraphLayoutProvider, useGraphLayout } from "./context";
 
@@ -154,6 +155,8 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
     edgesRef,
   });
 
+  const collaborators = useCursors(workspaceId ?? "", userMe?.userId ?? "");
+
   const handleLogout = useCallback(async () => {
     try {
       await logout();
@@ -268,6 +271,10 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
         nodes={nodes as Node<NodeView>[]}
         onNodeFocus={setFocusedNodeId}
         activeProjectId={focusedNodeId}
+        user={userMe}
+        onLogout={handleLogout}
+        collaborators={collaborators}
+        workspaceId={workspaceId}
       />
 
       <DropDown sidebarWidth={sidebarWidth} />
