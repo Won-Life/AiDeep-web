@@ -1,7 +1,7 @@
 /*
  * CONTEXT
  * - Problem      : 워크스페이스 초대 링크를 클릭 한 번으로 생성하고 클립보드에 복사해야 함.
- * - Why          : inviteToWorkspace API가 이미 존재하며 { url, code }를 반환함.
+ * - Why          : inviteToWorkspace API가 이미 { url, code }를 반환하므로 두 값을 함께 복사.
  *                  별도 모달 없이 즉각적인 클립보드 복사 + 토스트가 UX를 단순하게 유지.
  * - Alternatives : 링크를 미리 생성해 저장 — 만료 관리 복잡, 보안 리스크.
  * - Trade-offs   : 버튼 클릭마다 새 초대 코드를 발급함. 서버에서 중복 발급을 처리해야 함.
@@ -29,13 +29,14 @@ export default function ShareButton({ workspaceId }: ShareButtonProps) {
     if (!workspaceId || isLoading) return;
     setIsLoading(true);
     try {
-      const { url } = await inviteToWorkspace({ workspaceId, role: 'EDITOR' });
+      const { url, code } = await inviteToWorkspace({ workspaceId, role: 'EDITOR' });
+      const clipboardText = `초대 URL: ${url}\n인증번호: ${code}`;
       try {
-        await navigator.clipboard.writeText(url);
-        showToast('초대 URL이 복사되었습니다.');
+        await navigator.clipboard.writeText(clipboardText);
+        showToast('초대 URL과 인증번호가 복사되었습니다.');
       } catch {
         console.warn('[ShareButton] clipboard write failed');
-        showToast('초대 URL이 생성되었습니다.');
+        showToast('초대 URL과 인증번호가 생성되었습니다.');
       }
     } catch {
       showToast('링크 생성에 실패했습니다');
