@@ -2,17 +2,16 @@
  * CONTEXT
  * - Problem      : 현재 워크스페이스에 접속 중인 협업자들을 헤더에서 한눈에 볼 수 있어야 함.
  * - Why          : CursorsMap은 cursor_move 이벤트 기반이라 이미 소켓이 연결된 상태에서 추가
- *                  구독 없이 협업자 이름·색상을 얻을 수 있는 가장 저렴한 데이터 소스.
- * - Alternatives : useWorkspaceAwareness(별도 Yjs Doc 생성) — 연결 비용이 큼, 중복 소켓.
+ *                  구독 없이 협업자 이름·색상을 얻을 수 있는 가장 저렴한 데이터 소스. (API 구현 시 대체 예정)
  * - Trade-offs   : cursor_move 이벤트가 없으면 목록에 나타나지 않음 (마우스를 전혀 움직이지
  *                  않은 사용자는 숨겨짐). 현재 협업 모델에서는 허용 가능한 trade-off.
  * - Edge Case    : 협업자 0명이면 현재 사용자 아바타 단독 표시.
  */
-"use client";
-import { useState, useRef, useEffect } from "react";
-import type { CursorsMap } from "@/hooks/useCursors";
-import MembersModal from "./MembersModal";
-import { getCursorColor } from "@/utils/cursorColor";
+'use client';
+import { useState, useRef, useEffect } from 'react';
+import type { CursorsMap } from '@/hooks/useCursors';
+import MembersModal from './MembersModal';
+import { getCursorColor } from '@/utils/cursorColor';
 
 const MAX_VISIBLE = 3;
 
@@ -25,7 +24,7 @@ function AvatarCircle({
   color: string;
   size?: number;
 }) {
-  const initial = name ? name[0].toUpperCase() : "?";
+  const initial = name ? name[0].toUpperCase() : '?';
   return (
     <div
       className="flex items-center justify-center rounded-full shrink-0 font-semibold select-none text-white"
@@ -33,9 +32,9 @@ function AvatarCircle({
         width: size,
         height: size,
         backgroundColor: color,
-        fontFamily: "Pretendard, sans-serif",
+        fontFamily: 'Pretendard, sans-serif',
         fontSize: 11,
-        border: "2px solid white",
+        border: '2px solid white',
       }}
     >
       {initial}
@@ -87,8 +86,8 @@ export default function CollaboratorsList({
         setIsOpen(false);
       }
     }
-    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
   const isSolo = entries.length === 0;
@@ -108,7 +107,10 @@ export default function CollaboratorsList({
               <div
                 key={c.userId}
                 className="relative"
-                style={{ marginLeft: i === 0 ? 0 : -8, zIndex: MAX_VISIBLE - i }}
+                style={{
+                  marginLeft: i === 0 ? 0 : -8,
+                  zIndex: MAX_VISIBLE - i,
+                }}
               >
                 <AvatarCircle name={c.userName} color={c.color} />
               </div>
@@ -120,9 +122,9 @@ export default function CollaboratorsList({
                   style={{
                     width: 28,
                     height: 28,
-                    fontFamily: "Pretendard, sans-serif",
+                    fontFamily: 'Pretendard, sans-serif',
                     fontSize: 10,
-                    border: "2px solid white",
+                    border: '2px solid white',
                   }}
                 >
                   +{hidden}
@@ -138,11 +140,15 @@ export default function CollaboratorsList({
         onClick={() => setIsOpen((prev) => !prev)}
         className="flex items-center justify-center rounded-full transition-colors"
         style={{ width: 20, height: 20 }}
-        title={isSolo ? `접속 중: ${currentUsername}` : `접속 중: ${entries.map((e) => e.userName).join(", ")}`}
+        title={
+          isSolo
+            ? `접속 중: ${currentUsername}`
+            : `접속 중: ${entries.map((e) => e.userName).join(', ')}`
+        }
       >
         <span
           className="flex items-center justify-center transition-transform duration-200"
-          style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+          style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
         >
           <ChevronDownIcon />
         </span>
