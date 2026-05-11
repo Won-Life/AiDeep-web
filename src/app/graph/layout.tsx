@@ -1,61 +1,61 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
-import { type Node } from "@xyflow/react";
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { type Node } from '@xyflow/react';
 import Sidebar, {
   type Project,
   type Resource,
   SIDEBAR_WIDTH,
   VISIBLE_BUTTON_WIDTH,
-} from "@/components/layout/Sidebar";
-import ChipHeader from "@/components/layout/ChipHeader";
-import DropDown from "@/components/ui/DropDown";
-import UserMenu from "@/components/layout/UserMenu";
-import { getMe } from "@/api/user";
-import { logout } from "@/api/auth";
-import { getWorkspaces } from "@/api/workspace";
-import { getNodes } from "@/features/graph/api/getNodes";
-import { convertToReactFlow } from "@/features/graph/components/GraphCanvas";
-import { useWorkspaceWS } from "@/hooks/useWorkspaceWS";
-import { useCursors } from "@/hooks/useCursors";
-import { type NodeView } from "@/features/nodes/TextUpdateNode";
-import { GraphLayoutProvider, useGraphLayout } from "./context";
+} from '@/components/layout/Sidebar';
+import ChipHeader from '@/components/layout/ChipHeader';
+import DropDown from '@/components/ui/DropDown';
+import UserMenu from '@/components/layout/UserMenu';
+import { getMe } from '@/api/user';
+import { logout } from '@/api/auth';
+import { getWorkspaces } from '@/api/workspace';
+import { getNodes } from '@/features/graph/api/getNodes';
+import { convertToReactFlow } from '@/features/graph/components/GraphCanvas';
+import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
+import { useCursors } from '@/hooks/useCursors';
+import { type NodeView } from '@/features/nodes/TextUpdateNode';
+import { GraphLayoutProvider, useGraphLayout } from './context';
 
 const INITIAL_PROJECTS: Project[] = [
-  { id: "p1", name: "Project 1" },
-  { id: "p2", name: "Project 2" },
-  { id: "p3", name: "Project 3" },
-  { id: "p4", name: "Project 4" },
+  { id: 'w1', name: 'Workspaces 1' },
+  { id: 'w2', name: 'Workspaces 2' },
+  { id: 'w3', name: 'Workspaces 3' },
+  { id: 'w4', name: 'Workspaces 4' },
 ];
 
 const INITIAL_RESOURCES: Resource[] = [
   {
-    id: "r1",
-    name: "Resource n",
+    id: 'r1',
+    name: 'Resource n',
     subItems: [
-      { id: "r1-1", name: "Resource n-1" },
-      { id: "r1-2", name: "Resource n-2" },
-      { id: "r1-3", name: "Resource n-3" },
+      { id: 'r1-1', name: 'Resource n-1' },
+      { id: 'r1-2', name: 'Resource n-2' },
+      { id: 'r1-3', name: 'Resource n-3' },
     ],
   },
-  { id: "r2", name: "Resource n", subItems: [] },
+  { id: 'r2', name: 'Resource n', subItems: [] },
   {
-    id: "r3",
-    name: "Resource n",
+    id: 'r3',
+    name: 'Resource n',
     subItems: [
-      { id: "r3-1", name: "Resource n-1" },
-      { id: "r3-2", name: "Resource n-2" },
-      { id: "r3-3", name: "Resource n-3" },
+      { id: 'r3-1', name: 'Resource n-1' },
+      { id: 'r3-2', name: 'Resource n-2' },
+      { id: 'r3-3', name: 'Resource n-3' },
     ],
   },
   {
-    id: "r4",
-    name: "Resource n",
+    id: 'r4',
+    name: 'Resource n',
     subItems: [
-      { id: "r4-1", name: "Resource n-1" },
-      { id: "r4-2", name: "Resource n-2" },
-      { id: "r4-3", name: "Resource n-3" },
+      { id: 'r4-1', name: 'Resource n-1' },
+      { id: 'r4-2', name: 'Resource n-2' },
+      { id: 'r4-3', name: 'Resource n-3' },
     ],
   },
 ];
@@ -95,9 +95,9 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem("sidebar_open");
-      if (stored !== null) setIsSidebarOpen(stored === "true");
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('sidebar_open');
+      if (stored !== null) setIsSidebarOpen(stored === 'true');
     }
   }, []);
 
@@ -108,7 +108,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   const handleToggleSidebar = useCallback(() => {
     setIsSidebarOpen((prev) => {
       const next = !prev;
-      sessionStorage.setItem("sidebar_open", String(next));
+      sessionStorage.setItem('sidebar_open', String(next));
       return next;
     });
   }, []);
@@ -118,7 +118,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
       .then(setUserMe)
       // DO: 500(서버 에러)에도 /login으로 리다이렉트됨
       // isAxiosError(err) && err.response?.status === 401 일 때만 로그아웃해야 함
-      .catch(() => router.replace("/login"));
+      .catch(() => router.replace('/login'));
   }, [router, setUserMe]);
 
   // 워크스페이스 + 노드/엣지 — 최초 1회만 fetch (synced 이후 스킵)
@@ -143,31 +143,31 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
         setSynced(true);
       })
       .catch((err) => {
-        console.error("[GraphLayout] sync failed", err);
+        console.error('[GraphLayout] sync failed', err);
         setSynced(true);
       });
   }, [synced, setWorkspaceId, setNodes, setEdges, setSynced]);
 
   useWorkspaceWS({
-    workspaceId: workspaceId ?? "",
+    workspaceId: workspaceId ?? '',
     setNodes,
     setEdges,
     edgesRef,
   });
 
-  const collaborators = useCursors(workspaceId ?? "", userMe?.userId ?? "");
+  const collaborators = useCursors(workspaceId ?? '', userMe?.userId ?? '');
 
   const handleLogout = useCallback(async () => {
     try {
       await logout();
     } catch {}
-    router.replace("/login");
+    router.replace('/login');
   }, [router]);
 
   const addProject = () =>
     setProjects((prev) => [
       ...prev,
-      { id: makeId(), name: "", isEditing: true },
+      { id: makeId(), name: '', isEditing: true },
     ]);
   const saveProjectName = (id: string, name: string) =>
     setProjects((prev) =>
@@ -180,7 +180,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   const addResource = () =>
     setResources((prev) => [
       ...prev,
-      { id: makeId(), name: "", subItems: [], isEditing: true },
+      { id: makeId(), name: '', subItems: [], isEditing: true },
     ]);
   const saveResourceName = (id: string, name: string) =>
     setResources((prev) =>
@@ -194,7 +194,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
               ...r,
               subItems: [
                 ...r.subItems,
-                { id: makeId(), name: "", isEditing: true },
+                { id: makeId(), name: '', isEditing: true },
               ],
             }
           : r,
@@ -280,8 +280,8 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
       <DropDown sidebarWidth={sidebarWidth} />
 
       <UserMenu
-        username={userMe?.username ?? ""}
-        email={userMe?.email ?? ""}
+        username={userMe?.username ?? ''}
+        email={userMe?.email ?? ''}
         onLogout={handleLogout}
       />
     </div>

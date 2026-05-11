@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 export const SIDEBAR_WIDTH = 260;
 export const VISIBLE_BUTTON_WIDTH = 40;
@@ -47,7 +47,7 @@ function ProjectList({
             style={{
               width: 18,
               height: 18,
-              background: "rgb(var(--ds-gray-700))",
+              background: 'rgb(var(--ds-gray-700))',
             }}
           />
           {project.isEditing ? (
@@ -58,30 +58,30 @@ function ProjectList({
               className="sidebar-new-input bg-transparent border-none outline-none"
               style={{
                 fontSize: 14,
-                color: "rgb(var(--foreground))",
+                color: 'rgb(var(--foreground))',
                 flex: 1,
                 minWidth: 0,
               }}
               onBlur={(e) => onSaveName(project.id, e.target.value.trim())}
               onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
+                if (e.key === 'Enter') e.currentTarget.blur();
               }}
             />
           ) : (
             <span
               style={{
                 fontSize: 14,
-                color: "rgb(var(--foreground))",
-                cursor: "text",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                color: 'rgb(var(--foreground))',
+                cursor: 'text',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
                 minWidth: 0,
               }}
               onClick={() => onStartEdit(project.id)}
             >
               {project.name || (
-                <span style={{ color: "rgb(var(--ds-gray-500))" }}>
+                <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
                   이름 입력...
                 </span>
               )}
@@ -125,7 +125,7 @@ function ResourceTree({
             <svg
               width="20"
               height={ITEM_H}
-              style={{ flexShrink: 0, overflow: "visible" }}
+              style={{ flexShrink: 0, overflow: 'visible' }}
             >
               {isLast ? (
                 <path
@@ -167,14 +167,14 @@ function ResourceTree({
                 className="sidebar-new-input rounded-full px-3 py-1 border-none outline-none"
                 style={{
                   fontSize: 13,
-                  background: "rgb(var(--ds-gray-800))",
-                  color: "rgb(var(--foreground))",
-                  width: "90%",
-                  display: "inline-block",
+                  background: 'rgb(var(--ds-gray-800))',
+                  color: 'rgb(var(--foreground))',
+                  width: '90%',
+                  display: 'inline-block',
                 }}
                 onBlur={(e) => onSaveName(item.id, e.target.value.trim())}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === 'Enter') e.currentTarget.blur();
                 }}
               />
             ) : (
@@ -183,35 +183,35 @@ function ResourceTree({
                 draggable
                 style={{
                   fontSize: 13,
-                  background: "rgb(var(--ds-gray-800))",
-                  color: "rgb(var(--foreground))",
-                  cursor: "text",
-                  maxWidth: "90%",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  display: "inline-block",
+                  background: 'rgb(var(--ds-gray-800))',
+                  color: 'rgb(var(--foreground))',
+                  cursor: 'text',
+                  maxWidth: '90%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-block',
                 }}
                 onClick={() => onStartEdit(item.id)}
                 onDragStart={(event) => {
-                  const dragPreview = document.createElement("div");
-                  dragPreview.textContent = item.name || " ";
-                  dragPreview.style.padding = "4px 12px";
-                  dragPreview.style.fontSize = "13px";
-                  dragPreview.style.borderRadius = "9999px";
-                  dragPreview.style.background = "rgb(var(--ds-gray-800))";
-                  dragPreview.style.color = "rgb(var(--foreground))";
-                  dragPreview.style.border = "1px solid rgba(0,0,0,0)";
-                  dragPreview.style.position = "absolute";
-                  dragPreview.style.top = "-9999px";
-                  dragPreview.style.left = "-9999px";
+                  const dragPreview = document.createElement('div');
+                  dragPreview.textContent = item.name || ' ';
+                  dragPreview.style.padding = '4px 12px';
+                  dragPreview.style.fontSize = '13px';
+                  dragPreview.style.borderRadius = '9999px';
+                  dragPreview.style.background = 'rgb(var(--ds-gray-800))';
+                  dragPreview.style.color = 'rgb(var(--foreground))';
+                  dragPreview.style.border = '1px solid rgba(0,0,0,0)';
+                  dragPreview.style.position = 'absolute';
+                  dragPreview.style.top = '-9999px';
+                  dragPreview.style.left = '-9999px';
                   document.body.appendChild(dragPreview);
 
                   event.dataTransfer.setData(
-                    "application/resource-subitem",
+                    'application/resource-subitem',
                     JSON.stringify({ id: item.id, name: item.name }),
                   );
-                  event.dataTransfer.effectAllowed = "copy";
+                  event.dataTransfer.effectAllowed = 'copy';
                   event.dataTransfer.setDragImage(dragPreview, 10, 10);
 
                   requestAnimationFrame(() => {
@@ -220,7 +220,7 @@ function ResourceTree({
                 }}
               >
                 {item.name || (
-                  <span style={{ color: "rgb(var(--ds-gray-500))" }}>
+                  <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
                     내용을 입력하세요
                   </span>
                 )}
@@ -279,12 +279,12 @@ function ResourceList({
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer"
                 style={{
                   fontSize: 13,
-                  color: "rgb(var(--foreground))",
-                  borderColor: "rgb(var(--ds-black))",
-                  background: "transparent",
-                  maxWidth: "90%",
+                  color: 'rgb(var(--foreground))',
+                  borderColor: 'rgb(var(--ds-black))',
+                  background: 'transparent',
+                  maxWidth: '90%',
                   minWidth: 0,
-                  width: resource.isEditing ? "90%" : undefined,
+                  width: resource.isEditing ? '90%' : undefined,
                 }}
               >
                 {resource.isEditing ? (
@@ -295,7 +295,7 @@ function ResourceList({
                     className="sidebar-new-input bg-transparent border-none outline-none"
                     style={{
                       fontSize: 13,
-                      color: "rgb(var(--foreground))",
+                      color: 'rgb(var(--foreground))',
                       flex: 1,
                       minWidth: 0,
                     }}
@@ -303,16 +303,16 @@ function ResourceList({
                       onSaveResourceName(resource.id, e.target.value.trim())
                     }
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
+                      if (e.key === 'Enter') e.currentTarget.blur();
                     }}
                   />
                 ) : (
                   <span
                     style={{
-                      cursor: "text",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      cursor: 'text',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -320,7 +320,7 @@ function ResourceList({
                     }}
                   >
                     {resource.name || (
-                      <span style={{ color: "rgb(var(--ds-gray-500))" }}>
+                      <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
                         이름 입력...
                       </span>
                     )}
@@ -352,8 +352,8 @@ function ResourceList({
                 className="flex items-center justify-center cursor-pointer"
                 style={{
                   fontSize: 18,
-                  color: "rgb(var(--ds-gray-400))",
-                  background: "transparent",
+                  color: 'rgb(var(--ds-gray-400))',
+                  background: 'transparent',
                   flexShrink: 0,
                 }}
               >
@@ -428,18 +428,18 @@ export default function Sidebar({
       className="fixed left-0 top-0 h-full flex flex-col z-50"
       style={{
         width: SIDEBAR_WIDTH,
-        background: "rgb(var(--surface))",
+        background: 'rgb(var(--surface))',
         transform: isOpen
-          ? "translateX(0)"
+          ? 'translateX(0)'
           : `translateX(calc(-100% + ${VISIBLE_BUTTON_WIDTH}px))`,
-        transition: "transform 300ms ease",
-        overflow: "visible",
+        transition: 'transform 300ms ease',
+        overflow: 'visible',
       }}
     >
       {/* ── 스크롤 영역 ── */}
       <div
         className="scrollbar-hide flex-1 overflow-y-auto px-4 pt-5 pb-4"
-        style={{ overflow: isOpen ? undefined : "hidden" }}
+        style={{ overflow: isOpen ? undefined : 'hidden' }}
       >
         {/* Project 섹션 */}
         <div className="mb-8">
@@ -449,16 +449,16 @@ export default function Sidebar({
                 style={{
                   fontSize: 18,
                   fontWeight: 700,
-                  color: "rgb(var(--foreground))",
+                  color: 'rgb(var(--foreground))',
                 }}
               >
-                Project
+                Workspaces
               </span>
               <button
                 onClick={onAddProject}
                 style={{
                   fontSize: 22,
-                  color: "rgb(var(--ds-black))",
+                  color: 'rgb(var(--ds-black))',
                   lineHeight: 1,
                 }}
                 className="cursor-pointer"
@@ -471,11 +471,11 @@ export default function Sidebar({
               className="cursor-pointer"
               style={{
                 fontSize: 20,
-                color: "rgb(var(--ds-gray-500))",
+                color: 'rgb(var(--ds-gray-500))',
                 fontWeight: 600,
               }}
             >
-              {isOpen ? "«" : "»"}
+              {isOpen ? '«' : '»'}
             </button>
           </div>
 
@@ -493,7 +493,7 @@ export default function Sidebar({
               style={{
                 fontSize: 18,
                 fontWeight: 700,
-                color: "rgb(var(--foreground))",
+                color: 'rgb(var(--foreground))',
               }}
             >
               Resource
@@ -502,7 +502,7 @@ export default function Sidebar({
               onClick={onAddResource}
               style={{
                 fontSize: 22,
-                color: "rgb(var(--ds-black))",
+                color: 'rgb(var(--ds-black))',
                 lineHeight: 1,
               }}
               className="cursor-pointer"
@@ -527,7 +527,7 @@ export default function Sidebar({
       {/* ── 하단 아이콘 바 ── */}
       <div
         className="shrink-0 flex items-center gap-3 px-4 py-3"
-        style={{ borderTop: "1px solid rgb(var(--border))" }}
+        style={{ borderTop: '1px solid rgb(var(--border))' }}
       >
         <button
           className="flex items-center justify-center rounded-full cursor-pointer"
@@ -535,15 +535,15 @@ export default function Sidebar({
             width: 24,
             height: 24,
             fontSize: 13,
-            color: "rgb(var(--ds-gray-500))",
-            border: "1.5px solid rgb(var(--ds-gray-600))",
+            color: 'rgb(var(--ds-gray-500))',
+            border: '1.5px solid rgb(var(--ds-gray-600))',
           }}
         >
           ?
         </button>
         <button
           className="flex items-center justify-center cursor-pointer"
-          style={{ color: "rgb(var(--ds-gray-500))" }}
+          style={{ color: 'rgb(var(--ds-gray-500))' }}
           title="레이아웃"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
