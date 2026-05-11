@@ -6,12 +6,13 @@
  * - Alternatives : useWorkspaceAwareness(별도 Yjs Doc 생성) — 연결 비용이 큼, 중복 소켓.
  * - Trade-offs   : cursor_move 이벤트가 없으면 목록에 나타나지 않음 (마우스를 전혀 움직이지
  *                  않은 사용자는 숨겨짐). 현재 협업 모델에서는 허용 가능한 trade-off.
- * - Edge Case    : 협업자 0명이면 컴포넌트 자체를 렌더하지 않음(조건부 반환).
+ * - Edge Case    : 협업자 0명이면 현재 사용자 아바타 단독 표시.
  */
 "use client";
 import { useState, useRef, useEffect } from "react";
 import type { CursorsMap } from "@/hooks/useCursors";
 import MembersModal from "./MembersModal";
+import { getCursorColor } from "@/utils/cursorColor";
 
 const MAX_VISIBLE = 3;
 
@@ -90,6 +91,8 @@ export default function CollaboratorsList({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
+  const isSolo = entries.length === 0;
+  const myColor = getCursorColor(currentUserId);
   const visible = entries.slice(0, MAX_VISIBLE);
   const hidden = entries.length - MAX_VISIBLE;
 
@@ -97,30 +100,36 @@ export default function CollaboratorsList({
     <div ref={menuRef} className="relative flex items-center gap-1">
       {/* 겹쳐있는 아바타 원들 */}
       <div className="flex items-center">
-        {visible.map((c, i) => (
-          <div
-            key={c.userId}
-            className="relative"
-            style={{ marginLeft: i === 0 ? 0 : -8, zIndex: MAX_VISIBLE - i }}
-          >
-            <AvatarCircle name={c.userName} color={c.color} />
-          </div>
-        ))}
-        {hidden > 0 && (
-          <div className="relative" style={{ marginLeft: -8, zIndex: 0 }}>
-            <div
-              className="flex items-center justify-center rounded-full shrink-0 bg-[#e6e6e6] text-[#2c2c2c] font-semibold select-none"
-              style={{
-                width: 28,
-                height: 28,
-                fontFamily: "Pretendard, sans-serif",
-                fontSize: 10,
-                border: "2px solid white",
-              }}
-            >
-              +{hidden}
-            </div>
-          </div>
+        {isSolo ? (
+          <AvatarCircle name={currentUsername} color={myColor} />
+        ) : (
+          <>
+            {visible.map((c, i) => (
+              <div
+                key={c.userId}
+                className="relative"
+                style={{ marginLeft: i === 0 ? 0 : -8, zIndex: MAX_VISIBLE - i }}
+              >
+                <AvatarCircle name={c.userName} color={c.color} />
+              </div>
+            ))}
+            {hidden > 0 && (
+              <div className="relative" style={{ marginLeft: -8, zIndex: 0 }}>
+                <div
+                  className="flex items-center justify-center rounded-full shrink-0 bg-[#e6e6e6] text-[#2c2c2c] font-semibold select-none"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    fontFamily: "Pretendard, sans-serif",
+                    fontSize: 10,
+                    border: "2px solid white",
+                  }}
+                >
+                  +{hidden}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -129,7 +138,7 @@ export default function CollaboratorsList({
         onClick={() => setIsOpen((prev) => !prev)}
         className="flex items-center justify-center rounded-full transition-colors"
         style={{ width: 20, height: 20 }}
-        title={`접속 중: ${entries.map((e) => e.userName).join(", ")}`}
+        title={isSolo ? `접속 중: ${currentUsername}` : `접속 중: ${entries.map((e) => e.userName).join(", ")}`}
       >
         <span
           className="flex items-center justify-center transition-transform duration-200"
