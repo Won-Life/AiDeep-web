@@ -66,6 +66,13 @@ export function emitLivePosition(
   socket?.emit('node_position_live', { workspaceId, nodeId, x, y });
 }
 
+export function addWorkspaceEventListener(handler: WsEventHandler): () => void {
+  if (!socket) return () => {};
+  const wrapped = (event: WsEvent) => handler(event);
+  socket.on('workspace_event', wrapped);
+  return () => socket?.off('workspace_event', wrapped);
+}
+
 export function onLivePosition(
   handler: (payload: LivePositionPayload) => void,
 ): () => void {

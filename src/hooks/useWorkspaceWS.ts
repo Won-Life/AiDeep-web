@@ -204,6 +204,7 @@ export function useWorkspaceWS({
           id: e.edge.edgeId,
           source: e.edge.sourceId,
           target: e.edge.targetId,
+          type: 'branch',
           sourceHandle: e.edge.sourceHandle,
           targetHandle: e.edge.targetHandle,
         };
