@@ -1563,7 +1563,7 @@ function GraphCanvasInner({
       if (!raw) return;
       event.preventDefault();
 
-      let payload: { id: string; name: string } | null = null;
+      let payload: { id: string; name: string; markdownBody?: string; jsonBody?: string } | null = null;
       try {
         payload = JSON.parse(raw);
       } catch {
@@ -1617,8 +1617,8 @@ function GraphCanvasInner({
       let nodeId: string;
       try {
         const res = await createMdNode(workspaceId, payload.name, position, {
-          markdownBody: '',
-          jsonBody: EMPTY_LEXICAL_JSON,
+          markdownBody: payload.markdownBody ?? '',
+          jsonBody: payload.jsonBody ?? EMPTY_LEXICAL_JSON,
           color: colorPair.bg,
           textColor: colorPair.text,
         });
