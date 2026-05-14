@@ -19,11 +19,14 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  $getNodeByKey,
+  $insertNodes,
   FORMAT_TEXT_COMMAND,
   SELECTION_CHANGE_COMMAND,
   $createParagraphNode,
   COMMAND_PRIORITY_LOW,
   DecoratorNode,
+  createCommand,
   type NodeKey,
   type SerializedLexicalNode,
 } from 'lexical';
@@ -52,7 +55,7 @@ import {
 import { LinkNode, AutoLinkNode } from '@lexical/link';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
-import { TRANSFORMERS } from '@lexical/markdown';
+import { TRANSFORMERS, $convertToMarkdownString } from '@lexical/markdown';
 import { MarkdownPastePlugin } from './plugins/MarkdownPastePlugin';
 import { $setBlocksType } from '@lexical/selection';
 import { $getNearestNodeOfType, mergeRegister } from '@lexical/utils';
@@ -79,45 +82,83 @@ export interface NotionEditorProps {
   username?: string;
   cursorColor?: string;
   onFirstLineChange?: (text: string) => void;
+  onContentChange?: (content: { markdownBody: string; jsonBody: string }) => void;
   toolbarSlot?: ReactNode;
+  noMediaDrop?: boolean;
+  autoGrow?: boolean;
+  minHeight?: number;
+}
+
+// ─── Media Commands ───────────────────────────────────────────────────────────
+
+const INSERT_IMAGE_COMMAND = createCommand<{ src: string; caption?: string }>('INSERT_IMAGE');
+const INSERT_FILE_COMMAND = createCommand<{ name: string; size: number; dataUrl: string }>('INSERT_FILE');
+
+// ─── Image Caption Editor ─────────────────────────────────────────────────────
+
+function ImageCaptionEditor({ nodeKey, caption }: { nodeKey: NodeKey; caption: string }) {
+  const [editor] = useLexicalComposerContext();
+  const [local, setLocal] = useState(caption);
+
+  const save = useCallback(() => {
+    editor.update(() => {
+      const node = $getNodeByKey(nodeKey);
+      if (node instanceof ImageNode) {
+        node.getWritable().__caption = local;
+      }
+    });
+  }, [editor, nodeKey, local]);
+
+  return (
+    <input
+      className="nodrag nowheel"
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      placeholder="사진 설명"
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'center',
+        fontSize: 12,
+        color: '#999',
+        background: 'transparent',
+        border: 'none',
+        outline: 'none',
+        padding: '4px 0 6px',
+        cursor: 'text',
+      }}
+    />
+  );
 }
 
 // ─── Image Node ───────────────────────────────────────────────────────────────
 
 type SerializedImageNode = SerializedLexicalNode & {
   src: string;
-  alt: string;
+  caption: string;
 };
 
 class ImageNode extends DecoratorNode<ReactNode> {
   __src: string;
-  __alt: string;
+  __caption: string;
 
-  static getType(): string {
-    return 'image';
-  }
+  static getType(): string { return 'image'; }
+  static clone(node: ImageNode): ImageNode { return new ImageNode(node.__src, node.__caption, node.__key); }
+  static importJSON(s: SerializedImageNode): ImageNode { return new ImageNode(s.src, s.caption ?? ''); }
 
-  static clone(node: ImageNode): ImageNode {
-    return new ImageNode(node.__src, node.__alt, node.__key);
-  }
-
-  static importJSON(serialized: SerializedImageNode): ImageNode {
-    return new ImageNode(serialized.src, serialized.alt);
-  }
-
-  constructor(src: string, alt = '', key?: NodeKey) {
+  constructor(src: string, caption = '', key?: NodeKey) {
     super(key);
     this.__src = src;
-    this.__alt = alt;
+    this.__caption = caption;
   }
 
   exportJSON(): SerializedImageNode {
-    return { type: 'image', version: 1, src: this.__src, alt: this.__alt };
+    return { type: 'image', version: 1, src: this.__src, caption: this.__caption };
   }
 
-  isInline(): boolean {
-    return false;
-  }
+  isInline(): boolean { return false; }
 
   createDOM(): HTMLElement {
     const div = document.createElement('div');
@@ -125,29 +166,122 @@ class ImageNode extends DecoratorNode<ReactNode> {
     return div;
   }
 
-  updateDOM(): false {
-    return false;
-  }
+  updateDOM(): false { return false; }
 
   decorate(): ReactNode {
     return (
-      <img
-        src={this.__src}
-        alt={this.__alt}
-        draggable={false}
+      <figure style={{ margin: '6px 0', padding: 0 }} contentEditable={false}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={this.__src}
+          alt={this.__caption}
+          draggable={false}
+          style={{ maxWidth: '100%', borderRadius: 6, display: 'block' }}
+        />
+        <ImageCaptionEditor nodeKey={this.__key} caption={this.__caption} />
+      </figure>
+    );
+  }
+}
+
+// ─── File Node ────────────────────────────────────────────────────────────────
+
+type SerializedFileNode = SerializedLexicalNode & {
+  name: string;
+  size: number;
+  dataUrl: string;
+};
+
+class FileNode extends DecoratorNode<ReactNode> {
+  __name: string;
+  __size: number;
+  __dataUrl: string;
+
+  static getType(): string { return 'file'; }
+  static clone(node: FileNode): FileNode { return new FileNode(node.__name, node.__size, node.__dataUrl, node.__key); }
+  static importJSON(s: SerializedFileNode): FileNode { return new FileNode(s.name, s.size, s.dataUrl ?? ''); }
+
+  constructor(name: string, size: number, dataUrl: string, key?: NodeKey) {
+    super(key);
+    this.__name = name;
+    this.__size = size;
+    this.__dataUrl = dataUrl;
+  }
+
+  exportJSON(): SerializedFileNode {
+    return { type: 'file', version: 1, name: this.__name, size: this.__size, dataUrl: this.__dataUrl };
+  }
+
+  isInline(): boolean { return false; }
+
+  createDOM(): HTMLElement {
+    const div = document.createElement('div');
+    div.style.display = 'contents';
+    return div;
+  }
+
+  updateDOM(): false { return false; }
+
+  decorate(): ReactNode {
+    const { __name, __size, __dataUrl } = this;
+    const sizeLabel =
+      __size < 1024 * 1024
+        ? `${Math.round(__size / 1024)}kb`
+        : `${(__size / 1024 / 1024).toFixed(1)}mb`;
+
+    return (
+      <div
+        contentEditable={false}
+        className="nodrag nowheel"
         style={{
-          maxWidth: '100%',
-          borderRadius: 6,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '10px 14px',
+          borderRadius: 8,
+          border: '1px solid #EBEBEB',
+          background: '#FAFAFA',
           margin: '6px 0',
-          display: 'block',
+          cursor: 'pointer',
+          userSelect: 'none',
         }}
-      />
+        onClick={() => {
+          if (!__dataUrl) return;
+          const a = document.createElement('a');
+          a.href = __dataUrl;
+          a.download = __name;
+          a.click();
+        }}
+      >
+        <svg width="15" height="18" viewBox="0 0 15 18" fill="none">
+          <path
+            d="M9 1H2C1.46957 1 0.960859 1.21071 0.585786 1.58579C0.210714 1.96086 0 2.46957 0 3V15C0 15.5304 0.210714 16.0391 0.585786 16.4142C0.960859 16.7893 1.46957 17 2 17H13C13.5304 17 14.0391 16.7893 14.4142 16.4142C14.7893 16.0391 15 15.5304 15 15V7L9 1Z"
+            fill="#F0F0F0"
+            stroke="#CCCCCC"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+          <path d="M9 1V7H15" stroke="#CCCCCC" strokeWidth="1" strokeLinejoin="round" />
+        </svg>
+        <span
+          style={{
+            flex: 1,
+            fontSize: 13,
+            color: '#333',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {__name}
+        </span>
+        <span style={{ fontSize: 12, color: '#AAA', flexShrink: 0 }}>{sizeLabel}</span>
+      </div>
     );
   }
 }
 
 // ─── Editor Theme ─────────────────────────────────────────────────────────────
-// Class names are defined in globals.css under @layer components
 
 const EDITOR_THEME = {
   heading: { h1: 'ne-h1', h2: 'ne-h2', h3: 'ne-h3' },
@@ -184,6 +318,7 @@ const REGISTERED_NODES = [
   LinkNode,
   AutoLinkNode,
   ImageNode,
+  FileNode,
   TableNode,
   TableRowNode,
   TableCellNode,
@@ -202,6 +337,88 @@ const BLOCK_OPTIONS = [
   { label: '번호 목록', value: 'number' as BlockType, icon: '1.' },
 ] as const;
 
+// ─── Media helpers ────────────────────────────────────────────────────────────
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
+
+// ─── Media Plugin ─────────────────────────────────────────────────────────────
+
+function MediaPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return mergeRegister(
+      editor.registerCommand(
+        INSERT_IMAGE_COMMAND,
+        ({ src, caption = '' }) => {
+          editor.update(() => {
+            $insertNodes([new ImageNode(src, caption)]);
+          });
+          return true;
+        },
+        COMMAND_PRIORITY_LOW,
+      ),
+      editor.registerCommand(
+        INSERT_FILE_COMMAND,
+        ({ name, size, dataUrl }) => {
+          editor.update(() => {
+            $insertNodes([new FileNode(name, size, dataUrl)]);
+          });
+          return true;
+        },
+        COMMAND_PRIORITY_LOW,
+      ),
+    );
+  }, [editor]);
+
+  return null;
+}
+
+// ─── Drag Drop Plugin ─────────────────────────────────────────────────────────
+
+function DragDropPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const handleDragOver = (e: Event) => {
+      const de = e as DragEvent;
+      if (de.dataTransfer?.types.includes('Files')) {
+        de.preventDefault();
+        if (de.dataTransfer) de.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const handleDrop = async (e: Event) => {
+      const de = e as DragEvent;
+      const file = de.dataTransfer?.files[0];
+      if (!file) return;
+      de.preventDefault();
+      de.stopPropagation();
+      const dataUrl = await readFileAsDataUrl(file);
+      if (file.type.startsWith('image/')) {
+        editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src: dataUrl });
+      } else {
+        editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+      }
+    };
+
+    return editor.registerRootListener((root, prev) => {
+      prev?.removeEventListener('dragover', handleDragOver);
+      prev?.removeEventListener('drop', handleDrop);
+      root?.addEventListener('dragover', handleDragOver);
+      root?.addEventListener('drop', handleDrop);
+    });
+  }, [editor]);
+
+  return null;
+}
+
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
 
 export function ToolbarPlugin() {
@@ -214,6 +431,8 @@ export function ToolbarPlugin() {
   const [blockType, setBlockType] = useState<BlockType>('paragraph');
   const [showBlockMenu, setShowBlockMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const updateToolbar = useCallback(() => {
     const selection = $getSelection();
@@ -262,7 +481,6 @@ export function ToolbarPlugin() {
     );
   }, [editor, updateToolbar]);
 
-  // Close block menu on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -282,9 +500,7 @@ export function ToolbarPlugin() {
 
     if (type === 'bullet') {
       editor.dispatchCommand(
-        blockType === 'bullet'
-          ? REMOVE_LIST_COMMAND
-          : INSERT_UNORDERED_LIST_COMMAND,
+        blockType === 'bullet' ? REMOVE_LIST_COMMAND : INSERT_UNORDERED_LIST_COMMAND,
         undefined,
       );
       return;
@@ -292,9 +508,7 @@ export function ToolbarPlugin() {
 
     if (type === 'number') {
       editor.dispatchCommand(
-        blockType === 'number'
-          ? REMOVE_LIST_COMMAND
-          : INSERT_ORDERED_LIST_COMMAND,
+        blockType === 'number' ? REMOVE_LIST_COMMAND : INSERT_ORDERED_LIST_COMMAND,
         undefined,
       );
       return;
@@ -316,6 +530,22 @@ export function ToolbarPlugin() {
     });
   };
 
+  const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const src = await readFileAsDataUrl(file);
+    editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
+    e.target.value = '';
+  };
+
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+    e.target.value = '';
+  };
+
   const currentLabel =
     BLOCK_OPTIONS.find((b) => b.value === blockType)?.label ?? '텍스트';
 
@@ -323,8 +553,12 @@ export function ToolbarPlugin() {
     <div
       className="nodrag nowheel flex items-center gap-0.5 px-2 py-1.5 shrink-0 select-none"
       style={{ borderBottom: '1px solid #EBEBEB' }}
-      onMouseDown={(e) => e.preventDefault()} // keep editor focus
+      onMouseDown={(e) => e.preventDefault()}
     >
+      {/* Hidden file inputs */}
+      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageInput} />
+      <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileInput} />
+
       {/* ── Block type dropdown ── */}
       <div ref={menuRef} className="relative">
         <button
@@ -385,48 +619,16 @@ export function ToolbarPlugin() {
       </div>
 
       {/* ── Divider ── */}
-      <div
-        style={{ width: 1, height: 14, background: '#E0E0E0', margin: '0 4px' }}
-      />
+      <div style={{ width: 1, height: 14, background: '#E0E0E0', margin: '0 4px' }} />
 
       {/* ── Text format buttons ── */}
       {(
         [
-          {
-            format: 'bold' as const,
-            label: 'B',
-            active: isBold,
-            title: '굵게 ⌘B',
-            extraStyle: { fontWeight: 700 },
-          },
-          {
-            format: 'italic' as const,
-            label: 'I',
-            active: isItalic,
-            title: '기울임 ⌘I',
-            extraStyle: { fontStyle: 'italic' },
-          },
-          {
-            format: 'underline' as const,
-            label: 'U',
-            active: isUnderline,
-            title: '밑줄 ⌘U',
-            extraStyle: { textDecoration: 'underline' },
-          },
-          {
-            format: 'strikethrough' as const,
-            label: 'S',
-            active: isStrikethrough,
-            title: '취소선',
-            extraStyle: { textDecoration: 'line-through' },
-          },
-          {
-            format: 'code' as const,
-            label: '<>',
-            active: isCode,
-            title: '인라인 코드',
-            extraStyle: { fontFamily: 'monospace', fontSize: 10 },
-          },
+          { format: 'bold' as const, label: 'B', active: isBold, title: '굵게 ⌘B', extraStyle: { fontWeight: 700 } },
+          { format: 'italic' as const, label: 'I', active: isItalic, title: '기울임 ⌘I', extraStyle: { fontStyle: 'italic' } },
+          { format: 'underline' as const, label: 'U', active: isUnderline, title: '밑줄 ⌘U', extraStyle: { textDecoration: 'underline' } },
+          { format: 'strikethrough' as const, label: 'S', active: isStrikethrough, title: '취소선', extraStyle: { textDecoration: 'line-through' } },
+          { format: 'code' as const, label: '<>', active: isCode, title: '인라인 코드', extraStyle: { fontFamily: 'monospace', fontSize: 10 } },
         ] as const
       ).map(({ format, label, active, title, extraStyle }) => (
         <button
@@ -444,22 +646,78 @@ export function ToolbarPlugin() {
             ...extraStyle,
           }}
           onMouseEnter={(e) => {
-            if (!active)
-              (e.currentTarget as HTMLElement).style.background = '#F3F3F3';
+            if (!active) (e.currentTarget as HTMLElement).style.background = '#F3F3F3';
           }}
           onMouseLeave={(e) => {
-            if (!active)
-              (e.currentTarget as HTMLElement).style.background = 'transparent';
+            if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent';
           }}
         >
           {label}
         </button>
       ))}
+
+      {/* ── Divider ── */}
+      <div style={{ width: 1, height: 14, background: '#E0E0E0', margin: '0 4px' }} />
+
+      {/* ── Media buttons ── */}
+      <button
+        type="button"
+        title="이미지 삽입"
+        onClick={() => imageInputRef.current?.click()}
+        className="flex items-center justify-center rounded cursor-pointer transition-colors"
+        style={{ width: 26, height: 26, color: '#AAAAAA' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#F3F3F3'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      >
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="0.7" y="0.7" width="11.6" height="11.6" rx="1.5" />
+          <circle cx="4" cy="4" r="1" fill="currentColor" stroke="none" />
+          <path d="M0.7 8.5l2.8-2.8 2 2 2.5-3.2 4.3 5" />
+        </svg>
+      </button>
+
+      <button
+        type="button"
+        title="파일 첨부"
+        onClick={() => fileInputRef.current?.click()}
+        className="flex items-center justify-center rounded cursor-pointer transition-colors"
+        style={{ width: 26, height: 26, color: '#AAAAAA' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#F3F3F3'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      >
+        <svg width="11" height="13" viewBox="0 0 11 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9.5 5.5L4.5 10.5a2.5 2.5 0 01-3.535-3.536L5.5 2.43a1.5 1.5 0 012.121 2.121L3.086 9.086a.5.5 0 01-.707-.707L7 3.76" />
+        </svg>
+      </button>
     </div>
   );
 }
 
 // ─── Title Tracker Plugin ─────────────────────────────────────────────────────
+
+function ContentExportPlugin({
+  onChange,
+}: {
+  onChange: (content: { markdownBody: string; jsonBody: string }) => void;
+}) {
+  const [editor] = useLexicalComposerContext();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return editor.registerUpdateListener(({ editorState }) => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        editorState.read(() => {
+          const markdownBody = $convertToMarkdownString(TRANSFORMERS);
+          const jsonBody = JSON.stringify(editorState.toJSON());
+          onChange({ markdownBody, jsonBody });
+        });
+      }, 500);
+    });
+  }, [editor, onChange]);
+
+  return null;
+}
 
 function TitleTrackerPlugin({
   onChange,
@@ -493,18 +751,20 @@ export function NotionEditor({
   username,
   cursorColor,
   onFirstLineChange,
+  onContentChange,
   toolbarSlot,
+  noMediaDrop = false,
+  autoGrow = false,
+  minHeight,
 }: NotionEditorProps) {
   const initialConfig = {
     namespace: `ne-${nodeId}`,
     theme: EDITOR_THEME,
     nodes: REGISTERED_NODES,
     onError: (error: Error) => console.error('[NotionEditor]', error),
-    // YJS 모드 전용 — CollaborationPlugin이 Y.Doc에서 상태를 가져오므로 null
     editorState: null,
   };
 
-  // CollaborationPlugin에 Y.Doc과 provider를 주입하는 factory
   const providerFactory = useCallback(
     (id: string, yjsDocMap: Map<string, Y.Doc>) => {
       if (!collabProvider) return null as never;
@@ -516,14 +776,15 @@ export function NotionEditor({
   );
 
   return (
-    // flex-1 + min-h-0: flex child가 부모의 max-height 안에서 제대로 수축되도록 함
-    <div className="flex flex-col flex-1 min-h-0 bg-white rounded-b-lg">
+    <div className={autoGrow ? 'flex flex-col bg-white rounded-b-lg' : 'flex flex-col flex-1 min-h-0 bg-white rounded-b-lg'}>
       <LexicalCollaboration>
         <LexicalComposer initialConfig={initialConfig}>
           {toolbarSlot}
 
-          {/* min-h-0: flex child가 컨텐츠 크기 이하로 수축 가능 → overflow-y-auto 작동 */}
-          <div className="relative flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+          <div
+            className={autoGrow ? 'relative' : 'relative flex-1 min-h-0 overflow-y-auto scrollbar-hide'}
+            style={autoGrow ? { minHeight: minHeight ?? 80 } : undefined}
+          >
             <RichTextPlugin
               contentEditable={
                 <ContentEditable
@@ -545,14 +806,20 @@ export function NotionEditor({
               ErrorBoundary={LexicalErrorBoundary}
             />
           </div>
+
           <TablePlugin />
           <ListPlugin />
           <CheckListPlugin />
           <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
           <MarkdownPastePlugin />
+          <MediaPlugin />
+          {!noMediaDrop && <DragDropPlugin />}
 
           {onFirstLineChange && (
             <TitleTrackerPlugin onChange={onFirstLineChange} />
+          )}
+          {onContentChange && (
+            <ContentExportPlugin onChange={onContentChange} />
           )}
 
           {collabProvider && (
