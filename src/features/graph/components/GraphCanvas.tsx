@@ -1364,7 +1364,18 @@ function GraphCanvasInner({
           );
 
           setNodes((prev) => {
-            if (prev.some((n) => n.id === nodeId)) return prev;
+            const existingIndex = prev.findIndex((n) => n.id === nodeId);
+            if (existingIndex !== -1) {
+              // WS NODE_CREATE가 REST 응답보다 먼저 도착한 경우:
+              // handleSide가 없으면 추가, 이미 있으면 무시
+              if (prev[existingIndex].data?.handleSide !== undefined)
+                return prev;
+              return prev.map((n) =>
+                n.id === nodeId
+                  ? { ...n, data: { ...n.data, handleSide: side } }
+                  : n,
+              );
+            }
             return [
               ...prev,
               {
@@ -1435,7 +1446,7 @@ function GraphCanvasInner({
   /* =========================
      Node click → toggle input box
      ========================= */
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     setOpenNodeIds((prev) => {
       if (prev.includes(node.id)) {
         // 이미 열려 있으면 포커스만 이동
@@ -1564,23 +1575,18 @@ function GraphCanvasInner({
       const shouldConnect =
         targetParent && !isInvalidConnection(targetParent.id, '__new__', edges);
 
-      // root 노드 → 위치 기반, depth>0 노드 → 부모의 handleSide 계승
-      const dropSide: 'left' | 'right' | undefined =
-        shouldConnect && targetParent
-          ? getParentId(targetParent.id, edges) !== null
-            ? ((targetParent.data?.handleSide as
-                | 'left'
-                | 'right'
-                | undefined) ??
-              getTargetSideRelativeToParent(
-                basePosition.x,
-                targetParent.position.x,
-              ))
-            : getTargetSideRelativeToParent(
-                basePosition.x,
-                targetParent.position.x,
-              )
-          : undefined;
+      // hoveredNode(sourceNode)가 handleSide를 가지면 상속, 없으면(root) 위치 기반
+      const dropSide: 'left' | 'right' | undefined = (() => {
+        if (!shouldConnect || !targetParent) return undefined;
+        const storedSide = targetParent.data?.handleSide as
+          | 'left'
+          | 'right'
+          | undefined;
+        return (
+          storedSide ??
+          getTargetSideRelativeToParent(basePosition.x, targetParent.position.x)
+        );
+      })();
 
       const position =
         shouldConnect && targetParent && dropSide
@@ -1611,7 +1617,18 @@ function GraphCanvasInner({
         );
 
         setNodes((prev) => {
-          if (prev.some((n) => n.id === nodeId)) return prev;
+          const existingIndex = prev.findIndex((n) => n.id === nodeId);
+          if (existingIndex !== -1) {
+            // WS NODE_CREATE가 REST 응답보다 먼저 도착한 경우:
+            // handleSide가 없고 dropSide가 결정된 경우에만 handleSide 추가
+            if (!dropSide || prev[existingIndex].data?.handleSide !== undefined)
+              return prev;
+            return prev.map((n) =>
+              n.id === nodeId
+                ? { ...n, data: { ...n.data, handleSide: dropSide } }
+                : n,
+            );
+          }
           return [
             ...prev,
             {
