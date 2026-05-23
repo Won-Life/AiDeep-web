@@ -43,13 +43,17 @@ export async function createProjectNode(
   });
 }
 
+interface CreateNodeResponse {
+  nodeId: string;
+}
+
 export async function createMdNode(
   workspaceId: string,
   title: string,
   position: Position,
   body: MdBody,
-): Promise<void> {
-  await api(`/workspace/${workspaceId}/node/md`, {
+): Promise<CreateNodeResponse> {
+  return api<CreateNodeResponse>(`/workspace/${workspaceId}/node/md`, {
     method: "POST",
     body: JSON.stringify({ title, position, body }),
   });

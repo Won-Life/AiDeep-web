@@ -33,7 +33,7 @@ import {
   updateNodeContent,
   EMPTY_LEXICAL_JSON,
 } from '../api/nodes';
-import { emitLivePosition, emitCursorMove, addWorkspaceEventListener } from '@/api/ws';
+import { emitLivePosition, emitCursorMove } from '@/api/ws';
 import { createEdge, deleteEdge } from '../api/edges';
 import type { EdgeDto, NodeDto } from '../types';
 import { rectCollide } from '../layout/rectCollide';
@@ -540,20 +540,8 @@ function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
       };
     }
 
-    // Case 2: source 전용 노드 (부모 없음) → outgoing edges의 sourceHandle로 방향 결정
-    const outgoingEdges = edges.filter((e) => e.source === node.id);
-    if (outgoingEdges.length === 0) return node;
-
-    const sides = outgoingEdges.map((e) =>
-      e.sourceHandle?.includes('right')
-        ? ('right' as const)
-        : ('left' as const),
-    );
-    const allSame = sides.every((s) => s === sides[0]);
-    return {
-      ...node,
-      data: { ...node.data, handleSide: allSame ? sides[0] : undefined },
-    };
+    // Case 2: 부모 없는 non-main 노드 → hasParent: false만 표시
+    return { ...node, data: { ...node.data, hasParent: false } };
   });
 }
 
@@ -714,12 +702,6 @@ function GraphCanvasInner({
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
   const isConnectingRef = useRef(false);
   const lastLiveEmitRef = useRef(0);
-  const pendingEdgesRef = useRef<{
-    posKey: string;
-    sourceId: string;
-    sourceHandle: string;
-    targetHandle: string;
-  }[]>([]);
   const LIVE_EMIT_INTERVAL = 50; // ms
 
   // ─── Cursor sharing ──────────────────────────────────────
@@ -1282,7 +1264,20 @@ function GraphCanvasInner({
         resolvedSourceHandle,
         resolvedTargetHandle,
       )
-        .then(() => {
+        .then(({ edgeId }) => {
+          setEdges((prev) => {
+            if (prev.some((e) => e.id === edgeId)) return prev;
+            const newEdge: Edge = {
+              id: edgeId,
+              source: sourceId,
+              target: targetId,
+              type: 'branch',
+              sourceHandle: resolvedSourceHandle,
+              targetHandle: resolvedTargetHandle,
+            };
+            const allEdges = [...prev, newEdge];
+            return [...prev, buildEdgePresentation(newEdge, nodes, allEdges)];
+          });
           if (colorToPropagate) {
             updateNodeContent(workspaceId, targetId, {
               color: colorToPropagate.bg,
@@ -1305,7 +1300,7 @@ function GraphCanvasInner({
 
   const onConnectEnd = useCallback(
     async (event: MouseEvent | TouchEvent, connectionState: any) => {
-      // 기존 노드에 연결되지 않았을 때 (빈 공간에 드롭)
+      // 핸들에서 직접 뽑은 엣지가 다른 노드에 연결되지 않았을 때 (엣지를 빈 공간에 드롭) 새 노드 생성하며 연결 생성
       if (!connectionState.isValid) {
         // 마우스 위치 가져오기
         const { clientX, clientY } =
@@ -1369,25 +1364,66 @@ function GraphCanvasInner({
           edges,
         );
 
-        const posKey = `${Math.round(adjustedPosition.x)},${Math.round(adjustedPosition.y)}`;
-        pendingEdgesRef.current.push({
-          posKey,
-          sourceId: connectionState.fromNode.id,
-          sourceHandle: fromHandle || `source-${side}`,
-          targetHandle: `target-${side === 'left' ? 'right' : 'left'}`,
-        });
         try {
-          await createMdNode(workspaceId, '새 노드', adjustedPosition, {
-            markdownBody: '',
-            jsonBody: EMPTY_LEXICAL_JSON,
-            color: colorPair.bg,
-            textColor: colorPair.text,
+          const { nodeId } = await createMdNode(
+            workspaceId,
+            '',
+            adjustedPosition,
+            {
+              markdownBody: '',
+              jsonBody: EMPTY_LEXICAL_JSON,
+              color: colorPair.bg,
+              textColor: colorPair.text,
+            },
+          );
+
+          setNodes((prev) => {
+            if (prev.some((n) => n.id === nodeId)) return prev;
+            return [
+              ...prev,
+              {
+                id: nodeId,
+                type: 'textUpdater',
+                position: adjustedPosition,
+                data: {
+                  title: '',
+                  isMain: false,
+                  color: colorPair.bg,
+                  textColor: colorPair.text,
+                  handleSide: side,
+                },
+              },
+            ];
           });
+
+          const fromHandleId = fromHandle || `source-${side}`;
+          const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
+          createEdge(
+            workspaceId,
+            connectionState.fromNode.id,
+            nodeId,
+            fromHandleId,
+            targetHandleId,
+          )
+            .then(({ edgeId }) => {
+              setEdges((prev) => {
+                if (prev.some((e) => e.id === edgeId)) return prev;
+                const newEdge: Edge = {
+                  id: edgeId,
+                  source: connectionState.fromNode.id,
+                  target: nodeId,
+                  type: 'branch',
+                  sourceHandle: fromHandleId,
+                  targetHandle: targetHandleId,
+                };
+                return [...prev, newEdge];
+              });
+            })
+            .catch((err) =>
+              console.error('[onConnectEnd] createEdge failed', err),
+            );
         } catch (err) {
           console.error('[onConnectEnd] node creation failed', err);
-          pendingEdgesRef.current = pendingEdgesRef.current.filter(
-            (p) => p.posKey !== posKey,
-          );
         }
       }
 
@@ -1456,7 +1492,25 @@ function GraphCanvasInner({
           textColor: colorPair.text,
         } as MdBody;
 
-        await createMdNode(workspaceId, '', position, body);
+        const { nodeId } = await createMdNode(workspaceId, '', position, body);
+
+        setNodes((prev) => {
+          if (prev.some((n) => n.id === nodeId)) return prev;
+          return [
+            ...prev,
+            {
+              id: nodeId,
+              type: 'textUpdater',
+              position,
+              data: {
+                title: '',
+                isMain: false,
+                color: colorPair.bg,
+                textColor: colorPair.text,
+              },
+            },
+          ];
+        });
       } catch (err) {
         console.error('[onPaneClick] createMdNode failed', err);
       }
@@ -1501,7 +1555,12 @@ function GraphCanvasInner({
       if (!raw) return;
       event.preventDefault();
 
-      let payload: { id: string; name: string; markdownBody?: string; jsonBody?: string } | null = null;
+      let payload: {
+        id: string;
+        name: string;
+        markdownBody?: string;
+        jsonBody?: string;
+      } | null = null;
       try {
         payload = JSON.parse(raw);
       } catch {
@@ -1552,28 +1611,66 @@ function GraphCanvasInner({
         ? getGraphColor(targetParent.id, nodes, edges)
         : DEFAULT_NODE_COLOR;
 
-      const posKey = `${Math.round(position.x)},${Math.round(position.y)}`;
-      if (shouldConnect && targetParent && dropSide) {
-        pendingEdgesRef.current.push({
-          posKey,
-          sourceId: targetParent.id,
-          sourceHandle: `source-${dropSide}`,
-          targetHandle: `target-${dropSide === 'left' ? 'right' : 'left'}`,
-        });
-      }
-
       try {
-        await createMdNode(workspaceId, payload.name, position, {
-          markdownBody: payload.markdownBody ?? '',
-          jsonBody: payload.jsonBody ?? EMPTY_LEXICAL_JSON,
-          color: colorPair.bg,
-          textColor: colorPair.text,
+        const { nodeId } = await createMdNode(
+          workspaceId,
+          payload.name,
+          position,
+          {
+            markdownBody: payload.markdownBody ?? '',
+            jsonBody: payload.jsonBody ?? EMPTY_LEXICAL_JSON,
+            color: colorPair.bg,
+            textColor: colorPair.text,
+          },
+        );
+
+        setNodes((prev) => {
+          if (prev.some((n) => n.id === nodeId)) return prev;
+          return [
+            ...prev,
+            {
+              id: nodeId,
+              type: 'textUpdater',
+              position,
+              data: {
+                title: payload.name,
+                isMain: false,
+                color: colorPair.bg,
+                textColor: colorPair.text,
+                ...(dropSide && { handleSide: dropSide }),
+              },
+            },
+          ];
         });
+
+        if (shouldConnect && targetParent && dropSide) {
+          const sourceHandle = `source-${dropSide}`;
+          const targetHandle = `target-${dropSide === 'left' ? 'right' : 'left'}`;
+          createEdge(
+            workspaceId,
+            targetParent.id,
+            nodeId,
+            sourceHandle,
+            targetHandle,
+          )
+            .then(({ edgeId }) => {
+              setEdges((prev) => {
+                if (prev.some((e) => e.id === edgeId)) return prev;
+                const newEdge: Edge = {
+                  id: edgeId,
+                  source: targetParent.id,
+                  target: nodeId,
+                  type: 'branch',
+                  sourceHandle,
+                  targetHandle,
+                };
+                return [...prev, newEdge];
+              });
+            })
+            .catch((err) => console.error('[onDrop] createEdge failed', err));
+        }
       } catch (err) {
         console.error('[onDrop] createMdNode failed', err);
-        pendingEdgesRef.current = pendingEdgesRef.current.filter(
-          (p) => p.posKey !== posKey,
-        );
         setHoveredNodeId(null);
         return;
       }
@@ -1953,16 +2050,30 @@ function GraphCanvasInner({
               : prev,
           );
 
-          // API: 새 부모 연결 — WS EDGE_CREATE가 엣지 추가
+          // API: 새 부모 연결 — REST 응답으로 edgeId 취득 후 state 추가
+          const dragStopSourceHandle = `source-${sideRelativeToParent}`;
+          const dragStopTargetHandle = `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`;
           const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
           createEdge(
             workspaceId,
             parentNode.id,
             childNode.id,
-            `source-${sideRelativeToParent}`,
-            `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`,
+            dragStopSourceHandle,
+            dragStopTargetHandle,
           )
-            .then(() => {
+            .then(({ edgeId }) => {
+              setEdges((prev) => {
+                if (prev.some((e) => e.id === edgeId)) return prev;
+                const newEdge: Edge = {
+                  id: edgeId,
+                  source: parentNode.id,
+                  target: childNode.id,
+                  type: 'branch',
+                  sourceHandle: dragStopSourceHandle,
+                  targetHandle: dragStopTargetHandle,
+                };
+                return [...prev, newEdge];
+              });
               updateNodeContent(workspaceId, childNode.id, {
                 color: dragStopColor.bg,
                 textColor: dragStopColor.text,
@@ -2043,19 +2154,6 @@ function GraphCanvasInner({
     },
     [nodes, edges, hoveredNodeId, workspaceId],
   );
-
-  useEffect(() => {
-    return addWorkspaceEventListener((event) => {
-      if (event.type !== 'NODE_CREATE') return;
-      const { nodeId, position } = event.node;
-      const posKey = `${Math.round(position.x)},${Math.round(position.y)}`;
-      const idx = pendingEdgesRef.current.findIndex((p) => p.posKey === posKey);
-      if (idx === -1) return;
-      const pending = pendingEdgesRef.current.splice(idx, 1)[0];
-      createEdge(workspaceId, pending.sourceId, nodeId, pending.sourceHandle, pending.targetHandle)
-        .catch((err) => console.error('[pending createEdge] failed', err));
-    });
-  }, [workspaceId]);
 
   useEffect(() => {
     if (focusedNodeId) {
