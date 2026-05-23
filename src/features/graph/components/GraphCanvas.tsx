@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useMemo,
   type Dispatch,
   type SetStateAction,
   type DragEvent,
@@ -992,26 +993,10 @@ function GraphCanvasInner({
     setIsArchiveModalOpen(false);
   }, [pendingArchiveNodeIds, workspaceId]);
 
-  useEffect(() => {
-    setEdges((snapshot) => {
-      const updated = snapshot.map((edge) =>
-        buildEdgePresentation(edge, nodes, snapshot),
-      );
-      const isSame =
-        updated.length === snapshot.length &&
-        updated.every((edge, index) => {
-          const prev = snapshot[index];
-          return (
-            edge.type === prev.type &&
-            edge.sourceHandle === prev.sourceHandle &&
-            edge.targetHandle === prev.targetHandle &&
-            edge.data?.hubX === prev.data?.hubX &&
-            edge.data?.hubY === prev.data?.hubY
-          );
-        });
-      return isSame ? snapshot : updated;
-    });
-  }, [nodes, edges.length]);
+  const edgesWithPresentation = useMemo(
+    () => edges.map((edge) => buildEdgePresentation(edge, nodes, edges)),
+    [nodes, edges],
+  );
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
@@ -1267,16 +1252,17 @@ function GraphCanvasInner({
         .then(({ edgeId }) => {
           setEdges((prev) => {
             if (prev.some((e) => e.id === edgeId)) return prev;
-            const newEdge: Edge = {
-              id: edgeId,
-              source: sourceId,
-              target: targetId,
-              type: 'branch',
-              sourceHandle: resolvedSourceHandle,
-              targetHandle: resolvedTargetHandle,
-            };
-            const allEdges = [...prev, newEdge];
-            return [...prev, buildEdgePresentation(newEdge, nodes, allEdges)];
+            return [
+              ...prev,
+              {
+                id: edgeId,
+                source: sourceId,
+                target: targetId,
+                type: 'branch',
+                sourceHandle: resolvedSourceHandle,
+                targetHandle: resolvedTargetHandle,
+              },
+            ];
           });
           if (colorToPropagate) {
             updateNodeContent(workspaceId, targetId, {
@@ -2172,7 +2158,7 @@ function GraphCanvasInner({
     <div className="relative w-full h-full bg-background">
       <ReactFlow
         nodes={nodesWithCallbacks}
-        edges={edges}
+        edges={edgesWithPresentation}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
