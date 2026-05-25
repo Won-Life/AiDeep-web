@@ -1250,20 +1250,17 @@ function GraphCanvasInner({
         resolvedTargetHandle,
       )
         .then(({ edgeId }) => {
-          setEdges((prev) => {
-            if (prev.some((e) => e.id === edgeId)) return prev;
-            return [
-              ...prev,
-              {
-                id: edgeId,
-                source: sourceId,
-                target: targetId,
-                type: 'branch',
-                sourceHandle: resolvedSourceHandle,
-                targetHandle: resolvedTargetHandle,
-              },
-            ];
-          });
+          setEdges((prev) => [
+            ...prev,
+            {
+              id: edgeId,
+              source: sourceId,
+              target: targetId,
+              type: 'branch',
+              sourceHandle: resolvedSourceHandle,
+              targetHandle: resolvedTargetHandle,
+            },
+          ]);
           if (colorToPropagate) {
             updateNodeContent(workspaceId, targetId, {
               color: colorToPropagate.bg,
@@ -1363,35 +1360,23 @@ function GraphCanvasInner({
             },
           );
 
-          setNodes((prev) => {
-            const existingIndex = prev.findIndex((n) => n.id === nodeId);
-            if (existingIndex !== -1) {
-              // WS NODE_CREATE가 REST 응답보다 먼저 도착한 경우:
-              // handleSide가 없으면 추가, 이미 있으면 무시
-              if (prev[existingIndex].data?.handleSide !== undefined)
-                return prev;
-              return prev.map((n) =>
-                n.id === nodeId
-                  ? { ...n, data: { ...n.data, handleSide: side } }
-                  : n,
-              );
-            }
-            return [
-              ...prev,
-              {
-                id: nodeId,
-                type: 'textUpdater',
-                position: adjustedPosition,
-                data: {
-                  title: '',
-                  isMain: false,
-                  color: colorPair.bg,
-                  textColor: colorPair.text,
-                  handleSide: side,
-                },
+          // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
+          // 본인 생성 노드의 WS 이벤트는 무시되므로 REST 응답이 항상 최초 삽입.
+          setNodes((prev) => [
+            ...prev,
+            {
+              id: nodeId,
+              type: 'textUpdater',
+              position: adjustedPosition,
+              data: {
+                title: '',
+                isMain: false,
+                color: colorPair.bg,
+                textColor: colorPair.text,
+                handleSide: side,
               },
-            ];
-          });
+            },
+          ]);
 
           const fromHandleId = fromHandle || `source-${side}`;
           const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
@@ -1403,18 +1388,17 @@ function GraphCanvasInner({
             targetHandleId,
           )
             .then(({ edgeId }) => {
-              setEdges((prev) => {
-                if (prev.some((e) => e.id === edgeId)) return prev;
-                const newEdge: Edge = {
+              setEdges((prev) => [
+                ...prev,
+                {
                   id: edgeId,
                   source: connectionState.fromNode.id,
                   target: nodeId,
                   type: 'branch',
                   sourceHandle: fromHandleId,
                   targetHandle: targetHandleId,
-                };
-                return [...prev, newEdge];
-              });
+                },
+              ]);
             })
             .catch((err) =>
               console.error('[onConnectEnd] createEdge failed', err),
@@ -1491,23 +1475,22 @@ function GraphCanvasInner({
 
         const { nodeId } = await createMdNode(workspaceId, '', position, body);
 
-        setNodes((prev) => {
-          if (prev.some((n) => n.id === nodeId)) return prev;
-          return [
-            ...prev,
-            {
-              id: nodeId,
-              type: 'textUpdater',
-              position,
-              data: {
-                title: '',
-                isMain: false,
-                color: colorPair.bg,
-                textColor: colorPair.text,
-              },
+        // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
+        // 본인 생성 노드의 WS 이벤트는 무시되므로 REST 응답이 항상 최초 삽입.
+        setNodes((prev) => [
+          ...prev,
+          {
+            id: nodeId,
+            type: 'textUpdater',
+            position,
+            data: {
+              title: '',
+              isMain: false,
+              color: colorPair.bg,
+              textColor: colorPair.text,
             },
-          ];
-        });
+          },
+        ]);
       } catch (err) {
         console.error('[onPaneClick] createMdNode failed', err);
       }
@@ -1616,35 +1599,23 @@ function GraphCanvasInner({
           },
         );
 
-        setNodes((prev) => {
-          const existingIndex = prev.findIndex((n) => n.id === nodeId);
-          if (existingIndex !== -1) {
-            // WS NODE_CREATE가 REST 응답보다 먼저 도착한 경우:
-            // handleSide가 없고 dropSide가 결정된 경우에만 handleSide 추가
-            if (!dropSide || prev[existingIndex].data?.handleSide !== undefined)
-              return prev;
-            return prev.map((n) =>
-              n.id === nodeId
-                ? { ...n, data: { ...n.data, handleSide: dropSide } }
-                : n,
-            );
-          }
-          return [
-            ...prev,
-            {
-              id: nodeId,
-              type: 'textUpdater',
-              position,
-              data: {
-                title: payload.name,
-                isMain: false,
-                color: colorPair.bg,
-                textColor: colorPair.text,
-                ...(dropSide && { handleSide: dropSide }),
-              },
+        // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
+        // 본인 생성 노드의 WS 이벤트는 무시되므로 REST 응답이 항상 최초 삽입.
+        setNodes((prev) => [
+          ...prev,
+          {
+            id: nodeId,
+            type: 'textUpdater',
+            position,
+            data: {
+              title: payload.name,
+              isMain: false,
+              color: colorPair.bg,
+              textColor: colorPair.text,
+              ...(dropSide && { handleSide: dropSide }),
             },
-          ];
-        });
+          },
+        ]);
 
         if (shouldConnect && targetParent && dropSide) {
           const sourceHandle = `source-${dropSide}`;
@@ -1657,18 +1628,17 @@ function GraphCanvasInner({
             targetHandle,
           )
             .then(({ edgeId }) => {
-              setEdges((prev) => {
-                if (prev.some((e) => e.id === edgeId)) return prev;
-                const newEdge: Edge = {
+              setEdges((prev) => [
+                ...prev,
+                {
                   id: edgeId,
                   source: targetParent.id,
                   target: nodeId,
                   type: 'branch',
                   sourceHandle,
                   targetHandle,
-                };
-                return [...prev, newEdge];
-              });
+                },
+              ]);
             })
             .catch((err) => console.error('[onDrop] createEdge failed', err));
         }
@@ -2065,18 +2035,17 @@ function GraphCanvasInner({
             dragStopTargetHandle,
           )
             .then(({ edgeId }) => {
-              setEdges((prev) => {
-                if (prev.some((e) => e.id === edgeId)) return prev;
-                const newEdge: Edge = {
+              setEdges((prev) => [
+                ...prev,
+                {
                   id: edgeId,
                   source: parentNode.id,
                   target: childNode.id,
                   type: 'branch',
                   sourceHandle: dragStopSourceHandle,
                   targetHandle: dragStopTargetHandle,
-                };
-                return [...prev, newEdge];
-              });
+                },
+              ]);
               updateNodeContent(workspaceId, childNode.id, {
                 color: dragStopColor.bg,
                 textColor: dragStopColor.text,

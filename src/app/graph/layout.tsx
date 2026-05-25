@@ -150,6 +150,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
 
   useWorkspaceWS({
     workspaceId: workspaceId ?? '',
+    currentUserId: userMe?.userId,
     setNodes,
     setEdges,
     edgesRef,
