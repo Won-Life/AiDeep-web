@@ -627,6 +627,7 @@ function GraphCanvasInner({
     null,
   );
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isArchiveDeleting, setIsArchiveDeleting] = useState(false);
   const [pendingArchiveNodeIds, setPendingArchiveNodeIds] = useState<string[]>(
     [],
   );
@@ -961,6 +962,7 @@ function GraphCanvasInner({
 
     const idsToArchive = new Set(pendingArchiveNodeIds);
 
+    setIsArchiveDeleting(true);
     // BE 삭제 API 호출 (병렬)
     try {
       await Promise.all(
@@ -971,6 +973,7 @@ function GraphCanvasInner({
       // 실패 시 모달만 닫고 로컬 state 유지
       setPendingArchiveNodeIds([]);
       setIsArchiveModalOpen(false);
+      setIsArchiveDeleting(false);
       return;
     }
 
@@ -991,6 +994,7 @@ function GraphCanvasInner({
     );
     setPendingArchiveNodeIds([]);
     setIsArchiveModalOpen(false);
+    setIsArchiveDeleting(false);
   }, [pendingArchiveNodeIds, workspaceId]);
 
   const edgesWithPresentation = useMemo(
@@ -2190,7 +2194,8 @@ function GraphCanvasInner({
               <button
                 type="button"
                 onClick={handleConfirmArchive}
-                className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background"
+                disabled={isArchiveDeleting}
+                className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50"
               >
                 Yes
               </button>
