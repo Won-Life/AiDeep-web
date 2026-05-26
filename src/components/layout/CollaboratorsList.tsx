@@ -1,15 +1,13 @@
 /*
  * CONTEXT
  * - Problem      : 현재 워크스페이스에 접속 중인 협업자들을 헤더에서 한눈에 볼 수 있어야 함.
- * - Why          : CursorsMap은 cursor_move 이벤트 기반이라 이미 소켓이 연결된 상태에서 추가
- *                  구독 없이 협업자 이름·색상을 얻을 수 있는 가장 저렴한 데이터 소스. (API 구현 시 대체 예정)
- * - Trade-offs   : cursor_move 이벤트가 없으면 목록에 나타나지 않음 (마우스를 전혀 움직이지
- *                  않은 사용자는 숨겨짐). 현재 협업 모델에서는 허용 가능한 trade-off.
+ * - Why          : presence_state 이벤트로 소켓 연결 즉시 전체 접속 멤버 목록을 수신.
+ *                  context에서 collaborators를 직접 읽어 prop drilling을 제거.
  * - Edge Case    : 협업자 0명이면 현재 사용자 아바타 단독 표시.
  */
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import type { CursorsMap } from '@/hooks/useCursors';
+import { useWorkspaceLayout } from '@/app/workspace/context';
 import MembersModal from './MembersModal';
 import { getCursorColor } from '@/utils/cursorColor';
 
@@ -63,22 +61,17 @@ function ChevronDownIcon() {
 }
 
 interface CollaboratorsListProps {
-  collaborators: CursorsMap;
-  workspaceId: string | null;
   currentUserId: string;
   currentUsername: string;
 }
 
 export default function CollaboratorsList({
-  collaborators,
-  workspaceId,
   currentUserId,
   currentUsername,
 }: CollaboratorsListProps) {
+  const { collaborators } = useWorkspaceLayout();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const entries = Object.values(collaborators);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -90,10 +83,10 @@ export default function CollaboratorsList({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const isSolo = entries.length === 0;
+  const isSolo = collaborators.length === 0;
   const myColor = getCursorColor(currentUserId);
-  const visible = entries.slice(0, MAX_VISIBLE);
-  const hidden = entries.length - MAX_VISIBLE;
+  const visible = collaborators.slice(0, MAX_VISIBLE);
+  const hidden = collaborators.length - MAX_VISIBLE;
 
   return (
     <div ref={menuRef} className="relative flex items-center gap-1">
@@ -143,7 +136,7 @@ export default function CollaboratorsList({
         title={
           isSolo
             ? `접속 중: ${currentUsername}`
-            : `접속 중: ${entries.map((e) => e.userName).join(', ')}`
+            : `접속 중: ${collaborators.map((c) => c.userName).join(', ')}`
         }
       >
         <span
@@ -155,12 +148,7 @@ export default function CollaboratorsList({
       </button>
 
       {/* 참여자 목록 모달 */}
-      {isOpen && (
-        <MembersModal
-          currentUsername={currentUsername}
-          collaborators={collaborators}
-        />
-      )}
+      {isOpen && <MembersModal />}
     </div>
   );
 }

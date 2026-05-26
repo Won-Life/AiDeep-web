@@ -11,9 +11,14 @@ import {
   type SetStateAction,
 } from "react";
 import type { Edge, Node } from "@xyflow/react";
-import type { UserMeResponse, WorkspaceRole } from "@/api/types";
+import type {
+  UserMeResponse,
+  WorkspaceMember,
+  WorkspaceRole,
+} from "@/api/types";
+import type { PresenceMember } from "@/api/ws";
 
-interface GraphLayoutContextValue {
+interface WorkspaceLayoutContextValue {
   // 유저
   userMe: UserMeResponse | null;
   setUserMe: (user: UserMeResponse | null) => void;
@@ -27,6 +32,12 @@ interface GraphLayoutContextValue {
   setWorkspaceId: Dispatch<SetStateAction<string | null>>;
   workspaceRole: WorkspaceRole | null;
   setWorkspaceRole: Dispatch<SetStateAction<WorkspaceRole | null>>;
+  // 워크스페이스 참여자 (DB 전체 목록 — 초기화 시 fetch)
+  workspaceMembers: WorkspaceMember[];
+  setWorkspaceMembers: Dispatch<SetStateAction<WorkspaceMember[]>>;
+  // 현재 접속 중인 참여자 (presence_state 이벤트 기반)
+  collaborators: PresenceMember[];
+  setCollaborators: Dispatch<SetStateAction<PresenceMember[]>>;
   // 그래프 데이터 (페이지 이동 시 유지)
   nodes: Node[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
@@ -37,16 +48,18 @@ interface GraphLayoutContextValue {
   setSynced: Dispatch<SetStateAction<boolean>>;
 }
 
-const GraphLayoutContext = createContext<GraphLayoutContextValue>(
-  null as unknown as GraphLayoutContextValue,
+const WorkspaceLayoutContext = createContext<WorkspaceLayoutContextValue>(
+  null as unknown as WorkspaceLayoutContextValue,
 );
 
-export function GraphLayoutProvider({ children }: { children: ReactNode }) {
+export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
   const [userMe, setUserMe] = useState<UserMeResponse | null>(null);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(0);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | null>(null);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
+  const [collaborators, setCollaborators] = useState<PresenceMember[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [synced, setSynced] = useState(false);
@@ -55,13 +68,15 @@ export function GraphLayoutProvider({ children }: { children: ReactNode }) {
   edgesRef.current = edges;
 
   return (
-    <GraphLayoutContext.Provider
+    <WorkspaceLayoutContext.Provider
       value={{
         userMe, setUserMe,
         focusedNodeId, setFocusedNodeId,
         sidebarWidth, setSidebarWidth,
         workspaceId, setWorkspaceId,
         workspaceRole, setWorkspaceRole,
+        workspaceMembers, setWorkspaceMembers,
+        collaborators, setCollaborators,
         nodes, setNodes,
         edges, setEdges,
         edgesRef,
@@ -69,8 +84,8 @@ export function GraphLayoutProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-    </GraphLayoutContext.Provider>
+    </WorkspaceLayoutContext.Provider>
   );
 }
 
-export const useGraphLayout = () => useContext(GraphLayoutContext);
+export const useWorkspaceLayout = () => useContext(WorkspaceLayoutContext);

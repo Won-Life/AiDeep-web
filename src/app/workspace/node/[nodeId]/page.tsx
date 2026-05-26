@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { NodeEditorPanel } from "@/features/editor/NodeEditorPanel";
 import { getNode } from "@/features/graph/api/nodes";
-import { useGraphLayout } from "@/app/graph/context";
+import { useWorkspaceLayout } from "@/app/workspace/context";
 import { useYjsProvider } from "@/hooks/useYjsProvider";
 import { useWorkspaceAwareness } from "@/hooks/useWorkspaceAwareness";
 import { COLOR_PALETTE } from "@/features/graph/constants/colors";
@@ -23,7 +23,7 @@ export default function NodeFullscreenPage() {
   const params = useParams<{ nodeId: string }>();
   const searchParams = useSearchParams();
 
-  const { sidebarWidth, userMe, workspaceRole } = useGraphLayout();
+  const { sidebarWidth, userMe, workspaceRole } = useWorkspaceLayout();
   const nodeId = params.nodeId;
   const workspaceId = searchParams.get("workspaceId") ?? "";
 

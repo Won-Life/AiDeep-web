@@ -10,7 +10,7 @@ import {
 } from '@xyflow/react';
 import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
-import { useGraphLayout } from '@/app/graph/context';
+import { useWorkspaceLayout } from '@/app/workspace/context';
 import { COLOR_PALETTE } from '@/features/graph/constants/colors';
 import NodeContextMenu from '@/components/ui/NodeContextMenu';
 
@@ -57,7 +57,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const showInputBox = nodeData.showInputBox ?? false;
   const isContextMenuOpen = nodeData.isContextMenuOpen ?? false;
 
-  const { userMe } = useGraphLayout();
+  const { userMe } = useWorkspaceLayout();
   const userName = userMe?.username ?? 'Anonymous';
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
 
@@ -190,7 +190,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           panelZIndex={nodeData.panelZIndex}
           onExpandClick={() =>
             router.push(
-              `/graph/node/${id}?workspaceId=${nodeData.workspaceId ?? ''}`,
+              `/workspace/node/${id}?workspaceId=${nodeData.workspaceId ?? ''}`,
             )
           }
           onClose={() => nodeData.onClosePanel?.(id)}

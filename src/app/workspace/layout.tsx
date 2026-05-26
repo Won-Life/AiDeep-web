@@ -14,13 +14,14 @@ import DropDown from '@/components/ui/DropDown';
 import UserMenu from '@/components/layout/UserMenu';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
-import { getWorkspaces } from '@/api/workspace';
+import { getWorkspaces /*, getWorkspaceMembers */ } from '@/api/workspace'; // getWorkspaceMembers — GET /workspace/:id/members 백엔드 미구현
 import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/components/GraphCanvas';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
-import { useCursors } from '@/hooks/useCursors';
+import { onPresenceState } from '@/api/ws';
+import { getCursorColor } from '@/utils/cursorColor';
 import { type NodeView } from '@/features/nodes/TextUpdateNode';
-import { GraphLayoutProvider, useGraphLayout } from './context';
+import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
 
 const INITIAL_PROJECTS: Project[] = [
   { id: 'w1', name: 'Workspaces 1' },
@@ -64,7 +65,7 @@ function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function GraphLayoutInner({ children }: { children: ReactNode }) {
+function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const {
     focusedNodeId,
@@ -75,13 +76,15 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
     workspaceId,
     setWorkspaceId,
     setWorkspaceRole,
+    setWorkspaceMembers,
+    setCollaborators,
     setNodes,
     setEdges,
     nodes,
     edgesRef,
     synced,
     setSynced,
-  } = useGraphLayout();
+  } = useWorkspaceLayout();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
@@ -116,47 +119,69 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   useEffect(() => {
     getMe()
       .then(setUserMe)
-      // DO: 500(서버 에러)에도 /login으로 리다이렉트됨
-      // isAxiosError(err) && err.response?.status === 401 일 때만 로그아웃해야 함
       .catch(() => router.replace('/login'));
   }, [router, setUserMe]);
 
-  // 워크스페이스 + 노드/엣지 — 최초 1회만 fetch (synced 이후 스킵)
+  // 워크스페이스 + 노드/엣지 + 참여자 목록 — 최초 1회만 fetch (synced 이후 스킵)
   useEffect(() => {
     if (synced) return;
+
     getWorkspaces()
       .then((list) => {
-        if (!list.length) return;
+        if (!list.length) return Promise.reject('no workspace');
         const ws = list[0];
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
-        return getNodes(ws.workspaceId);
+        return Promise.all([
+          getNodes(ws.workspaceId),
+          // getWorkspaceMembers(ws.workspaceId),
+        ]);
       })
-      .then((data) => {
-        if (!data) return;
+      .then((results) => {
+        if (!results) return;
+        const [nodeData, members] = results;
         const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
-          data.nodes ?? [],
-          data.edges ?? [],
+          nodeData.nodes ?? [],
+          nodeData.edges ?? [],
         );
         setNodes(flowNodes);
         setEdges(flowEdges);
+        // setWorkspaceMembers(members);
         setSynced(true);
       })
       .catch((err) => {
-        console.error('[GraphLayout] sync failed', err);
+        if (err !== 'no workspace') {
+          console.error('[WorkspaceLayout] sync failed', err);
+        }
         setSynced(true);
       });
-  }, [synced, setWorkspaceId, setNodes, setEdges, setSynced]);
+  }, [synced, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced]);
 
   useWorkspaceWS({
     workspaceId: workspaceId ?? '',
     currentUserId: userMe?.userId,
+    userName: userMe?.username,
+    color: userMe ? getCursorColor(userMe.userId) : undefined,
+    profile: null,
     setNodes,
     setEdges,
     edgesRef,
   });
 
-  const collaborators = useCursors(workspaceId ?? '', userMe?.userId ?? '');
+  // presence_state 이벤트 → collaborators 업데이트
+  useEffect(() => {
+    if (!workspaceId) return;
+    const cleanup = onPresenceState((payload) => {
+      if (payload.workspaceId !== workspaceId) return;
+      setCollaborators(
+        payload.members.filter((m) => m.userId !== userMe?.userId),
+      );
+    });
+    return () => {
+      cleanup();
+      setCollaborators([]);
+    };
+  }, [workspaceId, userMe?.userId, setCollaborators]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -246,7 +271,6 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
-      {/* 캔버스 영역 — 페이지 콘텐츠 */}
       <div className="absolute inset-0 z-0">{children}</div>
 
       <Sidebar
@@ -274,7 +298,6 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
         activeProjectId={focusedNodeId}
         user={userMe}
         onLogout={handleLogout}
-        collaborators={collaborators}
         workspaceId={workspaceId}
       />
 
@@ -289,10 +312,10 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   );
 }
 
-export default function GraphLayout({ children }: { children: ReactNode }) {
+export default function WorkspaceLayout({ children }: { children: ReactNode }) {
   return (
-    <GraphLayoutProvider>
-      <GraphLayoutInner>{children}</GraphLayoutInner>
-    </GraphLayoutProvider>
+    <WorkspaceLayoutProvider>
+      <WorkspaceLayoutInner>{children}</WorkspaceLayoutInner>
+    </WorkspaceLayoutProvider>
   );
 }
