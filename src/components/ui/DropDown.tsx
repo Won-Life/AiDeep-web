@@ -3,9 +3,10 @@ import { useState } from 'react';
 
 interface DropDownProps {
   sidebarWidth: number;
+  onChatOpen: () => void;
 }
 
-export default function DropDown({ sidebarWidth }: DropDownProps) {
+export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -32,7 +33,10 @@ export default function DropDown({ sidebarWidth }: DropDownProps) {
                 <span className="w-4 h-4 bg-orange-500 rounded"></span>
                 AI 자동 구조화
               </li>
-              <li className="flex items-center gap-2 text-sm text-black hover:bg-gray-100 px-2 py-2 rounded cursor-pointer">
+              <li
+                className="flex items-center gap-2 text-sm text-black hover:bg-gray-100 px-2 py-2 rounded cursor-pointer"
+                onClick={() => { setIsOpen(false); onChatOpen(); }}
+              >
                 <span className="w-4 h-4 bg-blue-500 rounded-full"></span>
                 AI 챗봇 사용하기
               </li>
