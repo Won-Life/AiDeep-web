@@ -1,5 +1,2 @@
 reviews:
   review_status: true
-  base_branches:
-    - main
-    - dev
