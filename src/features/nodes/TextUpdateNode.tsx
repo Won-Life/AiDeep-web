@@ -44,7 +44,7 @@ export type NodeView = {
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
   isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
   onClosePanel?: (nodeId: string) => void; // 패널 닫기
-  onFocusPanel?: (nodeId: string) => void; // 패널 포커스
+  onForwardPanel?: (nodeId: string) => void; // 패널 포커스
   onChange?: (nodeId: string, value: string) => void;
 };
 
@@ -194,7 +194,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
             )
           }
           onClose={() => nodeData.onClosePanel?.(id)}
-          onFocus={() => nodeData.onFocusPanel?.(id)}
+          onFocus={() => nodeData.onForwardPanel?.(id)}
           collabProvider={collabProvider}
           username={userName}
           cursorColor={cursorColor}

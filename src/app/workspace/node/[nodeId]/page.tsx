@@ -41,7 +41,7 @@ export default function NodeFullscreenPage() {
   });
 
   // 워크스페이스 awareness — 전체화면 에디터에서도 "이 노드를 보는 중" 상태 전파
-  const { setFocusedNodeId } = useWorkspaceAwareness({
+  const { setOpenEditorNodeId } = useWorkspaceAwareness({
     workspaceId,
     userName,
     userColor: cursorColor,
@@ -50,10 +50,10 @@ export default function NodeFullscreenPage() {
 
   useEffect(() => {
     if (!loading && !error && nodeId) {
-      setFocusedNodeId(nodeId);
+      setOpenEditorNodeId(nodeId);
     }
-    return () => setFocusedNodeId(null);
-  }, [nodeId, loading, error, setFocusedNodeId]);
+    return () => setOpenEditorNodeId(null);
+  }, [nodeId, loading, error, setOpenEditorNodeId]);
 
   useEffect(() => {
     if (!workspaceId || !nodeId) return;
