@@ -618,8 +618,8 @@ function GraphCanvasInner({
   setNodes,
   setEdges,
 }: GraphCanvasInnerProps) {
-  const [openNodeIds, setOpenNodeIds] = useState<string[]>([]);
-  const [localFocusedNodeId, setLocalFocusedNodeId] = useState<string | null>(
+  const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
+  const [workingOnEditorNodeId, setWorkingOnEditorNodeId] = useState<string | null>(
     null,
   );
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -637,31 +637,26 @@ function GraphCanvasInner({
   // ─── Workspace Awareness ─────────────────────────────────────────
   const cursorColor = getCursorColor(currentUserId);
 
-  // Remote toggle: only open (add to openNodeIds + focus), never close
-  const handleRemoteToggle = useCallback(
-    (event: { nodeId: string | null; isOpen: boolean }) => {
-      if (!event.isOpen || !event.nodeId) return;
-      const nodeId = event.nodeId;
-      setOpenNodeIds((prev) =>
-        prev.includes(nodeId) ? prev : [...prev, nodeId],
-      );
-      setLocalFocusedNodeId(nodeId);
-    },
-    [],
-  );
-
-  const { nodeViewers, setFocusedNodeId } = useWorkspaceAwareness({
+  const { nodeViewers, aggregateOpenNodeIds, setOpenEditorNodeId, setAwarenessOpenNodeIds } = useWorkspaceAwareness({
     workspaceId,
     userName: currentUserName,
     userColor: cursorColor,
     role: currentUserRole,
-    onRemoteToggle: handleRemoteToggle,
   });
 
-  // Sync localFocusedNodeId → awareness
+  // Sync workingOnEditorNodeId → awareness (viewer 뱃지용)
   useEffect(() => {
-    setFocusedNodeId(localFocusedNodeId);
-  }, [localFocusedNodeId, setFocusedNodeId]);
+    setOpenEditorNodeId(workingOnEditorNodeId);
+  }, [workingOnEditorNodeId, setOpenEditorNodeId]);
+
+  // Sync myOpenEditorNodeIds → awareness (내가 연 패널 목록 전파용)
+  useEffect(() => {
+    // CONTEXT: 
+    // awareness 는 기본적으로 map 형태로, workspaceId 를 key 값으로 가지며 각 workspace 내에서 참여자 별로 데이터를 저장하는 것이 best practice 이다. (예: awareness.getStates()[clientId] = { user: { name, color }, openEditorNodeId, openNodeIds } 형태)
+    // 그래서 각 참여자 별로 연 패널 목록을 따로 관리하고 공유함으로서, 각 사용자가 워크스페이스를 떠나면 해당 사용자만 열어뒀던 패널들은 자동으로 닫히도록 할 수 있다. 
+    // 별도의 연결 상태 관리가 필요 없이 awareness 로 참여자의 연결 상태를 관리 가능하므로, 내가 떠나면 내 상태가 사라지게 구현한다.
+    setAwarenessOpenNodeIds(myOpenEditorNodeIds);
+  }, [myOpenEditorNodeIds, setAwarenessOpenNodeIds]);
 
   // viewport 저장 (debounce)
   const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -842,12 +837,12 @@ function GraphCanvasInner({
   );
 
   const handleClosePanel = useCallback((nodeId: string) => {
-    setOpenNodeIds((prev) => prev.filter((id) => id !== nodeId));
-    setLocalFocusedNodeId((prev) => (prev === nodeId ? null : prev));
+    setMyOpenEditorNodeIds((prev) => prev.filter((id) => id !== nodeId));
+    setWorkingOnEditorNodeId((prev) => (prev === nodeId ? null : prev));
   }, []);
 
-  const handleFocusPanel = useCallback((nodeId: string) => {
-    setLocalFocusedNodeId(nodeId);
+  const handleForwardPanel = useCallback((nodeId: string) => {
+    setWorkingOnEditorNodeId(nodeId);
   }, []);
 
   const handleTitleChange = useCallback(
@@ -876,7 +871,7 @@ function GraphCanvasInner({
     const hasParent = parentId !== null;
 
     const isContextMenuOpen = contextMenuNodeId === node.id;
-    const isEditorOpen = openNodeIds.includes(node.id);
+    const isEditorOpen = aggregateOpenNodeIds.includes(node.id);
 
     return {
       ...node,
@@ -885,14 +880,14 @@ function GraphCanvasInner({
         ...node.data,
         handleSide: node.data?.isMain ? undefined : node.data?.handleSide,
         hasParent, // 부모 노드 존재 여부 전달
-        showInputBox: openNodeIds.includes(node.id), // 열린 노드에 입력박스 표시
+        showInputBox: aggregateOpenNodeIds.includes(node.id), // 열린 노드에 입력박스 표시
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
-        panelZIndex: node.id === localFocusedNodeId ? 30 : 20, // 포커스된 패널이 위
+        panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
         viewers: nodeViewers[node.id] ?? [], // 현재 이 노드를 보고 있는 다른 유저들
         onClosePanel: handleClosePanel,
-        onFocusPanel: handleFocusPanel,
+        onForwardPanel: handleForwardPanel,
         onChange: handleTitleChange,
       },
     };
@@ -988,8 +983,8 @@ function GraphCanvasInner({
       snapshot.filter((node) => !idsToArchive.has(node.id)),
     );
     setHoveredNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
-    setOpenNodeIds((prev) => prev.filter((id) => !idsToArchive.has(id)));
-    setLocalFocusedNodeId((prev) =>
+    setMyOpenEditorNodeIds((prev) => prev.filter((id) => !idsToArchive.has(id)));
+    setWorkingOnEditorNodeId((prev) =>
       prev && idsToArchive.has(prev) ? null : prev,
     );
     setPendingArchiveNodeIds([]);
@@ -1435,14 +1430,14 @@ function GraphCanvasInner({
      Node click → toggle input box
      ========================= */
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    setOpenNodeIds((prev) => {
+    setMyOpenEditorNodeIds((prev) => {
       if (prev.includes(node.id)) {
         // 이미 열려 있으면 포커스만 이동
         return prev;
       }
       return [...prev, node.id];
     });
-    setLocalFocusedNodeId(node.id);
+    setWorkingOnEditorNodeId(node.id);
   }, []);
 
   /* =========================

@@ -1,5 +1,6 @@
 "use client";
-import type { CursorsMap } from "@/hooks/useCursors";
+import { useWorkspaceLayout } from "@/app/workspace/context";
+// import { removeWorkspaceMember } from "@/api/workspace"; // DELETE /workspace/:id/member/:userId — 백엔드 미구현
 
 function UserIcon() {
   return (
@@ -13,20 +14,21 @@ function UserIcon() {
   );
 }
 
-interface MembersModalProps {
-  currentUsername: string;
-  collaborators: CursorsMap;
-}
+export default function MembersModal() {
+  const {
+    userMe,
+    // workspaceId,    // removeWorkspaceMember 백엔드 미구현 — 활성화 시 복구
+    // workspaceRole,  // canDelete 로직 비활성화 — 동일 이유
+    collaborators,
+  } = useWorkspaceLayout();
 
-export default function MembersModal({
-  currentUsername,
-  collaborators,
-}: MembersModalProps) {
-  const members = Object.values(collaborators);
+  // const canDelete = workspaceRole === "OWNER"; // removeWorkspaceMember 백엔드 미구현
+
+  // const handleDelete = async (userId: string) => { ... }; // removeWorkspaceMember 백엔드 미구현
 
   return (
     <div
-      className="absolute right-0 bg-white rounded-[8px] overflow-hidden"
+      className="absolute right-0 bg-white rounded-lg overflow-hidden"
       style={{
         top: "calc(100% + 8px)",
         minWidth: 220,
@@ -52,7 +54,7 @@ export default function MembersModal({
             color: "#2c2c2c",
           }}
         >
-          {currentUsername}{" "}
+          {userMe?.username}{" "}
           <span style={{ color: "#b8b8b8", fontWeight: 400 }}>(나)</span>
         </span>
       </div>
@@ -60,7 +62,7 @@ export default function MembersModal({
       {/* 구분선 */}
       <div style={{ height: 1, backgroundColor: "#f0f0f0" }} />
 
-      {/* 참여자 목록 */}
+      {/* 접속 중인 참여자 목록 */}
       <div style={{ padding: "10px 0 8px" }}>
         <p
           className="px-4"
@@ -75,7 +77,7 @@ export default function MembersModal({
           참여자
         </p>
 
-        {members.length === 0 ? (
+        {collaborators.length === 0 ? (
           <p
             className="px-4"
             style={{
@@ -90,7 +92,7 @@ export default function MembersModal({
             다른 참여자가 없습니다
           </p>
         ) : (
-          members.map((member) => (
+          collaborators.map((member) => (
             <div
               key={member.userId}
               className="flex items-center gap-3 px-4"
@@ -133,19 +135,27 @@ export default function MembersModal({
                 </span>
               </div>
 
-              <button
-                className="shrink-0 rounded-[4px]"
-                style={{
-                  backgroundColor: "#fee6e7",
-                  color: "#6d3537",
-                  fontFamily: "Pretendard, sans-serif",
-                  fontSize: 11,
-                  fontWeight: 400,
-                  padding: "4px 8px",
-                }}
-              >
-                삭제
-              </button>
+              {/* 삭제 버튼 — removeWorkspaceMember 백엔드 미구현, 활성화 시 아래 주석 해제
+              {canDelete && (
+                <button
+                  onClick={() => handleDelete(member.userId)}
+                  disabled={deletingIds.has(member.userId)}
+                  className="shrink-0 rounded-sm"
+                  style={{
+                    backgroundColor: "#fee6e7",
+                    color: "#6d3537",
+                    fontFamily: "Pretendard, sans-serif",
+                    fontSize: 11,
+                    fontWeight: 400,
+                    padding: "4px 8px",
+                    opacity: deletingIds.has(member.userId) ? 0.5 : 1,
+                    cursor: deletingIds.has(member.userId) ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {deletingIds.has(member.userId) ? "삭제 중..." : "삭제"}
+                </button>
+              )}
+              */}
             </div>
           ))
         )}

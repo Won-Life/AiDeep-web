@@ -10,7 +10,7 @@ import {
 } from '@xyflow/react';
 import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
-import { useGraphLayout } from '@/app/graph/context';
+import { useWorkspaceLayout } from '@/app/workspace/context';
 import { COLOR_PALETTE } from '@/features/graph/constants/colors';
 import NodeContextMenu from '@/components/ui/NodeContextMenu';
 
@@ -44,7 +44,7 @@ export type NodeView = {
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
   isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
   onClosePanel?: (nodeId: string) => void; // 패널 닫기
-  onFocusPanel?: (nodeId: string) => void; // 패널 포커스
+  onForwardPanel?: (nodeId: string) => void; // 패널 포커스
   onChange?: (nodeId: string, value: string) => void;
 };
 
@@ -57,7 +57,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const showInputBox = nodeData.showInputBox ?? false;
   const isContextMenuOpen = nodeData.isContextMenuOpen ?? false;
 
-  const { userMe } = useGraphLayout();
+  const { userMe } = useWorkspaceLayout();
   const userName = userMe?.username ?? 'Anonymous';
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
 
@@ -190,11 +190,11 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           panelZIndex={nodeData.panelZIndex}
           onExpandClick={() =>
             router.push(
-              `/graph/node/${id}?workspaceId=${nodeData.workspaceId ?? ''}`,
+              `/workspace/node/${id}?workspaceId=${nodeData.workspaceId ?? ''}`,
             )
           }
           onClose={() => nodeData.onClosePanel?.(id)}
-          onFocus={() => nodeData.onFocusPanel?.(id)}
+          onFocus={() => nodeData.onForwardPanel?.(id)}
           collabProvider={collabProvider}
           username={userName}
           cursorColor={cursorColor}

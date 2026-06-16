@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGraphLayout } from '@/app/graph/context';
+import { useWorkspaceLayout } from '@/app/workspace/context';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
 import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
 import { getCursorColor } from '@/utils/cursorColor';
@@ -482,7 +482,7 @@ export default function Sidebar({
   const editorContentRef = useRef<{ markdownBody: string; jsonBody: string } | null>(null);
 
   const router = useRouter();
-  const { userMe, workspaceId } = useGraphLayout();
+  const { userMe, workspaceId } = useWorkspaceLayout();
   const userName = userMe?.username ?? 'Anonymous';
   const cursorColor = getCursorColor(userMe?.userId ?? '');
 
@@ -508,7 +508,7 @@ export default function Sidebar({
 
   const handleExpandSubItem = useCallback(
     (id: string) => {
-      router.push(`/graph/node/${id}${workspaceId ? `?workspaceId=${workspaceId}` : ''}`);
+      router.push(`/workspace/node/${id}${workspaceId ? `?workspaceId=${workspaceId}` : ''}`);
     },
     [router, workspaceId],
   );

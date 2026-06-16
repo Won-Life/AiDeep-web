@@ -7,6 +7,7 @@ import type {
   JoinWorkspaceRequest,
   SyncResponse,
   WorkspaceListItem,
+  WorkspaceMember,
 } from './types';
 
 export async function getWorkspaces(): Promise<WorkspaceListItem[]> {
@@ -44,4 +45,20 @@ export async function syncWorkspace(workspaceId: string): Promise<SyncResponse> 
     params: { workspaceId },
   });
   return result;
+}
+
+export async function getWorkspaceMembers(
+  workspaceId: string,
+): Promise<WorkspaceMember[]> {
+  const { data } = await client.get<WorkspaceMember[]>(
+    `/workspace/${workspaceId}/members`,
+  );
+  return data;
+}
+
+export async function removeWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+): Promise<void> {
+  await client.delete(`/workspace/${workspaceId}/member/${userId}`);
 }

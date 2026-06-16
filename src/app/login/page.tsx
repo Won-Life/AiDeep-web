@@ -42,7 +42,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login({ email, password });
-      router.push('/graph');
+      router.push('/workspace');
     } catch (err) {
       setError(err instanceof ApiError ? err.reason : '로그인에 실패했습니다.');
     } finally {

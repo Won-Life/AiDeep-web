@@ -13,6 +13,9 @@ export function getSocket(): Socket | null {
 
 export function subscribeToWorkspace(
   workspaceId: string,
+  userName: string,
+  color: string,
+  profile: string | null,
   onEvent: WsEventHandler,
   onError?: WsErrorHandler,
 ): () => void {
@@ -33,7 +36,15 @@ export function subscribeToWorkspace(
   });
 
   socket.on('connect', () => {
-    socket!.emit('join_workspace', { workspaceId });
+    socket!.emit(
+      'join_workspace',
+      { workspaceId, userName, color, profile },
+      (ack: { ok: boolean; error?: string }) => {
+        if (!ack?.ok) {
+          console.error('[WS] join_workspace rejected:', ack?.error);
+        }
+      },
+    );
   });
 
   socket.on('workspace_event', (event: WsEvent) => {
@@ -80,6 +91,30 @@ export function onLivePosition(
   socket.on('node_position_live', handler);
   return () => {
     socket?.off('node_position_live', handler);
+  };
+}
+
+// ─── Presence ────────────────────────────────────────────────────────
+
+export interface PresenceMember {
+  userId: string;
+  userName: string;
+  color: string;
+  profile: string | null;
+}
+
+export interface PresenceStatePayload {
+  workspaceId: string;
+  members: PresenceMember[];
+}
+
+export function onPresenceState(
+  handler: (payload: PresenceStatePayload) => void,
+): () => void {
+  if (!socket) return () => {};
+  socket.on('presence_state', handler);
+  return () => {
+    socket?.off('presence_state', handler);
   };
 }
 
