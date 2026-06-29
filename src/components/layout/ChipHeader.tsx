@@ -1,17 +1,30 @@
+/*
+ * CONTEXT
+ * - Problem      : ChipHeader가 내부에서 getMe()를 직접 호출해 user 상태를 중복 관리.
+ *                  layout.tsx에 이미 userMe가 있어 동일 API를 두 번 호출하는 낭비 발생.
+ * - Why          : user·onLogout을 props로 주입받는 방식으로 전환.
+ *                  collaborators·workspaceRole은 context에서 직접 읽어 prop drilling 제거.
+ * - Alternatives : context 직접 구독 — ChipHeader가 GraphLayout context에 결합됨, 재사용성 저하.
+ * - Trade-offs   : props drilling이 한 단계 추가되지만, 관심사 분리가 명확해짐.
+ * - Edge Case    : user가 null이면 우측 영역 전체를 렌더하지 않음.
+ */
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { type Node } from "@xyflow/react";
 import { type NodeView } from "@/features/nodes/TextUpdateNode";
-import UserMenu from "./UserMenu";
-import { getMe } from "@/api/user";
-import { logout } from "@/api/auth";
 import { type UserMeResponse } from "@/api/types";
+import UserMenu from "./UserMenu";
+import CollaboratorsList from "./CollaboratorsList";
+import ShareButton from "./ShareButton";
 
 interface ChipHeaderProps {
   sidebarWidth: number;
   nodes: Node<NodeView>[];
   onNodeFocus?: (nodeId: string) => void;
   activeProjectId?: string | null;
+  user: UserMeResponse | null;
+  onLogout: () => void;
+  workspaceId: string | null;
 }
 
 export default function ChipHeader({
@@ -19,34 +32,26 @@ export default function ChipHeader({
   nodes,
   onNodeFocus,
   activeProjectId = null,
+  user,
+  onLogout,
+  workspaceId,
 }: ChipHeaderProps) {
   const mainNodes: Node<NodeView>[] = useMemo(
     () => nodes.filter((node) => node.data.isMain),
     [nodes],
   );
-  const [user, setUser] = useState<UserMeResponse | null>(null);
-
-  useEffect(() => {
-    getMe().then(setUser).catch(() => {});
-  }, []);
-
-  async function handleLogout() {
-    await logout();
-    window.location.href = "/login";
-  }
 
   return (
     <header
       className="fixed top-0 right-0 h-16 bg-background border-b border-border z-30 flex items-center justify-between px-4 transition-all duration-300"
       style={{ left: `${sidebarWidth}px` }}
     >
+      {/* 왼쪽: 프로젝트 chip 버튼 목록 */}
       <div className="flex gap-2">
         {mainNodes.map((node: Node<NodeView>) => (
           <button
             key={node.id}
-            onClick={() => {
-              onNodeFocus?.(node.id);
-            }}
+            onClick={() => onNodeFocus?.(node.id)}
             className="text-sm transition-colors hover:bg-surface"
             style={{
               border: "1px solid rgb(var(--ds-gray-700))",
@@ -71,13 +76,20 @@ export default function ChipHeader({
         ))}
       </div>
 
-      {/* 오른쪽: 사용자 정보 */}
+      {/* 오른쪽: 협업자 목록 → 유저 정보 → 공유하기 */}
       {user && (
-        <UserMenu
-          username={user.username}
-          email={user.email}
-          onLogout={handleLogout}
-        />
+        <div className="flex items-center gap-3">
+          <CollaboratorsList
+            currentUserId={user.userId}
+            currentUsername={user.username}
+          />
+          <UserMenu
+            username={user.username}
+            email={user.email}
+            onLogout={onLogout}
+          />
+          <ShareButton workspaceId={workspaceId} />
+        </div>
       )}
     </header>
   );

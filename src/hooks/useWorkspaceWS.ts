@@ -21,6 +21,10 @@ const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;
 
 interface UseWorkspaceWSOptions {
   workspaceId: string;
+  currentUserId?: string;
+  userName?: string;
+  color?: string;
+  profile?: string | null;
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   edgesRef: RefObject<Edge[]>;
@@ -33,6 +37,10 @@ interface UseWorkspaceWSOptions {
  */
 export function useWorkspaceWS({
   workspaceId,
+  currentUserId,
+  userName,
+  color,
+  profile = null,
   setNodes,
   setEdges,
   edgesRef,
@@ -46,7 +54,7 @@ export function useWorkspaceWS({
   setEdgesRef.current = setEdges;
 
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId || !userName) return;
 
     const handleEvent = (event: WsEvent) => {
       switch (event.type) {
@@ -126,7 +134,23 @@ export function useWorkspaceWS({
       }
     };
 
+    /*
+     * CONTEXT
+     * - Problem      : 노드 생성 시 REST 응답(nodeId만 포함)과 WS NODE_CREATE 이벤트(DB 저장값 전체 포함)가
+     *                  모두 도착해, "누가 먼저 왔냐"를 GraphCanvas 곳곳에서 판단하는
+     *                  race condition guard가 3벌 중복됐었음.
+     * - Why          : WS 이벤트를 본인 이벤트 필터링으로 차단하고, 클라이언트는 REST 응답 대신
+     *                  자신이 보낸 로컬 값으로 낙관적 업데이트(Optimistic Update)를 수행.
+     *                  단, 서버가 저장 값을 변환하는 로직이 생기면 reconciliation 없이 stale data가
+     *                  렌더링될 수 있음 — REST 응답 필드 확장으로 해소 가능 (관련 이슈 참고).
+     * - Alternatives : GraphCanvas에서 계속 중복 guard — 유지보수 비용이 채널이 늘수록 증가.
+     * - Trade-offs   : currentUserId가 없으면(undefined) 필터링을 건너뜀 — 중복 방어 없이 동작.
+     * - Edge Case    : currentUserId 미전달 시 이전과 동일하게 동작(하위 호환).
+     */
     const handleNodeCreate = (e: WsNodeCreateEvent) => {
+      // 본인이 생성한 노드는 REST 응답에서 이미 처리하므로 무시
+      if (currentUserId && e.userId === currentUserId) return;
+
       const newNode: Node = {
         id: e.node.nodeId,
         type: 'textUpdater',
@@ -139,12 +163,7 @@ export function useWorkspaceWS({
         },
       };
 
-      setNodesRef.current((prev) => {
-        // Guard against duplicate inserts (e.g. if the creator already
-        // added the node optimistically).
-        if (prev.some((n) => n.id === newNode.id)) return prev;
-        return [...prev, newNode];
-      });
+      setNodesRef.current((prev) => [...prev, newNode]);
     };
 
     const handleNodeDelete = (e: WsNodeDeleteEvent) => {
@@ -198,24 +217,32 @@ export function useWorkspaceWS({
     };
 
     const handleEdgeCreate = (e: WsEdgeCreateEvent) => {
-      setEdgesRef.current((prev) => {
-        if (prev.some((edge) => edge.id === e.edge.edgeId)) return prev;
-        const newEdge: Edge = {
-          id: e.edge.edgeId,
-          source: e.edge.sourceId,
-          target: e.edge.targetId,
-          sourceHandle: e.edge.sourceHandle,
-          targetHandle: e.edge.targetHandle,
-        };
-        return [...prev, newEdge];
-      });
+      // 본인이 생성한 엣지는 REST 응답에서 이미 처리하므로 무시
+      if (currentUserId && e.userId === currentUserId) return;
+
+      const newEdge: Edge = {
+        id: e.edge.edgeId,
+        source: e.edge.sourceId,
+        target: e.edge.targetId,
+        type: 'branch',
+        sourceHandle: e.edge.sourceHandle,
+        targetHandle: e.edge.targetHandle,
+      };
+      setEdgesRef.current((prev) => [...prev, newEdge]);
     };
 
     const handleError = (err: unknown) => {
       console.error('[useWorkspaceWS] connection error', err);
     };
 
-    const cleanup = subscribeToWorkspace(workspaceId, handleEvent, handleError);
+    const cleanup = subscribeToWorkspace(
+      workspaceId,
+      userName,
+      color ?? '',
+      profile,
+      handleEvent,
+      handleError,
+    );
 
     // 실시간 위치 이벤트 (transition 없이 즉시 적용)
     const handleLivePosition = (payload: LivePositionPayload) => {
@@ -253,5 +280,5 @@ export function useWorkspaceWS({
       cleanupLive(); // off() 먼저 — cleanup()이 socket을 null로 만들기 전에
       cleanup();
     };
-  }, [workspaceId]);
+  }, [workspaceId, userName]);
 }

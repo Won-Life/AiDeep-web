@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { NodeEditorPanel } from "@/features/editor/NodeEditorPanel";
 import { getNode } from "@/features/graph/api/nodes";
-import { useGraphLayout } from "@/app/graph/context";
+import { useWorkspaceLayout } from "@/app/workspace/context";
 import { useYjsProvider } from "@/hooks/useYjsProvider";
 import { useWorkspaceAwareness } from "@/hooks/useWorkspaceAwareness";
 import { COLOR_PALETTE } from "@/features/graph/constants/colors";
@@ -23,7 +23,7 @@ export default function NodeFullscreenPage() {
   const params = useParams<{ nodeId: string }>();
   const searchParams = useSearchParams();
 
-  const { sidebarWidth, userMe, workspaceRole } = useGraphLayout();
+  const { sidebarWidth, userMe, workspaceRole } = useWorkspaceLayout();
   const nodeId = params.nodeId;
   const workspaceId = searchParams.get("workspaceId") ?? "";
 
@@ -41,7 +41,7 @@ export default function NodeFullscreenPage() {
   });
 
   // 워크스페이스 awareness — 전체화면 에디터에서도 "이 노드를 보는 중" 상태 전파
-  const { setFocusedNodeId } = useWorkspaceAwareness({
+  const { setOpenEditorNodeId } = useWorkspaceAwareness({
     workspaceId,
     userName,
     userColor: cursorColor,
@@ -50,10 +50,10 @@ export default function NodeFullscreenPage() {
 
   useEffect(() => {
     if (!loading && !error && nodeId) {
-      setFocusedNodeId(nodeId);
+      setOpenEditorNodeId(nodeId);
     }
-    return () => setFocusedNodeId(null);
-  }, [nodeId, loading, error, setFocusedNodeId]);
+    return () => setOpenEditorNodeId(null);
+  }, [nodeId, loading, error, setOpenEditorNodeId]);
 
   useEffect(() => {
     if (!workspaceId || !nodeId) return;

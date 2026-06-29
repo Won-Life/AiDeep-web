@@ -27,6 +27,26 @@ function UserIcon() {
   );
 }
 
+function ChevronDownIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M2.5 4.5L6 8L9.5 4.5"
+        stroke="#2c2c2c"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function EditIcon({ size = 10 }: { size?: number }) {
   return (
     <svg
@@ -138,20 +158,53 @@ export default function UserMenu({
       {/* 트리거 버튼 */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center justify-center w-9 h-9 rounded-full overflow-hidden bg-[#f5f5f5] text-[#2c2c2c] text-sm font-semibold hover:bg-[#e6e6e6] shadow-sm transition-colors"
+        className="flex items-center gap-1.5 rounded-full transition-colors"
+        style={{ height: 28 }}
         title={username}
       >
-        {profileImageUrl ? (
-          <img
-            src={profileImageUrl}
-            alt={username}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full p-[7px]">
-            <UserIcon />
-          </div>
-        )}
+        {/* 아이콘 — 협업자 아바타와 동일한 28px */}
+        <div
+          className="flex items-center justify-center rounded-full shrink-0 bg-[#f5f5f5] overflow-hidden"
+          style={{
+            width: 28,
+            height: 28,
+            padding: profileImageUrl ? 0 : 5,
+            border: "2px solid white",
+          }}
+        >
+          {profileImageUrl ? (
+            <img
+              src={profileImageUrl}
+              alt={username}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full overflow-hidden">
+              <UserIcon />
+            </div>
+          )}
+        </div>
+
+        {/* 이름 */}
+        <span
+          className="text-[#2c2c2c] whitespace-nowrap"
+          style={{
+            fontFamily: "Pretendard, sans-serif",
+            fontSize: 12,
+            fontWeight: 400,
+            lineHeight: "20px",
+          }}
+        >
+          {username}
+        </span>
+
+        {/* 화살표 */}
+        <span
+          className="flex items-center justify-center transition-transform duration-200"
+          style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+        >
+          <ChevronDownIcon />
+        </span>
       </button>
 
       {/* 드롭다운 카드 */}

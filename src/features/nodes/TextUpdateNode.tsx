@@ -10,7 +10,7 @@ import {
 } from '@xyflow/react';
 import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
-import { useGraphLayout } from '@/app/graph/context';
+import { useWorkspaceLayout } from '@/app/workspace/context';
 import { COLOR_PALETTE } from '@/features/graph/constants/colors';
 import NodeContextMenu from '@/components/ui/NodeContextMenu';
 
@@ -35,8 +35,7 @@ export type NodeView = {
   color?: string;
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
-  sideRelativeToParent?: 'left' | 'right';
-  handleSide?: 'left' | 'right'; // Canvas가 위치 변경마다 재계산하는 핸들 방향
+  handleSide?: 'left' | 'right';
   hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
   panelZIndex?: number; // 패널 z-index (포커스된 패널이 위)
@@ -45,7 +44,7 @@ export type NodeView = {
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
   isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
   onClosePanel?: (nodeId: string) => void; // 패널 닫기
-  onFocusPanel?: (nodeId: string) => void; // 패널 포커스
+  onForwardPanel?: (nodeId: string) => void; // 패널 포커스
   onChange?: (nodeId: string, value: string) => void;
 };
 
@@ -58,7 +57,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const showInputBox = nodeData.showInputBox ?? false;
   const isContextMenuOpen = nodeData.isContextMenuOpen ?? false;
 
-  const { userMe } = useGraphLayout();
+  const { userMe } = useWorkspaceLayout();
   const userName = userMe?.username ?? 'Anonymous';
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
 
@@ -67,11 +66,9 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
     userName,
     userColor: cursorColor,
   });
-
-  // sideRelativeToParent는 최초 생성 시점에만 설정되므로 handleSide를 사용
-  const sideRelativeToParent = (nodeData.handleSide ??
-    nodeData.sideRelativeToParent ??
-    'right') as 'left' | 'right';
+  const sideRelativeToParent = (nodeData.handleSide ?? 'right') as
+    | 'left'
+    | 'right';
   const sourceHandlePosition =
     sideRelativeToParent === 'left' ? Position.Left : Position.Right;
   const viewers = (nodeData.viewers ?? []) as NodeViewer[];
@@ -105,9 +102,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const containerStyle = isMain
     ? {
         backgroundColor: nodeData.color || '#ffffff',
-        borderColor: isHovered
-          ? '#93C5FD'
-          : viewerBorderColor ?? EDGE_COLOR,
+        borderColor: isHovered ? '#93C5FD' : (viewerBorderColor ?? EDGE_COLOR),
         borderWidth: isHovered || viewerBorderColor ? '2px' : '1px',
       }
     : {
@@ -185,7 +180,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           <NodeContextMenu />
         </div>
       )}
-      
+
       {/* 노션 에디터 패널 - 노드 뒤에 배치 */}
       {showInputBox && (
         <NodeEditorPanel
@@ -195,11 +190,11 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
           panelZIndex={nodeData.panelZIndex}
           onExpandClick={() =>
             router.push(
-              `/graph/node/${id}?workspaceId=${nodeData.workspaceId ?? ''}`,
+              `/workspace/node/${id}?workspaceId=${nodeData.workspaceId ?? ''}`,
             )
           }
           onClose={() => nodeData.onClosePanel?.(id)}
-          onFocus={() => nodeData.onFocusPanel?.(id)}
+          onFocus={() => nodeData.onForwardPanel?.(id)}
           collabProvider={collabProvider}
           username={userName}
           cursorColor={cursorColor}
@@ -250,7 +245,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
               type="target"
               position={Position.Left}
               id="target-left"
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              isConnectableStart={false}
+              style={{ opacity: 0 }}
             />
             <Handle
               type="source"
@@ -262,7 +258,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
               type="target"
               position={Position.Right}
               id="target-right"
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              isConnectableStart={false}
+              style={{ opacity: 0 }}
             />
           </>
         ) : (
@@ -279,7 +276,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
                   ? 'target-left'
                   : 'target-right'
               }
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              isConnectableStart={false}
+              style={{ opacity: 0 }}
             />
             <Handle
               type="source"

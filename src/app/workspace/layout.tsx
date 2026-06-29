@@ -1,60 +1,62 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
-import { type Node } from "@xyflow/react";
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { type Node } from '@xyflow/react';
 import Sidebar, {
   type Project,
   type Resource,
   SIDEBAR_WIDTH,
   VISIBLE_BUTTON_WIDTH,
-} from "@/components/layout/Sidebar";
-import ChipHeader from "@/components/layout/ChipHeader";
-import DropDown from "@/components/ui/DropDown";
-import UserMenu from "@/components/layout/UserMenu";
-import { getMe } from "@/api/user";
-import { logout } from "@/api/auth";
-import { getWorkspaces } from "@/api/workspace";
-import { getNodes } from "@/features/graph/api/getNodes";
-import { toFlowEdge, toFlowNode } from "@/features/graph/api/mappers";
-import { useWorkspaceWS } from "@/hooks/useWorkspaceWS";
-import { type NodeView } from "@/features/nodes/TextUpdateNode";
-import { GraphLayoutProvider, useGraphLayout } from "./context";
+} from '@/components/layout/Sidebar';
+import ChipHeader from '@/components/layout/ChipHeader';
+import DropDown from '@/components/ui/DropDown';
+import UserMenu from '@/components/layout/UserMenu';
+import { getMe } from '@/api/user';
+import { logout } from '@/api/auth';
+import { getWorkspaces /*, getWorkspaceMembers */ } from '@/api/workspace'; // getWorkspaceMembers — GET /workspace/:id/members 백엔드 미구현
+import { getNodes } from '@/features/graph/api/getNodes';
+import { convertToReactFlow } from '@/features/graph/components/GraphCanvas';
+import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
+import { onPresenceState } from '@/api/ws';
+import { getCursorColor } from '@/utils/cursorColor';
+import { type NodeView } from '@/features/nodes/TextUpdateNode';
+import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
 
 const INITIAL_PROJECTS: Project[] = [
-  { id: "p1", name: "Project 1" },
-  { id: "p2", name: "Project 2" },
-  { id: "p3", name: "Project 3" },
-  { id: "p4", name: "Project 4" },
+  { id: 'w1', name: 'Workspaces 1' },
+  { id: 'w2', name: 'Workspaces 2' },
+  { id: 'w3', name: 'Workspaces 3' },
+  { id: 'w4', name: 'Workspaces 4' },
 ];
 
 const INITIAL_RESOURCES: Resource[] = [
   {
-    id: "r1",
-    name: "Resource n",
+    id: 'r1',
+    name: 'Resource n',
     subItems: [
-      { id: "r1-1", name: "Resource n-1" },
-      { id: "r1-2", name: "Resource n-2" },
-      { id: "r1-3", name: "Resource n-3" },
+      { id: 'r1-1', name: 'Resource n-1' },
+      { id: 'r1-2', name: 'Resource n-2' },
+      { id: 'r1-3', name: 'Resource n-3' },
     ],
   },
-  { id: "r2", name: "Resource n", subItems: [] },
+  { id: 'r2', name: 'Resource n', subItems: [] },
   {
-    id: "r3",
-    name: "Resource n",
+    id: 'r3',
+    name: 'Resource n',
     subItems: [
-      { id: "r3-1", name: "Resource n-1" },
-      { id: "r3-2", name: "Resource n-2" },
-      { id: "r3-3", name: "Resource n-3" },
+      { id: 'r3-1', name: 'Resource n-1' },
+      { id: 'r3-2', name: 'Resource n-2' },
+      { id: 'r3-3', name: 'Resource n-3' },
     ],
   },
   {
-    id: "r4",
-    name: "Resource n",
+    id: 'r4',
+    name: 'Resource n',
     subItems: [
-      { id: "r4-1", name: "Resource n-1" },
-      { id: "r4-2", name: "Resource n-2" },
-      { id: "r4-3", name: "Resource n-3" },
+      { id: 'r4-1', name: 'Resource n-1' },
+      { id: 'r4-2', name: 'Resource n-2' },
+      { id: 'r4-3', name: 'Resource n-3' },
     ],
   },
 ];
@@ -63,7 +65,7 @@ function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function GraphLayoutInner({ children }: { children: ReactNode }) {
+function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const {
     focusedNodeId,
@@ -74,13 +76,15 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
     workspaceId,
     setWorkspaceId,
     setWorkspaceRole,
+    setWorkspaceMembers,
+    setCollaborators,
     setNodes,
     setEdges,
     nodes,
     edgesRef,
     synced,
     setSynced,
-  } = useGraphLayout();
+  } = useWorkspaceLayout();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
@@ -94,9 +98,9 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem("sidebar_open");
-      if (stored !== null) setIsSidebarOpen(stored === "true");
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('sidebar_open');
+      if (stored !== null) setIsSidebarOpen(stored === 'true');
     }
   }, []);
 
@@ -107,7 +111,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   const handleToggleSidebar = useCallback(() => {
     setIsSidebarOpen((prev) => {
       const next = !prev;
-      sessionStorage.setItem("sidebar_open", String(next));
+      sessionStorage.setItem('sidebar_open', String(next));
       return next;
     });
   }, []);
@@ -115,52 +119,81 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   useEffect(() => {
     getMe()
       .then(setUserMe)
-      // DO: 500(서버 에러)에도 /login으로 리다이렉트됨
-      // isAxiosError(err) && err.response?.status === 401 일 때만 로그아웃해야 함
-      .catch(() => router.replace("/login"));
+      .catch(() => router.replace('/login'));
   }, [router, setUserMe]);
 
-  // 워크스페이스 + 노드/엣지 — 최초 1회만 fetch (synced 이후 스킵)
+  // 워크스페이스 + 노드/엣지 + 참여자 목록 — 최초 1회만 fetch (synced 이후 스킵)
   useEffect(() => {
     if (synced) return;
+
     getWorkspaces()
       .then((list) => {
-        if (!list.length) return;
+        if (!list.length) return Promise.reject('no workspace');
         const ws = list[0];
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
-        return getNodes(ws.workspaceId);
+        return Promise.all([
+          getNodes(ws.workspaceId),
+          // getWorkspaceMembers(ws.workspaceId),
+        ]);
       })
-      .then((data) => {
-        if (!data) return;
-        if (data.nodes?.length) setNodes(data.nodes.map(toFlowNode));
-        if (data.edges?.length) setEdges(data.edges.map(toFlowEdge));
+      .then((results) => {
+        if (!results) return;
+        const [nodeData, members] = results;
+        const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
+          nodeData.nodes ?? [],
+          nodeData.edges ?? [],
+        );
+        setNodes(flowNodes);
+        setEdges(flowEdges);
+        // setWorkspaceMembers(members);
         setSynced(true);
       })
       .catch((err) => {
-        console.error("[GraphLayout] sync failed", err);
+        if (err !== 'no workspace') {
+          console.error('[WorkspaceLayout] sync failed', err);
+        }
         setSynced(true);
       });
-  }, [synced, setWorkspaceId, setNodes, setEdges, setSynced]);
+  }, [synced, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced]);
 
   useWorkspaceWS({
-    workspaceId: workspaceId ?? "",
+    workspaceId: workspaceId ?? '',
+    currentUserId: userMe?.userId,
+    userName: userMe?.username,
+    color: userMe ? getCursorColor(userMe.userId) : undefined,
+    profile: null,
     setNodes,
     setEdges,
     edgesRef,
   });
 
+  // presence_state 이벤트 → collaborators 업데이트
+  useEffect(() => {
+    if (!workspaceId) return;
+    const cleanup = onPresenceState((payload) => {
+      if (payload.workspaceId !== workspaceId) return;
+      setCollaborators(
+        payload.members.filter((m) => m.userId !== userMe?.userId),
+      );
+    });
+    return () => {
+      cleanup();
+      setCollaborators([]);
+    };
+  }, [workspaceId, userMe?.userId, setCollaborators]);
+
   const handleLogout = useCallback(async () => {
     try {
       await logout();
     } catch {}
-    router.replace("/login");
+    router.replace('/login');
   }, [router]);
 
   const addProject = () =>
     setProjects((prev) => [
       ...prev,
-      { id: makeId(), name: "", isEditing: true },
+      { id: makeId(), name: '', isEditing: true },
     ]);
   const saveProjectName = (id: string, name: string) =>
     setProjects((prev) =>
@@ -173,7 +206,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
   const addResource = () =>
     setResources((prev) => [
       ...prev,
-      { id: makeId(), name: "", subItems: [], isEditing: true },
+      { id: makeId(), name: '', subItems: [], isEditing: true },
     ]);
   const saveResourceName = (id: string, name: string) =>
     setResources((prev) =>
@@ -187,7 +220,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
               ...r,
               subItems: [
                 ...r.subItems,
-                { id: makeId(), name: "", isEditing: true },
+                { id: makeId(), name: '', isEditing: true },
               ],
             }
           : r,
@@ -238,7 +271,6 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
-      {/* 캔버스 영역 — 페이지 콘텐츠 */}
       <div className="absolute inset-0 z-0">{children}</div>
 
       <Sidebar
@@ -264,23 +296,26 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
         nodes={nodes as Node<NodeView>[]}
         onNodeFocus={setFocusedNodeId}
         activeProjectId={focusedNodeId}
+        user={userMe}
+        onLogout={handleLogout}
+        workspaceId={workspaceId}
       />
 
       <DropDown sidebarWidth={sidebarWidth} />
 
       <UserMenu
-        username={userMe?.username ?? ""}
-        email={userMe?.email ?? ""}
+        username={userMe?.username ?? ''}
+        email={userMe?.email ?? ''}
         onLogout={handleLogout}
       />
     </div>
   );
 }
 
-export default function GraphLayout({ children }: { children: ReactNode }) {
+export default function WorkspaceLayout({ children }: { children: ReactNode }) {
   return (
-    <GraphLayoutProvider>
-      <GraphLayoutInner>{children}</GraphLayoutInner>
-    </GraphLayoutProvider>
+    <WorkspaceLayoutProvider>
+      <WorkspaceLayoutInner>{children}</WorkspaceLayoutInner>
+    </WorkspaceLayoutProvider>
   );
 }

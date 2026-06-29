@@ -1,4 +1,11 @@
-"use client";
+'use client';
+
+import { useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useWorkspaceLayout } from '@/app/workspace/context';
+import { useYjsProvider } from '@/hooks/useYjsProvider';
+import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
+import { getCursorColor } from '@/utils/cursorColor';
 
 export const SIDEBAR_WIDTH = 260;
 export const VISIBLE_BUTTON_WIDTH = 40;
@@ -47,7 +54,7 @@ function ProjectList({
             style={{
               width: 18,
               height: 18,
-              background: "rgb(var(--ds-gray-700))",
+              background: 'rgb(var(--ds-gray-700))',
             }}
           />
           {project.isEditing ? (
@@ -58,30 +65,30 @@ function ProjectList({
               className="sidebar-new-input bg-transparent border-none outline-none"
               style={{
                 fontSize: 14,
-                color: "rgb(var(--foreground))",
+                color: 'rgb(var(--foreground))',
                 flex: 1,
                 minWidth: 0,
               }}
               onBlur={(e) => onSaveName(project.id, e.target.value.trim())}
               onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
+                if (e.key === 'Enter') e.currentTarget.blur();
               }}
             />
           ) : (
             <span
               style={{
                 fontSize: 14,
-                color: "rgb(var(--foreground))",
-                cursor: "text",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                color: 'rgb(var(--foreground))',
+                cursor: 'text',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
                 minWidth: 0,
               }}
               onClick={() => onStartEdit(project.id)}
             >
               {project.name || (
-                <span style={{ color: "rgb(var(--ds-gray-500))" }}>
+                <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
                   이름 입력...
                 </span>
               )}
@@ -97,12 +104,30 @@ function ProjectList({
 
 function ResourceTree({
   subItems,
+  selectedSubItemId,
+  onSelectSubItem,
   onSaveName,
   onStartEdit,
+  collabProvider,
+  userName,
+  cursorColor,
+  onContentChange,
+  onDragStart,
+  onExpandSubItem,
+  selectedUpdatedAt,
 }: {
   subItems: ResourceSubItem[];
+  selectedSubItemId: string | null;
+  onSelectSubItem: (id: string | null) => void;
   onSaveName: (id: string, name: string) => void;
   onStartEdit: (id: string) => void;
+  collabProvider: import('@/lib/SocketIoYjsProvider').SocketIoYjsProvider | null;
+  userName: string;
+  cursorColor: string;
+  onContentChange: (content: { markdownBody: string; jsonBody: string }) => void;
+  onDragStart: (event: React.DragEvent<HTMLSpanElement>, item: ResourceSubItem) => void;
+  onExpandSubItem: (id: string) => void;
+  selectedUpdatedAt?: string;
 }) {
   if (subItems.length === 0) return null;
 
@@ -116,115 +141,117 @@ function ResourceTree({
         const isLast = idx === subItems.length - 1;
         const isFirst = idx === 0;
         const topExtend = isFirst ? BRIDGE_H : 0;
+        const isSelected = selectedSubItemId === item.id;
+
         return (
-          <div
-            key={item.id}
-            className="flex items-center"
-            style={{ height: ITEM_H }}
-          >
-            <svg
-              width="20"
-              height={ITEM_H}
-              style={{ flexShrink: 0, overflow: "visible" }}
+          <div key={item.id}>
+            <div
+              className="flex items-center"
+              style={{ height: ITEM_H }}
             >
-              {isLast ? (
-                <path
-                  d={`M ${VX} ${-topExtend} L ${VX} ${ITEM_H / 2 - R} Q ${VX} ${ITEM_H / 2} ${VX + R} ${ITEM_H / 2} L 20 ${ITEM_H / 2}`}
-                  fill="none"
-                  stroke="rgb(var(--ds-black))"
-                  strokeWidth="1"
-                  strokeLinecap="round"
+              <svg
+                width="20"
+                height={ITEM_H}
+                style={{ flexShrink: 0, overflow: 'visible' }}
+              >
+                {isLast ? (
+                  <path
+                    d={`M ${VX} ${-topExtend} L ${VX} ${ITEM_H / 2 - R} Q ${VX} ${ITEM_H / 2} ${VX + R} ${ITEM_H / 2} L 20 ${ITEM_H / 2}`}
+                    fill="none"
+                    stroke="rgb(var(--ds-black))"
+                    strokeWidth="1"
+                    strokeLinecap="round"
+                  />
+                ) : (
+                  <>
+                    <line
+                      x1={VX}
+                      y1={-topExtend}
+                      x2={VX}
+                      y2={ITEM_H}
+                      stroke="rgb(var(--ds-black))"
+                      strokeWidth="1"
+                      strokeLinecap="round"
+                    />
+                    <line
+                      x1={VX}
+                      y1={ITEM_H / 2}
+                      x2="20"
+                      y2={ITEM_H / 2}
+                      stroke="rgb(var(--ds-black))"
+                      strokeWidth="1"
+                      strokeLinecap="round"
+                    />
+                  </>
+                )}
+              </svg>
+
+              {item.isEditing ? (
+                <input
+                  autoFocus
+                  placeholder="내용을 입력하세요"
+                  defaultValue={item.name}
+                  className="sidebar-new-input rounded-full px-3 py-1 border-none outline-none"
+                  style={{
+                    fontSize: 13,
+                    background: 'rgb(var(--ds-gray-800))',
+                    color: 'rgb(var(--foreground))',
+                    width: '90%',
+                    display: 'inline-block',
+                  }}
+                  onBlur={(e) => onSaveName(item.id, e.target.value.trim())}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
                 />
               ) : (
-                <>
-                  <line
-                    x1={VX}
-                    y1={-topExtend}
-                    x2={VX}
-                    y2={ITEM_H}
-                    stroke="rgb(var(--ds-black))"
-                    strokeWidth="1"
-                    strokeLinecap="round"
-                  />
-                  <line
-                    x1={VX}
-                    y1={ITEM_H / 2}
-                    x2="20"
-                    y2={ITEM_H / 2}
-                    stroke="rgb(var(--ds-black))"
-                    strokeWidth="1"
-                    strokeLinecap="round"
-                  />
-                </>
+                <span
+                  className="rounded-full px-3 py-1"
+                  draggable
+                  style={{
+                    fontSize: 13,
+                    background: isSelected ? '#000' : 'rgb(var(--ds-gray-800))',
+                    color: isSelected ? '#fff' : 'rgb(var(--foreground))',
+                    cursor: 'pointer',
+                    maxWidth: '90%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-block',
+                  }}
+                  onClick={() =>
+                    onSelectSubItem(isSelected ? null : item.id)
+                  }
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSubItem(null);
+                    onStartEdit(item.id);
+                  }}
+                  onDragStart={(e) => onDragStart(e, item)}
+                >
+                  {item.name || (
+                    <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
+                      내용을 입력하세요
+                    </span>
+                  )}
+                </span>
               )}
-            </svg>
+            </div>
 
-            {item.isEditing ? (
-              <input
-                autoFocus
-                placeholder="내용을 입력하세요"
-                defaultValue={item.name}
-                className="sidebar-new-input rounded-full px-3 py-1 border-none outline-none"
-                style={{
-                  fontSize: 13,
-                  background: "rgb(var(--ds-gray-800))",
-                  color: "rgb(var(--foreground))",
-                  width: "90%",
-                  display: "inline-block",
-                }}
-                onBlur={(e) => onSaveName(item.id, e.target.value.trim())}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                }}
-              />
-            ) : (
-              <span
-                className="rounded-full px-3 py-1"
-                draggable
-                style={{
-                  fontSize: 13,
-                  background: "rgb(var(--ds-gray-800))",
-                  color: "rgb(var(--foreground))",
-                  cursor: "text",
-                  maxWidth: "90%",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  display: "inline-block",
-                }}
-                onClick={() => onStartEdit(item.id)}
-                onDragStart={(event) => {
-                  const dragPreview = document.createElement("div");
-                  dragPreview.textContent = item.name || " ";
-                  dragPreview.style.padding = "4px 12px";
-                  dragPreview.style.fontSize = "13px";
-                  dragPreview.style.borderRadius = "9999px";
-                  dragPreview.style.background = "rgb(var(--ds-gray-800))";
-                  dragPreview.style.color = "rgb(var(--foreground))";
-                  dragPreview.style.border = "1px solid rgba(0,0,0,0)";
-                  dragPreview.style.position = "absolute";
-                  dragPreview.style.top = "-9999px";
-                  dragPreview.style.left = "-9999px";
-                  document.body.appendChild(dragPreview);
-
-                  event.dataTransfer.setData(
-                    "application/resource-subitem",
-                    JSON.stringify({ id: item.id, name: item.name }),
-                  );
-                  event.dataTransfer.effectAllowed = "copy";
-                  event.dataTransfer.setDragImage(dragPreview, 10, 10);
-
-                  requestAnimationFrame(() => {
-                    document.body.removeChild(dragPreview);
-                  });
-                }}
-              >
-                {item.name || (
-                  <span style={{ color: "rgb(var(--ds-gray-500))" }}>
-                    내용을 입력하세요
-                  </span>
-                )}
-              </span>
+            {/* 선택된 서브 아이템 아래 인라인 에디터 */}
+            {isSelected && (
+              <div className="mb-2">
+                <NodeEditorPanel
+                  nodeId={item.id}
+                  inline
+                  collabProvider={collabProvider}
+                  username={userName}
+                  cursorColor={cursorColor}
+                  onContentChange={onContentChange}
+                  onExpandClick={() => onExpandSubItem(item.id)}
+                  updatedAt={selectedUpdatedAt}
+                />
+              </div>
             )}
           </div>
         );
@@ -240,15 +267,26 @@ const BRIDGE_H = 8; // 첫 번째 트리 아이템 수직선 위쪽 연장 길�
 function ResourceList({
   resources,
   expanded,
+  selectedSubItemId,
+  onSelectSubItem,
   onToggleExpand,
   onAddSubItem,
   onSaveResourceName,
   onSaveSubItemName,
   onStartEditResource,
   onStartEditSubItem,
+  collabProvider,
+  userName,
+  cursorColor,
+  onContentChange,
+  onSubItemDragStart,
+  onExpandSubItem,
+  selectedUpdatedAt,
 }: {
   resources: Resource[];
   expanded: Set<string>;
+  selectedSubItemId: string | null;
+  onSelectSubItem: (id: string | null) => void;
   onToggleExpand: (id: string) => void;
   onAddSubItem: (resourceId: string) => void;
   onSaveResourceName: (id: string, name: string) => void;
@@ -259,6 +297,13 @@ function ResourceList({
   ) => void;
   onStartEditResource: (id: string) => void;
   onStartEditSubItem: (resourceId: string, subItemId: string) => void;
+  collabProvider: import('@/lib/SocketIoYjsProvider').SocketIoYjsProvider | null;
+  userName: string;
+  cursorColor: string;
+  onContentChange: (content: { markdownBody: string; jsonBody: string }) => void;
+  onSubItemDragStart: (event: React.DragEvent<HTMLSpanElement>, item: ResourceSubItem) => void;
+  onExpandSubItem: (id: string) => void;
+  selectedUpdatedAt?: string;
 }) {
   return (
     <div className="space-y-3">
@@ -279,12 +324,12 @@ function ResourceList({
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer"
                 style={{
                   fontSize: 13,
-                  color: "rgb(var(--foreground))",
-                  borderColor: "rgb(var(--ds-black))",
-                  background: "transparent",
-                  maxWidth: "90%",
+                  color: 'rgb(var(--foreground))',
+                  borderColor: 'rgb(var(--ds-black))',
+                  background: 'transparent',
+                  maxWidth: '90%',
                   minWidth: 0,
-                  width: resource.isEditing ? "90%" : undefined,
+                  width: resource.isEditing ? '90%' : undefined,
                 }}
               >
                 {resource.isEditing ? (
@@ -295,7 +340,7 @@ function ResourceList({
                     className="sidebar-new-input bg-transparent border-none outline-none"
                     style={{
                       fontSize: 13,
-                      color: "rgb(var(--foreground))",
+                      color: 'rgb(var(--foreground))',
                       flex: 1,
                       minWidth: 0,
                     }}
@@ -303,16 +348,16 @@ function ResourceList({
                       onSaveResourceName(resource.id, e.target.value.trim())
                     }
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
+                      if (e.key === 'Enter') e.currentTarget.blur();
                     }}
                   />
                 ) : (
                   <span
                     style={{
-                      cursor: "text",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      cursor: 'text',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -320,7 +365,7 @@ function ResourceList({
                     }}
                   >
                     {resource.name || (
-                      <span style={{ color: "rgb(var(--ds-gray-500))" }}>
+                      <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
                         이름 입력...
                       </span>
                     )}
@@ -352,8 +397,8 @@ function ResourceList({
                 className="flex items-center justify-center cursor-pointer"
                 style={{
                   fontSize: 18,
-                  color: "rgb(var(--ds-gray-400))",
-                  background: "transparent",
+                  color: 'rgb(var(--ds-gray-400))',
+                  background: 'transparent',
                   flexShrink: 0,
                 }}
               >
@@ -366,12 +411,21 @@ function ResourceList({
               <div style={{ marginTop: BRIDGE_H }}>
                 <ResourceTree
                   subItems={resource.subItems}
+                  selectedSubItemId={selectedSubItemId}
+                  onSelectSubItem={onSelectSubItem}
                   onSaveName={(subItemId, name) =>
                     onSaveSubItemName(resource.id, subItemId, name)
                   }
                   onStartEdit={(subItemId) =>
                     onStartEditSubItem(resource.id, subItemId)
                   }
+                  collabProvider={collabProvider}
+                  userName={userName}
+                  cursorColor={cursorColor}
+                  onContentChange={onContentChange}
+                  onDragStart={onSubItemDragStart}
+                  onExpandSubItem={onExpandSubItem}
+                  selectedUpdatedAt={selectedUpdatedAt}
                 />
               </div>
             )}
@@ -423,23 +477,95 @@ export default function Sidebar({
   onStartEditSubItem,
   onToggleExpand,
 }: SidebarProps) {
+  const [selectedSubItemId, setSelectedSubItemId] = useState<string | null>(null);
+  const [selectedUpdatedAt, setSelectedUpdatedAt] = useState<string | undefined>(undefined);
+  const editorContentRef = useRef<{ markdownBody: string; jsonBody: string } | null>(null);
+
+  const router = useRouter();
+  const { userMe, workspaceId } = useWorkspaceLayout();
+  const userName = userMe?.username ?? 'Anonymous';
+  const cursorColor = getCursorColor(userMe?.userId ?? '');
+
+  const { provider: collabProvider } = useYjsProvider({
+    nodeId: selectedSubItemId,
+    userName,
+    userColor: cursorColor,
+  });
+
+  const handleSelectSubItem = useCallback((id: string | null) => {
+    setSelectedSubItemId(id);
+    setSelectedUpdatedAt(id ? new Date().toISOString() : undefined);
+    editorContentRef.current = null;
+  }, []);
+
+  const handleContentChange = useCallback(
+    (content: { markdownBody: string; jsonBody: string }) => {
+      editorContentRef.current = content;
+      setSelectedUpdatedAt(new Date().toISOString());
+    },
+    [],
+  );
+
+  const handleExpandSubItem = useCallback(
+    (id: string) => {
+      router.push(`/workspace/node/${id}${workspaceId ? `?workspaceId=${workspaceId}` : ''}`);
+    },
+    [router, workspaceId],
+  );
+
+  const handleSubItemDragStart = useCallback(
+    (event: React.DragEvent<HTMLSpanElement>, item: ResourceSubItem) => {
+      const isSelected = selectedSubItemId === item.id;
+      const content = isSelected ? editorContentRef.current : null;
+
+      const dragPreview = document.createElement('div');
+      dragPreview.textContent = item.name || ' ';
+      dragPreview.style.padding = '4px 12px';
+      dragPreview.style.fontSize = '13px';
+      dragPreview.style.borderRadius = '9999px';
+      dragPreview.style.background = 'rgb(var(--ds-gray-800))';
+      dragPreview.style.color = 'rgb(var(--foreground))';
+      dragPreview.style.position = 'absolute';
+      dragPreview.style.top = '-9999px';
+      dragPreview.style.left = '-9999px';
+      document.body.appendChild(dragPreview);
+
+      event.dataTransfer.setData(
+        'application/resource-subitem',
+        JSON.stringify({
+          id: item.id,
+          name: item.name,
+          markdownBody: content?.markdownBody ?? '',
+          jsonBody: content?.jsonBody ?? '',
+        }),
+      );
+      event.dataTransfer.effectAllowed = 'copy';
+      event.dataTransfer.setDragImage(dragPreview, 10, 10);
+
+      requestAnimationFrame(() => {
+        document.body.removeChild(dragPreview);
+      });
+    },
+    [selectedSubItemId],
+  );
+
   return (
     <aside
       className="fixed left-0 top-0 h-full flex flex-col z-50"
       style={{
         width: SIDEBAR_WIDTH,
-        background: "rgb(var(--surface))",
+        background: 'rgb(var(--surface))',
         transform: isOpen
-          ? "translateX(0)"
+          ? 'translateX(0)'
           : `translateX(calc(-100% + ${VISIBLE_BUTTON_WIDTH}px))`,
-        transition: "transform 300ms ease",
-        overflow: "visible",
+        transition: 'transform 300ms ease',
+        overflow: 'visible',
       }}
     >
       {/* ── 스크롤 영역 ── */}
       <div
         className="scrollbar-hide flex-1 overflow-y-auto px-4 pt-5 pb-4"
-        style={{ overflow: isOpen ? undefined : "hidden" }}
+        style={{ overflow: isOpen ? undefined : 'hidden' }}
       >
         {/* Project 섹션 */}
         <div className="mb-8">
@@ -449,16 +575,16 @@ export default function Sidebar({
                 style={{
                   fontSize: 18,
                   fontWeight: 700,
-                  color: "rgb(var(--foreground))",
+                  color: 'rgb(var(--foreground))',
                 }}
               >
-                Project
+                Workspaces
               </span>
               <button
                 onClick={onAddProject}
                 style={{
                   fontSize: 22,
-                  color: "rgb(var(--ds-black))",
+                  color: 'rgb(var(--ds-black))',
                   lineHeight: 1,
                 }}
                 className="cursor-pointer"
@@ -471,11 +597,11 @@ export default function Sidebar({
               className="cursor-pointer"
               style={{
                 fontSize: 20,
-                color: "rgb(var(--ds-gray-500))",
+                color: 'rgb(var(--ds-gray-500))',
                 fontWeight: 600,
               }}
             >
-              {isOpen ? "«" : "»"}
+              {isOpen ? '«' : '»'}
             </button>
           </div>
 
@@ -493,7 +619,7 @@ export default function Sidebar({
               style={{
                 fontSize: 18,
                 fontWeight: 700,
-                color: "rgb(var(--foreground))",
+                color: 'rgb(var(--foreground))',
               }}
             >
               Resource
@@ -502,7 +628,7 @@ export default function Sidebar({
               onClick={onAddResource}
               style={{
                 fontSize: 22,
-                color: "rgb(var(--ds-black))",
+                color: 'rgb(var(--ds-black))',
                 lineHeight: 1,
               }}
               className="cursor-pointer"
@@ -514,12 +640,21 @@ export default function Sidebar({
           <ResourceList
             resources={resources}
             expanded={expanded}
+            selectedSubItemId={selectedSubItemId}
+            onSelectSubItem={handleSelectSubItem}
             onToggleExpand={onToggleExpand}
             onAddSubItem={onAddSubItem}
             onSaveResourceName={onSaveResourceName}
             onSaveSubItemName={onSaveSubItemName}
             onStartEditResource={onStartEditResource}
             onStartEditSubItem={onStartEditSubItem}
+            collabProvider={collabProvider}
+            userName={userName}
+            cursorColor={cursorColor}
+            onContentChange={handleContentChange}
+            onSubItemDragStart={handleSubItemDragStart}
+            onExpandSubItem={handleExpandSubItem}
+            selectedUpdatedAt={selectedUpdatedAt}
           />
         </div>
       </div>
@@ -527,7 +662,7 @@ export default function Sidebar({
       {/* ── 하단 아이콘 바 ── */}
       <div
         className="shrink-0 flex items-center gap-3 px-4 py-3"
-        style={{ borderTop: "1px solid rgb(var(--border))" }}
+        style={{ borderTop: '1px solid rgb(var(--border))' }}
       >
         <button
           className="flex items-center justify-center rounded-full cursor-pointer"
@@ -535,72 +670,24 @@ export default function Sidebar({
             width: 24,
             height: 24,
             fontSize: 13,
-            color: "rgb(var(--ds-gray-500))",
-            border: "1.5px solid rgb(var(--ds-gray-600))",
+            color: 'rgb(var(--ds-gray-500))',
+            border: '1.5px solid rgb(var(--ds-gray-600))',
           }}
         >
           ?
         </button>
         <button
           className="flex items-center justify-center cursor-pointer"
-          style={{ color: "rgb(var(--ds-gray-500))" }}
+          style={{ color: 'rgb(var(--ds-gray-500))' }}
           title="레이아웃"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <rect
-              x="1"
-              y="1"
-              width="7"
-              height="4"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1"
-            />
-            <rect
-              x="1"
-              y="7"
-              width="7"
-              height="4"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1"
-            />
-            <rect
-              x="1"
-              y="13"
-              width="7"
-              height="4"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1"
-            />
-            <rect
-              x="10"
-              y="1"
-              width="7"
-              height="4"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1"
-            />
-            <rect
-              x="10"
-              y="7"
-              width="7"
-              height="4"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1"
-            />
-            <rect
-              x="10"
-              y="13"
-              width="7"
-              height="4"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1"
-            />
+            <rect x="1" y="1" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
+            <rect x="1" y="7" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
+            <rect x="1" y="13" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
+            <rect x="10" y="1" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
+            <rect x="10" y="7" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
+            <rect x="10" y="13" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
           </svg>
         </button>
       </div>
