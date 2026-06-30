@@ -105,8 +105,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setSidebarWidth(sidebarWidth);
-  }, [sidebarWidth, setSidebarWidth]);
+    setSidebarWidth(isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH);
+  }, [isSidebarOpen, setSidebarWidth]);
 
   const handleToggleSidebar = useCallback(() => {
     setIsSidebarOpen((prev) => {

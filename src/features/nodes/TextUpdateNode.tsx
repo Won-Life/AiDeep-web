@@ -185,7 +185,6 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
       {showInputBox && (
         <NodeEditorPanel
           nodeId={id}
-          borderColor={EDGE_COLOR}
           handleSide={sideRelativeToParent}
           panelZIndex={nodeData.panelZIndex}
           onExpandClick={() =>
@@ -208,7 +207,7 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
         style={{
           ...containerStyle,
           position: 'relative',
-          zIndex: 10,
+          zIndex: 40,
           maxWidth: '200px',
           minWidth: `${PLACEHOLDER.length}em`,
           padding: isMain ? '26px 36px' : '6px 12px',

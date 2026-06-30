@@ -132,6 +132,7 @@ function ResourceTree({
   if (subItems.length === 0) return null;
 
   const ITEM_H = 38;
+  const SVG_W = 20;
   const VX = 8;
   const R = 6;
 
@@ -147,10 +148,10 @@ function ResourceTree({
           <div key={item.id}>
             <div
               className="flex items-center"
-              style={{ height: ITEM_H }}
+              style={{ height: ITEM_H, position: 'relative', zIndex: 1 }}
             >
               <svg
-                width="20"
+                width={SVG_W}
                 height={ITEM_H}
                 style={{ flexShrink: 0, overflow: 'visible' }}
               >
@@ -240,7 +241,7 @@ function ResourceTree({
 
             {/* 선택된 서브 아이템 아래 인라인 에디터 */}
             {isSelected && (
-              <div className="mb-2">
+              <div className="mb-2" style={{ marginTop: -12, marginLeft: SVG_W, position: 'relative', zIndex: 0 }}>
                 <NodeEditorPanel
                   nodeId={item.id}
                   inline
