@@ -22,6 +22,7 @@ import {
   ConnectionLineType,
   useReactFlow,
   ReactFlowProvider,
+  type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import * as d3 from 'd3';
@@ -660,17 +661,15 @@ function GraphCanvasInner({
 
   // viewport 저장 (debounce)
   const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedViewport = useRef<{ x: number; y: number; zoom: number } | null>(
-    (() => {
-      if (typeof window === 'undefined') return null;
-      try {
-        const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
-        return raw ? JSON.parse(raw) : null;
-      } catch {
-        return null;
-      }
-    })(),
-  );
+  const [savedViewport] = useState<{ x: number; y: number; zoom: number } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const handleViewportChange = useCallback(
     (viewport: { x: number; y: number; zoom: number }) => {
@@ -692,7 +691,10 @@ function GraphCanvasInner({
   const d3NodesRef = useRef<D3Node[]>([]);
   const isDraggingRef = useRef(false);
   const nodesRef = useRef<Node[]>(nodes);
-  nodesRef.current = nodes;
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
   const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
@@ -1281,7 +1283,7 @@ function GraphCanvasInner({
   }, []);
 
   const onConnectEnd = useCallback(
-    async (event: MouseEvent | TouchEvent, connectionState: any) => {
+    async (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       // 핸들에서 직접 뽑은 엣지가 다른 노드에 연결되지 않았을 때 (엣지를 빈 공간에 드롭) 새 노드 생성하며 연결 생성
       if (!connectionState.isValid) {
         // 마우스 위치 가져오기
@@ -2163,8 +2165,8 @@ function GraphCanvasInner({
         onDragLeave={onDragLeave}
         isValidConnection={isValidConnection}
         onViewportChange={handleViewportChange}
-        {...(savedViewport.current
-          ? { defaultViewport: savedViewport.current }
+        {...(savedViewport
+          ? { defaultViewport: savedViewport }
           : { fitView: true })}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
