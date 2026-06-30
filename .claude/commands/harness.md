@@ -1,18 +1,292 @@
-이 프로젝트는 Harness 프레임워크를 사용한다. 아래 워크플로우에 따라 작업을 진행하라.
+이 프로젝트는 Harness 프레임워크를 사용한다.
 
 ---
 
-## 워크플로우
+## 시작: 파이프라인 안내 후 모드 선택
 
-### A. 탐색
+/harness 실행 시, 먼저 아래 파이프라인을 출력한 다음 모드를 선택하게 한다.
 
-`/docs/` 하위 문서(PRD, ARCHITECTURE, ADR 등)를 읽고 프로젝트의 기획·아키텍처·설계 의도를 파악한다. 필요시 Explore 에이전트를 병렬로 사용한다.
+```
+══════════════════════════════════════════════════════
+  Harness 파이프라인
+══════════════════════════════════════════════════════
 
-### B. 논의
+  [A] 협업 모드 (사람이 phase 단위로 검토)
+  ──────────────────────────────────────────────────
+  1. GitHub 이슈 조회 — 내 담당 + 마감 가까운 순
+  2. 작업 이슈 선택
+  3. 관련 파일 탐색 → 확인 목록 안내
+  4. 브랜치 생성 (feat/issue-{N}-{slug})
+  5. 작업을 Phase로 분해 → 승인 후 시작
+     ┌── Phase 1 → 추론 프로토콜 → 자율 실행
+     │              └─ 완료 → 보고서 → 테스트 → 검토 대기
+     ├── Phase 2 → 추론 프로토콜 → 자율 실행
+     │              └─ 완료 → 보고서 → 테스트 → 검토 대기
+     └── ...
+  6. 전체 완료 → PR 생성 (→ dev 브랜치)
+
+  [B] 자동 실행 모드 (step 파일 기반 완전 자동)
+  ──────────────────────────────────────────────────
+  python3 scripts/execute.py {task-name}
+  python3 scripts/execute.py {task-name} --push
+
+══════════════════════════════════════════════════════
+```
+
+**"A 협업 모드 / B 자동 실행 모드 중 선택하세요."** 라고 묻는다.
+
+---
+
+## 모드 A: 협업 모드
+
+### 1. 이슈 조회 및 선택
+
+```bash
+gh issue list --assignee @me --state open --json number,title,milestone,labels,url --limit 30
+```
+
+`milestone.dueOn`이 빠른 순서로 정렬하고, `dueOn`이 없는 이슈는 뒤에 둔다.
+
+```
+담당 이슈 목록 (마감 가까운 순)
+────────────────────────────────────────────────────
+  #42  [마감: 2025-07-10]  [feat] 로그인 버튼 UI 수정
+  #38  [마감: 2025-07-15]  [fix]  API 에러 처리 개선
+  #55  [마감: 없음]         [docs] 문서 업데이트
+────────────────────────────────────────────────────
+작업할 이슈 번호를 선택하세요.
+```
+
+### 2. 이슈 분석 및 파일 안내
+
+```bash
+gh issue view {N} --json title,body,labels,milestone,comments
+```
+
+`docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/ADR.md`, `docs/UI_GUIDE.md`를 읽는다.
+Explore 에이전트를 사용해 이슈와 연관된 파일을 찾는다.
+아래 형식으로 **확인 권장 파일 목록**을 안내한다:
+
+```
+이슈 #42 — 로그인 버튼 UI 수정
+────────────────────────────────────────────────────
+확인 권장 파일 (변경 전 읽어두세요):
+  📄 src/features/auth/LoginButton.tsx    ← 주요 변경 대상
+  📄 src/components/ui/Button.tsx         ← 공통 버튼 컴포넌트
+  📄 docs/UI_GUIDE.md                     ← 디자인 토큰 기준
+  📄 src/app/globals.css                  ← CSS 변수 정의
+────────────────────────────────────────────────────
+```
+
+### 3. 브랜치 생성
+
+```bash
+git checkout dev && git pull origin dev
+git checkout -b feat/issue-{N}-{slug}
+```
+
+`{slug}`: 이슈 제목에서 영문 키워드만 추출해 kebab-case로 변환, 최대 5단어.
+
+### 4. Phase 분해 및 승인
+
+이슈를 큰 작업 단위(phase)로 분해한다.
+
+- 1 phase = 1 관심사 (타입 정의 / API 레이어 / UI 컴포넌트 / 통합·테스트 등)
+- 각 phase는 독립적으로 빌드·테스트 가능해야 한다
+- 일반적으로 2~4개. 단순한 이슈는 1~2개로 충분하다
+
+아래 형식으로 제시한 뒤 **사용자 승인을 받은 후 실행한다:**
+
+```
+Phase 계획
+──────────────────────────────────────────────────
+  Phase 1 [types]      — 새 타입 정의 및 기존 타입 수정
+  Phase 2 [api-layer]  — API 함수 및 WS 이벤트 핸들러
+  Phase 3 [ui]         — 컴포넌트 구현 및 스타일 적용
+──────────────────────────────────────────────────
+승인하시면 Phase 1부터 시작합니다.
+```
+
+### 5. 실행 주체 결정 (Phase 시작 전 판단)
+
+Phase 계획이 승인되면, 각 phase를 시작하기 전에 아래 기준으로 **누가 코드를 작성할지** 판단하고 사용자에게 제안한다.
+
+**사용자가 직접 작성하는 것을 권장하는 경우:**
+- 이 로직을 직접 구현해본 경험이 없을 것 같을 때 (학습 가치가 있는 패턴)
+- 면접에서 "이걸 어떻게 구현했어요?"라는 질문이 나올 수 있는 코드일 때
+- 아키텍처 결정이 포함되어 있어 손으로 써봐야 이해가 깊어지는 경우
+- 이 phase의 핵심 로직이 이슈의 본질이라 직접 다뤄봐야 할 때
+
+**Claude가 자동으로 작성하는 경우:**
+- 이미 코드베이스에 동일한 패턴이 있고 그것을 반복·확장하는 작업일 때
+- 보일러플레이트, 설정 파일, 타입 정의 추가 등 기계적 작업일 때
+- 여러 파일에 걸친 단순 반복 수정 (리네임, 필드 추가 등)
+- 이미 함께 로직을 분석·설계 완료하여 구현이 번역 수준인 경우
+
+판단 후 아래 형식으로 제안한다:
+
+```
+[Phase {N} 실행 주체 제안]
+──────────────────────────────────────────────────
+추천: 직접 작성 / Claude 자동 실행
+
+이유: {판단 근거 한 줄}
+──────────────────────────────────────────────────
+```
+
+사용자가 다른 선택을 해도 그대로 따른다.
+
+### 5-A. Phase 실행 — Claude 자동 실행 선택 시
+
+#### 5-1. 추론 프로토콜 (구현 전 필수)
+
+각 phase 코딩 시작 **전에** 반드시 아래를 먼저 작성한다.
+이것이 코드보다 먼저다. 생략하지 않는다.
+
+```
+[Phase {N} 추론]
+────────────────────────────────────────────────────
+문제 재정의  : 이 phase가 해결해야 할 것을 "어떤 상태에서 어떤 상태로"로 1줄 서술
+전제 조건    : 이 구현이 성립하려면 사전에 참이어야 하는 것들
+불변식       : 구현 중·후에도 깨지면 안 되는 것들 (예: WS 단일 진실 소스 유지)
+핵심 제약    : 기술·아키텍처·UX 상 선택의 폭을 좁히는 제약들
+접근법 도출  : 제약 → 해법 순서로 1-3줄 논리 흐름
+반례 점검    : 이 접근이 틀릴 수 있는 상황과 그 대응
+────────────────────────────────────────────────────
+```
+
+추론 내용은 보고서의 `## 추론` 섹션에도 그대로 기록한다.
+
+#### 5-2. 자율 실행
+
+작업 중 아래 규칙을 따른다:
+
+**금지사항:**
+- 권한 허락을 요청하지 않는다. 모든 도구를 자율적으로 사용한다.
+- "~해도 될까요?", "확인해주시겠어요?" 같은 질문으로 멈추지 않는다.
+- 블록 상황(API 키 없음, 외부 인증 필요, 사람만 할 수 있는 작업)이 아닌 이상 중단하지 않는다.
+
+**가드레일 (항상 우선):**
+1. `CLAUDE.md` CRITICAL 규칙 — 어떤 상황에서도 위반 금지
+2. `docs/ARCHITECTURE.md` — 디렉토리 구조 및 레이어 규칙
+3. `docs/ADR.md` — 기술 스택 결정 근거
+4. `docs/UI_GUIDE.md` — 색상 토큰, 스타일 기준
+5. `docs/PRD.md` — 기능 의도
+
+**MCP 활용:**
+- UI 작업 시: Figma MCP(`mcp__plugin_figma_figma__*`)로 디자인 컨텍스트를 가져온다.
+- API 스펙 확인이 필요하면 Postman MCP가 설정된 경우 활용한다.
+
+**검증 (phase 완료 전 반드시 실행):**
+```bash
+yarn tsc --noEmit   # 타입 에러 0개
+yarn build          # 빌드 성공
+yarn test           # 테스트 통과 (pure utility 변경 포함 시)
+```
+
+실패하면 스스로 수정 후 재실행한다. 3회 시도 후에도 실패하면 blocked로 처리하고 사유를 보고한다.
+
+#### 5-3. Phase 보고서 작성
+
+`phases/{issue-slug}/phase{N}-{name}.md` 파일을 생성한다:
+
+```markdown
+# Phase {N}: {이름}
+
+## 추론
+
+| 항목 | 내용 |
+|------|------|
+| 문제 재정의 | 어떤 상태에서 어떤 상태로 |
+| 전제 조건 | ... |
+| 불변식 | ... |
+| 핵심 제약 | ... |
+| 접근법 도출 | 제약 A → 제약 B → 해법 C |
+| 반례 점검 | 틀릴 수 있는 상황 / 대응 |
+
+## 작업 내용
+- (bullet list, 구체적으로)
+
+## 변경된 파일
+| 파일 | 변경 이유 |
+|------|----------|
+| `src/...` | ... |
+
+## 설계 결정
+| 결정 | 근거 (어떤 제약이 이 선택을 강제했는가) | 파생 결과 | 검토 후 제외한 대안 (미채택 이유) |
+|------|----------------------------------------|----------|----------------------------------|
+| ... | ... | ... | ... |
+
+## 테스트 결과
+- `yarn tsc --noEmit`: ✅ PASS / ❌ FAIL
+- `yarn build`: ✅ PASS / ❌ FAIL
+- `yarn test`: ✅ PASS (N passed) / ❌ FAIL
+
+## 다음 phase 진행 전 확인 사항
+- [ ] (있으면 작성, 없으면 "없음")
+```
+
+보고서를 채팅에 요약 출력하고 대기한다:
+**"Phase {N} 완료. 보고서: `phases/{issue-slug}/phase{N}-{name}.md` — 검토 후 다음 phase 진행을 알려주세요."**
+
+### 5-B. Phase 실행 — 사용자 직접 작성 선택 시
+
+사용자가 코드를 작성하는 동안 Claude는 아래 역할을 한다:
+
+- 추론 프로토콜(문제 재정의 / 전제 조건 / 불변식 / 반례)을 먼저 함께 정리해준다
+- 막히는 부분이 있으면 힌트를 주되 코드를 직접 써주지 않는다
+- 사용자가 작성을 완료하면 검증을 대신 실행하고 결과를 보고한다:
+  ```bash
+  yarn tsc --noEmit
+  yarn build
+  yarn test
+  ```
+- 보고서(`phases/{issue-slug}/phase{N}-{name}.md`)는 Claude가 작성한다. 설계 결정 칸에는 사용자가 선택한 접근법과 그 이유를 기록한다.
+
+### 6. 전체 완료 → PR 생성
+
+```bash
+git add -A
+git commit -m "feat(issue-{N}): {이슈 제목 한 줄 요약}"
+gh pr create --base dev --title "feat(issue-{N}): {이슈 제목}" --body "..."
+```
+
+**PR 본문 형식** — 간결하게, 의사결정 중심으로. 장황한 설명 금지:
+
+```markdown
+## 이슈
+Closes #{N}
+
+## 변경 요약
+- (핵심만 2-4줄)
+
+## 의사결정 근거
+| 결정 | 어떤 제약이 이 선택을 강제했는가 | 검토 후 제외한 대안 (미채택 이유) |
+|------|----------------------------------|----------------------------------|
+| ... | ... | ... |
+
+## 핵심 로직·규칙
+- (코드 리뷰 시 알아야 할 불변식이나 제약)
+
+## 변경 파일
+- `src/...` — 한 줄 설명
+```
+
+---
+
+## 모드 B: 자동 실행 모드
+
+execute.py는 `phases/{task-name}/index.json`과 `phases/{task-name}/step{N}.md` 파일이 준비된 상태에서만 실행할 수 있다. 파일이 없으면 아래 B-1~B-4 단계로 먼저 설계한다.
+
+### B-1. 탐색
+
+`docs/` 하위 문서(PRD, ARCHITECTURE, ADR 등)를 읽고 프로젝트의 기획·아키텍처·설계 의도를 파악한다. 필요시 Explore 에이전트를 병렬로 사용한다.
+
+### B-2. 논의
 
 구현을 위해 구체화하거나 기술적으로 결정해야 할 사항이 있으면 사용자에게 제시하고 논의한다.
 
-### C. Step 설계
+### B-3. Step 설계
 
 사용자가 구현 계획 작성을 지시하면 여러 step으로 나뉜 초안을 작성해 피드백을 요청한다.
 
@@ -26,66 +300,42 @@
 6. **주의사항은 구체적으로** — "조심해라" 대신 "X를 하지 마라. 이유: Y" 형식으로 적는다.
 7. **네이밍** — step name은 kebab-case slug로, 해당 step의 핵심 모듈/작업을 한두 단어로 표현한다 (예: `project-setup`, `api-layer`, `auth-flow`).
 
-### D. 파일 생성
+### B-4. 파일 생성
 
 사용자가 승인하면 아래 파일들을 생성한다.
 
-#### D-1. `phases/index.json` (전체 현황)
+#### `phases/index.json` (전체 현황)
 
 여러 task를 관리하는 top-level 인덱스. 이미 존재하면 `phases` 배열에 새 항목을 추가한다.
 
 ```json
 {
   "phases": [
-    {
-      "dir": "0-mvp",
-      "status": "pending"
-    }
+    { "dir": "0-mvp", "status": "pending" }
   ]
 }
 ```
 
-- `dir`: task 디렉토리명.
-- `status`: `"pending"` | `"completed"` | `"error"` | `"blocked"`. execute.py가 실행 중 자동으로 업데이트한다.
-- 타임스탬프(`completed_at`, `failed_at`, `blocked_at`)는 execute.py가 상태 변경 시 자동 기록한다. 생성 시 넣지 않는다.
-
-#### D-2. `phases/{task-name}/index.json` (task 상세)
+#### `phases/{task-name}/index.json` (task 상세)
 
 ```json
 {
-  "project": "<프로젝트명>",
-  "phase": "<task-name>",
+  "project": "aideep",
+  "phase": "{task-name}",
   "steps": [
     { "step": 0, "name": "project-setup", "status": "pending" },
-    { "step": 1, "name": "core-types", "status": "pending" },
-    { "step": 2, "name": "api-layer", "status": "pending" }
+    { "step": 1, "name": "api-layer",     "status": "pending" }
   ]
 }
 ```
 
-필드 규칙:
+- `steps[].step`: 0부터 시작하는 순번
+- `steps[].status`: 초기값은 모두 `"pending"`
+- 타임스탬프(`completed_at`, `failed_at`, `blocked_at`)는 execute.py가 자동 기록한다. 생성 시 넣지 않는다.
 
-- `project`: 프로젝트명 (CLAUDE.md 참조).
-- `phase`: task 이름. 디렉토리명과 일치시킨다.
-- `steps[].step`: 0부터 시작하는 순번.
-- `steps[].name`: kebab-case slug.
-- `steps[].status`: 초기값은 모두 `"pending"`.
+#### `phases/{task-name}/step{N}.md` (각 step마다 1개)
 
-상태 전이와 자동 기록 필드:
-
-| 전이 | 기록되는 필드 | 기록 주체 |
-|------|-------------|----------|
-| → `completed` | `completed_at`, `summary` | Claude 세션 (summary), execute.py (timestamp) |
-| → `error` | `failed_at`, `error_message` | Claude 세션 (message), execute.py (timestamp) |
-| → `blocked` | `blocked_at`, `blocked_reason` | Claude 세션 (reason), execute.py (timestamp) |
-
-`summary`는 step 완료 시 산출물을 한 줄로 요약한 것으로, execute.py가 다음 step 프롬프트에 컨텍스트로 누적 전달한다. 따라서 다음 step에 유용한 정보(생성된 파일, 핵심 결정 등)를 담아야 한다.
-
-`created_at`은 execute.py가 최초 실행 시 task 레벨에 한 번만 기록한다. step 레벨의 `started_at`도 execute.py가 각 step 시작 시 자동 기록한다. 생성 시 넣지 않는다.
-
-#### D-3. `phases/{task-name}/step{N}.md` (각 step마다 1개)
-
-```markdown
+````markdown
 # Step {N}: {이름}
 
 ## 읽어야 할 파일
@@ -95,8 +345,6 @@
 - `docs/ARCHITECTURE.md`
 - `docs/ADR.md`
 - {이전 step에서 생성/수정된 파일 경로}
-
-이전 step에서 만들어진 코드를 꼼꼼히 읽고, 설계 의도를 이해한 뒤 작업하라.
 
 ## 작업
 
@@ -109,45 +357,41 @@
 ```bash
 yarn tsc --noEmit  # 타입 에러 없음
 yarn build         # 빌드 에러 없음
-yarn test          # 유틸리티 테스트 통과 (해당 step에 pure utility 함수 포함 시)
+yarn test          # 유틸리티 테스트 통과 (pure utility 함수 포함 시)
 ```
 
 ## 검증 절차
 
 1. 위 AC 커맨드를 실행한다.
-2. 아키텍처 체크리스트를 확인한다:
+2. 아키텍처 체크리스트:
    - ARCHITECTURE.md 디렉토리 구조를 따르는가?
    - ADR 기술 스택을 벗어나지 않았는가?
    - CLAUDE.md CRITICAL 규칙을 위반하지 않았는가?
 3. 결과에 따라 `phases/{task-name}/index.json`의 해당 step을 업데이트한다:
    - 성공 → `"status": "completed"`, `"summary": "산출물 한 줄 요약"`
-   - 수정 3회 시도 후에도 실패 → `"status": "error"`, `"error_message": "구체적 에러 내용"`
-   - 사용자 개입 필요 (API 키, 외부 인증, 수동 설정 등) → `"status": "blocked"`, `"blocked_reason": "구체적 사유"` 후 즉시 중단
+   - 3회 시도 후에도 실패 → `"status": "error"`, `"error_message": "구체적 에러 내용"`
+   - 사용자 개입 필요 → `"status": "blocked"`, `"blocked_reason": "구체적 사유"` 후 즉시 중단
 
 ## 금지사항
 
-- {이 step에서 하지 말아야 할 것. "X를 하지 마라. 이유: Y" 형식}
-```
+- {X를 하지 마라. 이유: Y}
+````
 
-### E. 실행
+### B-5. 실행
+
+파일이 준비되면 터미널에서 실행한다:
 
 ```bash
 python3 scripts/execute.py {task-name}        # 순차 실행
 python3 scripts/execute.py {task-name} --push  # 실행 후 push
 ```
 
-> **보안 주의**: execute.py는 `--dangerously-skip-permissions` 플래그로 Claude를 호출한다. 자동화 실행이므로 `settings.json`의 PreToolUse hook과 `settings.local.json`의 allow list가 **적용되지 않는다**. step 파일에 작성된 지시가 그대로 실행되므로, step 설계 시 위험한 명령(rm -rf, force push 등)이 포함되지 않도록 주의한다.
-
-execute.py가 자동으로 처리하는 것:
-
+execute.py 자동 처리 항목:
 - `feat-{task-name}` 브랜치 생성/checkout
-- 가드레일 주입 — CLAUDE.md + docs/*.md 내용을 매 step 프롬프트에 포함
-- 컨텍스트 누적 — 완료된 step의 summary를 다음 step 프롬프트에 전달
-- 자가 교정 — 실패 시 최대 3회 재시도하며, 이전 에러 메시지를 프롬프트에 피드백
-- 2단계 커밋 — 코드 변경(`feat`)과 메타데이터(`chore`)를 분리 커밋
-- 타임스탬프 — started_at, completed_at, failed_at, blocked_at 자동 기록
+- CLAUDE.md + docs/*.md를 매 step 프롬프트에 가드레일로 주입
+- 완료된 step summary를 다음 step 컨텍스트에 누적 전달
+- 실패 시 최대 3회 자동 재시도 (이전 에러를 프롬프트에 피드백)
+- feat 커밋(코드) + chore 커밋(메타데이터) 분리
+- started_at, completed_at, failed_at, blocked_at 자동 기록
 
-에러 복구:
-
-- **error 발생 시**: `phases/{task-name}/index.json`에서 해당 step의 `status`를 `"pending"`으로 바꾸고 `error_message`를 삭제한 뒤 재실행한다.
-- **blocked 발생 시**: `blocked_reason`에 적힌 사유를 해결한 뒤, `status`를 `"pending"`으로 바꾸고 `blocked_reason`을 삭제한 뒤 재실행한다.
+**에러 복구:** `phases/{task-name}/index.json`에서 해당 step의 `status`를 `"pending"`으로 바꾸고 `error_message` 삭제 후 재실행한다.
