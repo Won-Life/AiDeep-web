@@ -282,7 +282,7 @@ function GraphLayoutInner({ children }: { children: ReactNode }) {
 
       <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setIsChatOpen(true)} />
 
-      <AiChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <AiChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} sidebarWidth={sidebarWidth} />
 
       <UserMenu
         username={userMe?.username ?? ''}
