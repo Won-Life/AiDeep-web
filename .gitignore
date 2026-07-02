@@ -42,7 +42,6 @@ next-env.d.ts
 
 # local config
 .mcp.json
-CLAUDE.md
 
 # harness — phase execution outputs
 phases/**/phase*-output.json
