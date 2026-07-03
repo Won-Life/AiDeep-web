@@ -48,7 +48,7 @@ export type NodeView = {
   onChange?: (nodeId: string, value: string) => void;
 };
 
-export function TextUpdaterNode({ data, id }: NodeProps) {
+export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const router = useRouter();
   const updateNodeInternals = useUpdateNodeInternals();
   const nodeData = data as NodeView;
@@ -102,16 +102,22 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
   const containerStyle = isMain
     ? {
         backgroundColor: nodeData.color || '#ffffff',
-        borderColor: isHovered ? '#93C5FD' : (viewerBorderColor ?? EDGE_COLOR),
-        borderWidth: isHovered || viewerBorderColor ? '2px' : '1px',
+        borderColor: isHovered
+          ? '#93C5FD'
+          : selected
+            ? 'rgb(var(--ds-main))'
+            : (viewerBorderColor ?? EDGE_COLOR),
+        borderWidth: isHovered || selected || viewerBorderColor ? '2px' : '1px',
       }
     : {
         backgroundColor: nodeData.color || '#ffffff',
         border: isHovered
           ? '3px solid #93C5FD'
-          : viewerBorderColor
-            ? `2px solid ${viewerBorderColor}`
-            : 'none',
+          : selected
+            ? '2px solid rgb(var(--ds-main))'
+            : viewerBorderColor
+              ? `2px solid ${viewerBorderColor}`
+              : 'none',
       };
 
   // 최대 3명 표시, 이후 +N
