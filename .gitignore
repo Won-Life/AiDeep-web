@@ -46,4 +46,7 @@ next-env.d.ts
 # harness — phase execution outputs
 phases/**/phase*-output.json
 phases/**/step*-output.json
+
+# harness — 하네스 관련 파일 복사본 모음
+/harness/
 repo.zip
