@@ -49,9 +49,12 @@ export function useWorkspaceWS({
   // Use refs so the latest setters are always available
   // without re-subscribing on every render.
   const setNodesRef = useRef(setNodes);
-  setNodesRef.current = setNodes;
   const setEdgesRef = useRef(setEdges);
-  setEdgesRef.current = setEdges;
+
+  useEffect(() => {
+    setNodesRef.current = setNodes;
+    setEdgesRef.current = setEdges;
+  }, [setNodes, setEdges]);
 
   useEffect(() => {
     if (!workspaceId || !userName) return;

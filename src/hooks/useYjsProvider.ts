@@ -38,7 +38,10 @@ export function useYjsProvider({
   const [provider, setProvider] = useState<SocketIoYjsProvider | null>(null);
   const [isSynced, setIsSynced] = useState(false);
   const optsRef = useRef({ userName, userColor });
-  optsRef.current = { userName, userColor };
+
+  useEffect(() => {
+    optsRef.current = { userName, userColor };
+  }, [userName, userColor]);
 
   useEffect(() => {
     if (!nodeId) return;

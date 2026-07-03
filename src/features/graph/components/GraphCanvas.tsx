@@ -22,6 +22,7 @@ import {
   ConnectionLineType,
   useReactFlow,
   ReactFlowProvider,
+  type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import * as d3 from 'd3';
@@ -660,17 +661,15 @@ function GraphCanvasInner({
 
   // viewport 저장 (debounce)
   const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedViewport = useRef<{ x: number; y: number; zoom: number } | null>(
-    (() => {
-      if (typeof window === 'undefined') return null;
-      try {
-        const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
-        return raw ? JSON.parse(raw) : null;
-      } catch {
-        return null;
-      }
-    })(),
-  );
+  const [savedViewport] = useState<{ x: number; y: number; zoom: number } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const handleViewportChange = useCallback(
     (viewport: { x: number; y: number; zoom: number }) => {
@@ -692,7 +691,10 @@ function GraphCanvasInner({
   const d3NodesRef = useRef<D3Node[]>([]);
   const isDraggingRef = useRef(false);
   const nodesRef = useRef<Node[]>(nodes);
-  nodesRef.current = nodes;
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
   const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
@@ -829,7 +831,7 @@ function GraphCanvasInner({
         ),
       );
     },
-    [],
+    [setNodes],
   );
 
   const titleDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -929,7 +931,7 @@ function GraphCanvasInner({
 
       setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
     },
-    [requestArchiveForNodes],
+    [requestArchiveForNodes, setNodes],
   );
 
   const onBeforeDelete = useCallback(
@@ -990,7 +992,7 @@ function GraphCanvasInner({
     setPendingArchiveNodeIds([]);
     setIsArchiveModalOpen(false);
     setIsArchiveDeleting(false);
-  }, [pendingArchiveNodeIds, workspaceId]);
+  }, [pendingArchiveNodeIds, workspaceId, setNodes, setEdges]);
 
   const edgesWithPresentation = useMemo(
     () => edges.map((edge) => buildEdgePresentation(edge, nodes, edges)),
@@ -1270,7 +1272,7 @@ function GraphCanvasInner({
         })
         .catch((err) => console.error('[createEdge] failed', err));
     },
-    [nodes, edges, workspaceId],
+    [nodes, edges, workspaceId, setNodes, setEdges],
   );
 
   /* =========================
@@ -1281,9 +1283,11 @@ function GraphCanvasInner({
   }, []);
 
   const onConnectEnd = useCallback(
-    async (event: MouseEvent | TouchEvent, connectionState: any) => {
+    async (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       // 핸들에서 직접 뽑은 엣지가 다른 노드에 연결되지 않았을 때 (엣지를 빈 공간에 드롭) 새 노드 생성하며 연결 생성
       if (!connectionState.isValid) {
+        const fromNode = connectionState.fromNode;
+        if (!fromNode) return;
         // 마우스 위치 가져오기
         const { clientX, clientY } =
           'changedTouches' in event ? event.changedTouches[0] : event;
@@ -1296,7 +1300,7 @@ function GraphCanvasInner({
 
         // source 노드 찾기
         const sourceNode = nodes.find(
-          (n) => n.id === connectionState.fromNode.id,
+          (n) => n.id === fromNode.id,
         );
         if (!sourceNode) return;
 
@@ -1341,7 +1345,7 @@ function GraphCanvasInner({
 
         // source 노드의 색상 가져오기
         const colorPair = getGraphColor(
-          connectionState.fromNode.id,
+          fromNode.id,
           nodes,
           edges,
         );
@@ -1381,7 +1385,7 @@ function GraphCanvasInner({
           const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
           createEdge(
             workspaceId,
-            connectionState.fromNode.id,
+            fromNode.id,
             nodeId,
             fromHandleId,
             targetHandleId,
@@ -1391,7 +1395,7 @@ function GraphCanvasInner({
                 ...prev,
                 {
                   id: edgeId,
-                  source: connectionState.fromNode.id,
+                  source: fromNode.id,
                   target: nodeId,
                   type: 'branch',
                   sourceHandle: fromHandleId,
@@ -1412,7 +1416,7 @@ function GraphCanvasInner({
         isConnectingRef.current = false;
       }, 0);
     },
-    [screenToFlowPosition, nodes, edges, workspaceId],
+    [screenToFlowPosition, nodes, edges, workspaceId, setNodes, setEdges],
   );
 
   /* =========================
@@ -1494,7 +1498,7 @@ function GraphCanvasInner({
         console.error('[onPaneClick] createMdNode failed', err);
       }
     },
-    [screenToFlowPosition, workspaceId, contextMenuNodeId],
+    [screenToFlowPosition, workspaceId, contextMenuNodeId, setNodes],
   );
 
   const onDragOver = useCallback(
@@ -1525,7 +1529,7 @@ function GraphCanvasInner({
         isInvalidConnection(closestNode.id, draggedPreview.id, edges);
       setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
     },
-    [screenToFlowPosition, nodes, edges],
+    [screenToFlowPosition, nodes, edges, setNodes],
   );
 
   const onDrop = useCallback(
@@ -1649,7 +1653,7 @@ function GraphCanvasInner({
 
       setHoveredNodeId(null);
     },
-    [screenToFlowPosition, nodes, edges, hoveredNodeId, workspaceId],
+    [screenToFlowPosition, nodes, edges, hoveredNodeId, workspaceId, setNodes, setEdges],
   );
 
   const onDragLeave = useCallback((event: DragEvent) => {
@@ -1891,7 +1895,7 @@ function GraphCanvasInner({
         );
       }
     },
-    [nodes, edges, workspaceId],
+    [nodes, edges, workspaceId, setNodes, setEdges],
   );
 
   const onNodeDragStop = useCallback(
@@ -2123,7 +2127,7 @@ function GraphCanvasInner({
         }
       });
     },
-    [nodes, edges, hoveredNodeId, workspaceId],
+    [nodes, edges, hoveredNodeId, workspaceId, setNodes, setEdges],
   );
 
   useEffect(() => {
@@ -2163,8 +2167,8 @@ function GraphCanvasInner({
         onDragLeave={onDragLeave}
         isValidConnection={isValidConnection}
         onViewportChange={handleViewportChange}
-        {...(savedViewport.current
-          ? { defaultViewport: savedViewport.current }
+        {...(savedViewport
+          ? { defaultViewport: savedViewport }
           : { fitView: true })}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}

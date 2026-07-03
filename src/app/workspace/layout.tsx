@@ -86,7 +86,11 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     setSynced,
   } = useWorkspaceLayout();
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = sessionStorage.getItem('sidebar_open');
+    return stored !== null ? stored === 'true' : true;
+  });
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -96,13 +100,6 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   );
 
   const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('sidebar_open');
-      if (stored !== null) setIsSidebarOpen(stored === 'true');
-    }
-  }, []);
 
   useEffect(() => {
     setSidebarWidth(sidebarWidth);
