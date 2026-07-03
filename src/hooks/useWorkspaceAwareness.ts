@@ -9,8 +9,8 @@ import type { WorkspaceRole } from '@/api/types';
 // ─── Types ──────────────────────────────────────────────────────────
 
 export interface AwarenessUserState {
-  focusedNodeId: string | null;
-  isOpen: boolean;
+  openEditorNodeId: string | null;
+  openNodeIds: string[];
   user: {
     name: string;
     color: string;
@@ -24,12 +24,6 @@ export type NodeViewersMap = Record<
   { clientId: number; name: string; color: string }[]
 >;
 
-/** Remote toggle event emitted by OWNER/EDITOR */
-export interface RemoteToggleEvent {
-  nodeId: string | null;
-  isOpen: boolean;
-}
-
 // ─── Hook ───────────────────────────────────────────────────────────
 
 interface UseWorkspaceAwarenessOptions {
@@ -37,8 +31,6 @@ interface UseWorkspaceAwarenessOptions {
   userName: string;
   userColor: string;
   role: WorkspaceRole;
-  /** Called when a remote OWNER/EDITOR toggles a node open/closed */
-  onRemoteToggle?: (event: RemoteToggleEvent) => void;
 }
 
 export function useWorkspaceAwareness({
@@ -46,17 +38,15 @@ export function useWorkspaceAwareness({
   userName,
   userColor,
   role,
-  onRemoteToggle,
 }: UseWorkspaceAwarenessOptions) {
   const docRef = useRef<Y.Doc | null>(null);
   const awarenessRef = useRef<awarenessProtocol.Awareness | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const onRemoteToggleRef = useRef(onRemoteToggle);
-  onRemoteToggleRef.current = onRemoteToggle;
 
   const [nodeViewers, setNodeViewers] = useState<NodeViewersMap>({});
+  const [aggregateOpenNodeIds, setAggregateOpenNodeIds] = useState<string[]>([]);
 
-  // ── Build viewers map from awareness states ──
+  // ── viewer 뱃지용: openEditorNodeId 기준으로 nodeId → 유저 목록 재계산 ──
 
   const rebuildViewers = useCallback(
     (awareness: awarenessProtocol.Awareness) => {
@@ -64,15 +54,29 @@ export function useWorkspaceAwareness({
       awareness.getStates().forEach((state, clientId) => {
         if (clientId === awareness.clientID) return;
         const s = state as AwarenessUserState;
-        if (!s.focusedNodeId || !s.user) return;
+        if (!s.openEditorNodeId || !s.user) return;
         const entry = { clientId, name: s.user.name, color: s.user.color };
-        if (!map[s.focusedNodeId]) {
-          map[s.focusedNodeId] = [entry];
+        if (!map[s.openEditorNodeId]) {
+          map[s.openEditorNodeId] = [entry];
         } else {
-          map[s.focusedNodeId].push(entry);
+          map[s.openEditorNodeId].push(entry);
         }
       });
       setNodeViewers(map);
+    },
+    [],
+  );
+
+  // ── 전체 참여자 openNodeIds 합집합 재계산 ──
+
+  const rebuildAllOpenNodeIds = useCallback(
+    (awareness: awarenessProtocol.Awareness) => {
+      const ids = new Set<string>();
+      awareness.getStates().forEach((state) => {
+        const s = state as AwarenessUserState;
+        (s.openNodeIds ?? []).forEach((id) => ids.add(id));
+      });
+      setAggregateOpenNodeIds(Array.from(ids));
     },
     [],
   );
@@ -87,16 +91,14 @@ export function useWorkspaceAwareness({
     docRef.current = doc;
     awarenessRef.current = awareness;
 
-    // Set initial local state
-    awareness.setLocalStateField('focusedNodeId', null);
-    awareness.setLocalStateField('isOpen', false);
+    awareness.setLocalStateField('openEditorNodeId', null);
+    awareness.setLocalStateField('openNodeIds', []);
     awareness.setLocalStateField('user', {
       name: userName,
       color: userColor,
       role,
     });
 
-    // Listen for remote awareness updates from server
     const cleanupSocket = onWsAwareness(({ data }) => {
       awarenessProtocol.applyAwarenessUpdate(
         awareness,
@@ -105,35 +107,27 @@ export function useWorkspaceAwareness({
       );
     });
 
-    // Handle awareness changes — rebuild viewers + detect remote toggles
-    const handleChange = (
-      changes: { added: number[]; updated: number[]; removed: number[] },
-    ) => {
+    /*
+     * CONTEXT
+     * - Problem      : awareness change 이벤트에서 열림/닫힘을 감지하는 방법이 두 가지 존재
+     * - Why          : 전체 재계산 방식 선택 — 매번 awareness.getStates() 전체 순회해서 합집합 재계산
+     *                  awareness를 SOT(Single Source of Truth)로 삼아 모든 상태를 awareness 기준으로 일관되게 관리
+     * - Alternatives : diff 방식 (changes.added/removed/updated 기반) — 변경된 유저만 처리해서 성능상 더 효율적
+     *                  기각 이유: prevOpenNodeIdsRef 관리, 추가/삭제/제거 로직 분기, state 동기화 복잡도 증가
+     * - Trade-offs   : 코드 단순함과 유지보수성을 얻는 대신, 변경 시 전체 유저 순회 (협업 유저 수 적어 문제 없음)
+     * - Edge Case    : 유저 수 적고(<10명) 패널 열림/닫힘 빈도 낮아(<1초당 1회) 성능 영향 미미할 것이라 예상
+     */
+    const handleChange = () => {
       rebuildViewers(awareness);
-
-      // Detect remote toggle events
-      const changedIds = [...changes.added, ...changes.updated];
-      for (const clientId of changedIds) {
-        if (clientId === awareness.clientID) continue;
-        const state = awareness.getStates().get(clientId) as
-          | AwarenessUserState
-          | undefined;
-        if (!state?.user) continue;
-        onRemoteToggleRef.current?.({
-          nodeId: state.focusedNodeId,
-          isOpen: state.isOpen,
-        });
-      }
+      rebuildAllOpenNodeIds(awareness);
     };
     awareness.on('change', handleChange);
 
-    // Emit current state on connect
     const update = awarenessProtocol.encodeAwarenessUpdate(awareness, [
       awareness.clientID,
     ]);
     emitWsAwareness(workspaceId, update);
 
-    // 15-second TTL refresh
     refreshTimerRef.current = setInterval(() => {
       const a = awarenessRef.current;
       if (!a) return;
@@ -153,11 +147,14 @@ export function useWorkspaceAwareness({
         [awareness.clientID],
         'window unload',
       );
+      const removalUpdate = awarenessProtocol.encodeAwarenessUpdate(awareness, [awareness.clientID]);
+      emitWsAwareness(workspaceId, removalUpdate);
       awareness.destroy();
       doc.destroy();
       docRef.current = null;
       awarenessRef.current = null;
       setNodeViewers({});
+      setAggregateOpenNodeIds([]);
     };
   }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -183,28 +180,29 @@ export function useWorkspaceAwareness({
     [workspaceId],
   );
 
-  // ── Public: set focused node + open state ──
+  // ── Public: 내가 열어둔 노드 id 목록을 awareness에 업데이트 ──
 
-  const setFocusedNodeId = useCallback(
+  const setAwarenessOpenNodeIds = useCallback(
+    (openNodeIds: string[]) => {
+      const awareness = awarenessRef.current;
+      if (!awareness) return;
+      awareness.setLocalStateField('openNodeIds', openNodeIds);
+      emitLocal(awareness);
+    },
+    [emitLocal],
+  );
+
+  // ── Public: 현재 포커스된 노드 id를 awareness에 업데이트 (viewer 뱃지용) ──
+
+  const setOpenEditorNodeId = useCallback(
     (nodeId: string | null) => {
       const awareness = awarenessRef.current;
       if (!awareness) return;
-      awareness.setLocalStateField('focusedNodeId', nodeId);
-      awareness.setLocalStateField('isOpen', nodeId !== null);
+      awareness.setLocalStateField('openEditorNodeId', nodeId);
       emitLocal(awareness);
     },
     [emitLocal],
   );
 
-  const setIsOpen = useCallback(
-    (isOpen: boolean) => {
-      const awareness = awarenessRef.current;
-      if (!awareness) return;
-      awareness.setLocalStateField('isOpen', isOpen);
-      emitLocal(awareness);
-    },
-    [emitLocal],
-  );
-
-  return { nodeViewers, setFocusedNodeId, setIsOpen };
+  return { nodeViewers, aggregateOpenNodeIds, setOpenEditorNodeId, setAwarenessOpenNodeIds };
 }

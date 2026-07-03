@@ -1,9 +1,9 @@
 "use client";
 
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
-import { useGraphLayout } from "./context";
+import { useWorkspaceLayout } from "./context";
 
-export default function GraphPage() {
+export default function WorkspacePage() {
   const {
     focusedNodeId, setFocusedNodeId,
     userMe,
@@ -12,7 +12,7 @@ export default function GraphPage() {
     nodes, setNodes,
     edges, setEdges,
     synced,
-  } = useGraphLayout();
+  } = useWorkspaceLayout();
 
   const currentUserId = userMe?.userId ?? "";
   const currentUserName = userMe?.username ?? "Anonymous";

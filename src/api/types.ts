@@ -102,6 +102,13 @@ export interface JoinWorkspaceRequest {
   code: string;
 }
 
+export interface WorkspaceMember {
+  userId: string;
+  username: string;
+  role: WorkspaceRole;
+  joinedAt: string;
+}
+
 // ─── Node ────────────────────────────────────────────────────────────
 
 export type NodeType = 'PROJECT' | 'DATA' | 'RESOURCE' | 'ARCHIVE';

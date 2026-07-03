@@ -22,6 +22,9 @@ const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;
 interface UseWorkspaceWSOptions {
   workspaceId: string;
   currentUserId?: string;
+  userName?: string;
+  color?: string;
+  profile?: string | null;
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   edgesRef: RefObject<Edge[]>;
@@ -35,6 +38,9 @@ interface UseWorkspaceWSOptions {
 export function useWorkspaceWS({
   workspaceId,
   currentUserId,
+  userName,
+  color,
+  profile = null,
   setNodes,
   setEdges,
   edgesRef,
@@ -43,12 +49,15 @@ export function useWorkspaceWS({
   // Use refs so the latest setters are always available
   // without re-subscribing on every render.
   const setNodesRef = useRef(setNodes);
-  setNodesRef.current = setNodes;
   const setEdgesRef = useRef(setEdges);
-  setEdgesRef.current = setEdges;
 
   useEffect(() => {
-    if (!workspaceId) return;
+    setNodesRef.current = setNodes;
+    setEdgesRef.current = setEdges;
+  }, [setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!workspaceId || !userName) return;
 
     const handleEvent = (event: WsEvent) => {
       switch (event.type) {
@@ -229,7 +238,14 @@ export function useWorkspaceWS({
       console.error('[useWorkspaceWS] connection error', err);
     };
 
-    const cleanup = subscribeToWorkspace(workspaceId, handleEvent, handleError);
+    const cleanup = subscribeToWorkspace(
+      workspaceId,
+      userName,
+      color ?? '',
+      profile,
+      handleEvent,
+      handleError,
+    );
 
     // 실시간 위치 이벤트 (transition 없이 즉시 적용)
     const handleLivePosition = (payload: LivePositionPayload) => {
@@ -267,5 +283,5 @@ export function useWorkspaceWS({
       cleanupLive(); // off() 먼저 — cleanup()이 socket을 null로 만들기 전에
       cleanup();
     };
-  }, [workspaceId]);
+  }, [workspaceId, userName]);
 }

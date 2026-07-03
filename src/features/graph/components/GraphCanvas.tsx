@@ -22,6 +22,7 @@ import {
   ConnectionLineType,
   useReactFlow,
   ReactFlowProvider,
+  type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import * as d3 from 'd3';
@@ -618,8 +619,8 @@ function GraphCanvasInner({
   setNodes,
   setEdges,
 }: GraphCanvasInnerProps) {
-  const [openNodeIds, setOpenNodeIds] = useState<string[]>([]);
-  const [localFocusedNodeId, setLocalFocusedNodeId] = useState<string | null>(
+  const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
+  const [workingOnEditorNodeId, setWorkingOnEditorNodeId] = useState<string | null>(
     null,
   );
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -637,45 +638,38 @@ function GraphCanvasInner({
   // ─── Workspace Awareness ─────────────────────────────────────────
   const cursorColor = getCursorColor(currentUserId);
 
-  // Remote toggle: only open (add to openNodeIds + focus), never close
-  const handleRemoteToggle = useCallback(
-    (event: { nodeId: string | null; isOpen: boolean }) => {
-      if (!event.isOpen || !event.nodeId) return;
-      const nodeId = event.nodeId;
-      setOpenNodeIds((prev) =>
-        prev.includes(nodeId) ? prev : [...prev, nodeId],
-      );
-      setLocalFocusedNodeId(nodeId);
-    },
-    [],
-  );
-
-  const { nodeViewers, setFocusedNodeId } = useWorkspaceAwareness({
+  const { nodeViewers, aggregateOpenNodeIds, setOpenEditorNodeId, setAwarenessOpenNodeIds } = useWorkspaceAwareness({
     workspaceId,
     userName: currentUserName,
     userColor: cursorColor,
     role: currentUserRole,
-    onRemoteToggle: handleRemoteToggle,
   });
 
-  // Sync localFocusedNodeId → awareness
+  // Sync workingOnEditorNodeId → awareness (viewer 뱃지용)
   useEffect(() => {
-    setFocusedNodeId(localFocusedNodeId);
-  }, [localFocusedNodeId, setFocusedNodeId]);
+    setOpenEditorNodeId(workingOnEditorNodeId);
+  }, [workingOnEditorNodeId, setOpenEditorNodeId]);
+
+  // Sync myOpenEditorNodeIds → awareness (내가 연 패널 목록 전파용)
+  useEffect(() => {
+    // CONTEXT: 
+    // awareness 는 기본적으로 map 형태로, workspaceId 를 key 값으로 가지며 각 workspace 내에서 참여자 별로 데이터를 저장하는 것이 best practice 이다. (예: awareness.getStates()[clientId] = { user: { name, color }, openEditorNodeId, openNodeIds } 형태)
+    // 그래서 각 참여자 별로 연 패널 목록을 따로 관리하고 공유함으로서, 각 사용자가 워크스페이스를 떠나면 해당 사용자만 열어뒀던 패널들은 자동으로 닫히도록 할 수 있다. 
+    // 별도의 연결 상태 관리가 필요 없이 awareness 로 참여자의 연결 상태를 관리 가능하므로, 내가 떠나면 내 상태가 사라지게 구현한다.
+    setAwarenessOpenNodeIds(myOpenEditorNodeIds);
+  }, [myOpenEditorNodeIds, setAwarenessOpenNodeIds]);
 
   // viewport 저장 (debounce)
   const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedViewport = useRef<{ x: number; y: number; zoom: number } | null>(
-    (() => {
-      if (typeof window === 'undefined') return null;
-      try {
-        const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
-        return raw ? JSON.parse(raw) : null;
-      } catch {
-        return null;
-      }
-    })(),
-  );
+  const [savedViewport] = useState<{ x: number; y: number; zoom: number } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(`graph_viewport_${workspaceId}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const handleViewportChange = useCallback(
     (viewport: { x: number; y: number; zoom: number }) => {
@@ -697,7 +691,10 @@ function GraphCanvasInner({
   const d3NodesRef = useRef<D3Node[]>([]);
   const isDraggingRef = useRef(false);
   const nodesRef = useRef<Node[]>(nodes);
-  nodesRef.current = nodes;
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
   const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
@@ -834,7 +831,7 @@ function GraphCanvasInner({
         ),
       );
     },
-    [],
+    [setNodes],
   );
 
   const titleDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -842,12 +839,12 @@ function GraphCanvasInner({
   );
 
   const handleClosePanel = useCallback((nodeId: string) => {
-    setOpenNodeIds((prev) => prev.filter((id) => id !== nodeId));
-    setLocalFocusedNodeId((prev) => (prev === nodeId ? null : prev));
+    setMyOpenEditorNodeIds((prev) => prev.filter((id) => id !== nodeId));
+    setWorkingOnEditorNodeId((prev) => (prev === nodeId ? null : prev));
   }, []);
 
-  const handleFocusPanel = useCallback((nodeId: string) => {
-    setLocalFocusedNodeId(nodeId);
+  const handleForwardPanel = useCallback((nodeId: string) => {
+    setWorkingOnEditorNodeId(nodeId);
   }, []);
 
   const handleTitleChange = useCallback(
@@ -876,7 +873,7 @@ function GraphCanvasInner({
     const hasParent = parentId !== null;
 
     const isContextMenuOpen = contextMenuNodeId === node.id;
-    const isEditorOpen = openNodeIds.includes(node.id);
+    const isEditorOpen = aggregateOpenNodeIds.includes(node.id);
 
     return {
       ...node,
@@ -885,14 +882,14 @@ function GraphCanvasInner({
         ...node.data,
         handleSide: node.data?.isMain ? undefined : node.data?.handleSide,
         hasParent, // 부모 노드 존재 여부 전달
-        showInputBox: openNodeIds.includes(node.id), // 열린 노드에 입력박스 표시
+        showInputBox: aggregateOpenNodeIds.includes(node.id), // 열린 노드에 입력박스 표시
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
-        panelZIndex: node.id === localFocusedNodeId ? 30 : 20, // 포커스된 패널이 위
+        panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
         viewers: nodeViewers[node.id] ?? [], // 현재 이 노드를 보고 있는 다른 유저들
         onClosePanel: handleClosePanel,
-        onFocusPanel: handleFocusPanel,
+        onForwardPanel: handleForwardPanel,
         onChange: handleTitleChange,
       },
     };
@@ -934,7 +931,7 @@ function GraphCanvasInner({
 
       setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
     },
-    [requestArchiveForNodes],
+    [requestArchiveForNodes, setNodes],
   );
 
   const onBeforeDelete = useCallback(
@@ -988,14 +985,14 @@ function GraphCanvasInner({
       snapshot.filter((node) => !idsToArchive.has(node.id)),
     );
     setHoveredNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
-    setOpenNodeIds((prev) => prev.filter((id) => !idsToArchive.has(id)));
-    setLocalFocusedNodeId((prev) =>
+    setMyOpenEditorNodeIds((prev) => prev.filter((id) => !idsToArchive.has(id)));
+    setWorkingOnEditorNodeId((prev) =>
       prev && idsToArchive.has(prev) ? null : prev,
     );
     setPendingArchiveNodeIds([]);
     setIsArchiveModalOpen(false);
     setIsArchiveDeleting(false);
-  }, [pendingArchiveNodeIds, workspaceId]);
+  }, [pendingArchiveNodeIds, workspaceId, setNodes, setEdges]);
 
   const edgesWithPresentation = useMemo(
     () => edges.map((edge) => buildEdgePresentation(edge, nodes, edges)),
@@ -1275,7 +1272,7 @@ function GraphCanvasInner({
         })
         .catch((err) => console.error('[createEdge] failed', err));
     },
-    [nodes, edges, workspaceId],
+    [nodes, edges, workspaceId, setNodes, setEdges],
   );
 
   /* =========================
@@ -1286,9 +1283,11 @@ function GraphCanvasInner({
   }, []);
 
   const onConnectEnd = useCallback(
-    async (event: MouseEvent | TouchEvent, connectionState: any) => {
+    async (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       // 핸들에서 직접 뽑은 엣지가 다른 노드에 연결되지 않았을 때 (엣지를 빈 공간에 드롭) 새 노드 생성하며 연결 생성
       if (!connectionState.isValid) {
+        const fromNode = connectionState.fromNode;
+        if (!fromNode) return;
         // 마우스 위치 가져오기
         const { clientX, clientY } =
           'changedTouches' in event ? event.changedTouches[0] : event;
@@ -1301,7 +1300,7 @@ function GraphCanvasInner({
 
         // source 노드 찾기
         const sourceNode = nodes.find(
-          (n) => n.id === connectionState.fromNode.id,
+          (n) => n.id === fromNode.id,
         );
         if (!sourceNode) return;
 
@@ -1346,7 +1345,7 @@ function GraphCanvasInner({
 
         // source 노드의 색상 가져오기
         const colorPair = getGraphColor(
-          connectionState.fromNode.id,
+          fromNode.id,
           nodes,
           edges,
         );
@@ -1386,7 +1385,7 @@ function GraphCanvasInner({
           const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
           createEdge(
             workspaceId,
-            connectionState.fromNode.id,
+            fromNode.id,
             nodeId,
             fromHandleId,
             targetHandleId,
@@ -1396,7 +1395,7 @@ function GraphCanvasInner({
                 ...prev,
                 {
                   id: edgeId,
-                  source: connectionState.fromNode.id,
+                  source: fromNode.id,
                   target: nodeId,
                   type: 'branch',
                   sourceHandle: fromHandleId,
@@ -1417,7 +1416,7 @@ function GraphCanvasInner({
         isConnectingRef.current = false;
       }, 0);
     },
-    [screenToFlowPosition, nodes, edges, workspaceId],
+    [screenToFlowPosition, nodes, edges, workspaceId, setNodes, setEdges],
   );
 
   /* =========================
@@ -1435,14 +1434,14 @@ function GraphCanvasInner({
      Node click → toggle input box
      ========================= */
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    setOpenNodeIds((prev) => {
+    setMyOpenEditorNodeIds((prev) => {
       if (prev.includes(node.id)) {
         // 이미 열려 있으면 포커스만 이동
         return prev;
       }
       return [...prev, node.id];
     });
-    setLocalFocusedNodeId(node.id);
+    setWorkingOnEditorNodeId(node.id);
   }, []);
 
   /* =========================
@@ -1499,7 +1498,7 @@ function GraphCanvasInner({
         console.error('[onPaneClick] createMdNode failed', err);
       }
     },
-    [screenToFlowPosition, workspaceId, contextMenuNodeId],
+    [screenToFlowPosition, workspaceId, contextMenuNodeId, setNodes],
   );
 
   const onDragOver = useCallback(
@@ -1530,7 +1529,7 @@ function GraphCanvasInner({
         isInvalidConnection(closestNode.id, draggedPreview.id, edges);
       setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
     },
-    [screenToFlowPosition, nodes, edges],
+    [screenToFlowPosition, nodes, edges, setNodes],
   );
 
   const onDrop = useCallback(
@@ -1654,7 +1653,7 @@ function GraphCanvasInner({
 
       setHoveredNodeId(null);
     },
-    [screenToFlowPosition, nodes, edges, hoveredNodeId, workspaceId],
+    [screenToFlowPosition, nodes, edges, hoveredNodeId, workspaceId, setNodes, setEdges],
   );
 
   const onDragLeave = useCallback((event: DragEvent) => {
@@ -1896,7 +1895,7 @@ function GraphCanvasInner({
         );
       }
     },
-    [nodes, edges, workspaceId],
+    [nodes, edges, workspaceId, setNodes, setEdges],
   );
 
   const onNodeDragStop = useCallback(
@@ -2128,7 +2127,7 @@ function GraphCanvasInner({
         }
       });
     },
-    [nodes, edges, hoveredNodeId, workspaceId],
+    [nodes, edges, hoveredNodeId, workspaceId, setNodes, setEdges],
   );
 
   useEffect(() => {
@@ -2168,8 +2167,8 @@ function GraphCanvasInner({
         onDragLeave={onDragLeave}
         isValidConnection={isValidConnection}
         onViewportChange={handleViewportChange}
-        {...(savedViewport.current
-          ? { defaultViewport: savedViewport.current }
+        {...(savedViewport
+          ? { defaultViewport: savedViewport }
           : { fitView: true })}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
