@@ -20,6 +20,21 @@ if echo "$cmd" | grep -qE '(yarn|pnpm)\s+add\s+|npm\s+i(nstall)?\s+[^- ]'; then
   exit 2
 fi
 
+if echo "$cmd" | grep -qE 'git\s+push'; then
+  # ponytail: 휴리스틱 — 명시적 dev/main 타깃 또는 (refspec 생략 시) 현재 브랜치가 dev/main이면 차단
+  if echo "$cmd" | grep -qE 'git\s+push[^;&|]*[[:space:]:](dev|main)([[:space:]]|$)'; then
+    echo 'BLOCKED: dev/main 직접 push 금지. feature 브랜치에서 PR을 생성하라 (gh pr create --base dev).' >&2
+    exit 2
+  fi
+  if ! echo "$cmd" | grep -qE 'git\s+push\s+(-\S+\s+)*\S+\s+\S+'; then
+    br=$(cd "${CLAUDE_PROJECT_DIR:-.}" && git branch --show-current 2>/dev/null)
+    if [ "$br" = "dev" ] || [ "$br" = "main" ]; then
+      echo "BLOCKED: 현재 브랜치($br)로의 직접 push 금지. feature 브랜치에서 PR을 생성하라." >&2
+      exit 2
+    fi
+  fi
+fi
+
 if echo "$cmd" | grep -qE '(^|[;&|]\s*|rtk\s+)git\s+commit' && echo "$cmd" | grep -qE '\-m'; then
   # ponytail: 단순 -m "..." 형태와 heredoc 본문 첫 줄만 검사하는 휴리스틱. 오탐 시 SKIP_GUARD=1로 우회.
   types='(feat|fix|docs|refactor|chore|test|style|perf|ci|build)'
