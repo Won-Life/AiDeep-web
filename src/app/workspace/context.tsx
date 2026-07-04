@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useRef,
   useState,
   type Dispatch,
@@ -65,7 +66,10 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
   const [synced, setSynced] = useState(false);
 
   const edgesRef = useRef<Edge[]>(edges);
-  edgesRef.current = edges;
+
+  useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
 
   return (
     <WorkspaceLayoutContext.Provider

@@ -14,7 +14,7 @@
 - CRITICAL: `src/api/`는 Next.js API Routes가 **아님**. 외부 백엔드를 호출하는 클라이언트 사이드 HTTP 유틸 함수 모음. `src/app/api/` 폴더는 이 프로젝트에 없으며 새로 만들지 않는다.
 - CRITICAL: 외부 백엔드 직접 호출 금지. 모든 HTTP 요청은 `/api/*` 경로로 보내고, Next.js rewrites(`next.config.ts`)가 `API_ORIGIN`으로 포워딩한다.
 - CRITICAL: 그래프 데이터(노드·엣지)는 WebSocket이 단일 진실 소스. SWR·TanStack Query를 도입하지 않는다. 이유는 `src/api/README.md` 참고.
-- CRITICAL: 본인이 생성한 노드·엣지의 WS 이벤트는 `currentUserId`로 필터링한다 (Optimistic Update 패턴, race condition 방지). `useWorkspaceWS.ts` 참고.
+- CRITICAL: 본인 변경사항은 REST 응답으로 local state에 반영한다. 서버가 WS 이벤트를 발신자 제외로 broadcast하므로(Aideep_backend#47) 본인 이벤트는 원래 오지 않지만, 클라이언트의 `currentUserId` 필터는 서버 회귀·룸 join 어긋남 대비 안전망으로 유지한다. `useWorkspaceWS.ts` 참고.
 - 앱 전체가 `'use client'` 기반. 캔버스·에디터 인터랙션 특성상 Server Components는 사용하지 않는다.
 - 기능 단위 코드는 `src/features/{domain}/`에, 공통 UI는 `src/components/`에, 타입은 `src/types/`에, API 함수는 `src/api/`에 배치한다.
 - 전역 상태는 `WorkspaceLayoutContext`(`src/app/workspace/context.tsx`)로 관리. 필요 없는 전역 상태 라이브러리를 도입하지 않는다.
@@ -26,6 +26,7 @@
 - 커밋 메시지는 conventional commits 형식을 따른다 (`feat:`, `fix:`, `docs:`, `refactor:`).
 - 테스트는 Vitest로 실행한다. 대상은 pure utility 함수(DOM·WS·3rd-party 의존 없는 것)만. WebSocket 기반 hooks, Lexical/Yjs 에디터, @xyflow/react 캔버스는 테스트 대상이 아니다.
 - 테스트 파일은 소스 파일 옆에 co-locate한다 (`*.test.ts`). jsdom 없이 Node 환경에서 실행된다.
+- 코드 품질 ESLint warn(`complexity`, `max-lines-per-function`, `max-depth`, `max-params`)은 **AI가 자동 리팩토링하지 않는다.** 내 변경으로 새 warn이 생기면 위반 위치와 이유를 사용자에게 보고만 하고, 분리·설계 판단은 개발자가 직접 내린다. 의도된 규칙: 설계 훈련은 개발자의 몫.
 
 ## 명령어
 ```

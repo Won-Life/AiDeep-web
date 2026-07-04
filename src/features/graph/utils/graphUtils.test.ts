@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Edge } from '@xyflow/react'
-import { getDescendantIds } from './graphUtils'
+import { getDescendantIds, getSameColorDescendantIds } from './graphUtils'
 
 function e(source: string, target: string): Edge {
   return { id: `${source}->${target}`, source, target } as Edge
@@ -41,5 +41,43 @@ describe('getDescendantIds', () => {
     const edges = [e('root', 'c1'), e('root', 'c2'), e('c2', 'c1')]
     const result = getDescendantIds('root', edges)
     expect([...result].filter(id => id === 'c1').length).toBe(1)
+  })
+})
+
+describe('getSameColorDescendantIds', () => {
+  const colors: Record<string, string | undefined> = {
+    A: 'red',
+    B: 'red',
+    C: 'blue',
+    D: 'red',
+  }
+  const colorOf = (id: string) => colors[id]
+
+  it('같은 색 자손만 포함한다', () => {
+    const edges = [e('A', 'B'), e('B', 'C')]
+    expect(getSameColorDescendantIds('A', edges, 'red', colorOf)).toEqual(
+      new Set(['B']),
+    )
+  })
+
+  it('색이 다른 노드에서 순회를 멈춘다 — 그 하위가 같은 색(D=red)이어도 제외', () => {
+    // A(red) → B(red) → C(blue) → D(red)
+    const edges = [e('A', 'B'), e('B', 'C'), e('C', 'D')]
+    expect(getSameColorDescendantIds('A', edges, 'red', colorOf)).toEqual(
+      new Set(['B']),
+    )
+  })
+
+  it('색이 다른 가지만 제외하고 같은 색 가지는 계속 순회한다', () => {
+    // A → B(red) → D(red), A → C(blue)
+    const edges = [e('A', 'B'), e('A', 'C'), e('B', 'D')]
+    expect(getSameColorDescendantIds('A', edges, 'red', colorOf)).toEqual(
+      new Set(['B', 'D']),
+    )
+  })
+
+  it('색 정보가 없는 노드는 rootColor와 다르므로 제외한다', () => {
+    const edges = [e('A', 'X')]
+    expect(getSameColorDescendantIds('A', edges, 'red', colorOf).size).toBe(0)
   })
 })
