@@ -26,6 +26,7 @@
 - 커밋 메시지는 conventional commits 형식을 따른다 (`feat:`, `fix:`, `docs:`, `refactor:`).
 - 테스트는 Vitest로 실행한다. 대상은 pure utility 함수(DOM·WS·3rd-party 의존 없는 것)만. WebSocket 기반 hooks, Lexical/Yjs 에디터, @xyflow/react 캔버스는 테스트 대상이 아니다.
 - 테스트 파일은 소스 파일 옆에 co-locate한다 (`*.test.ts`). jsdom 없이 Node 환경에서 실행된다.
+- 코드 품질 ESLint warn(`complexity`, `max-lines-per-function`, `max-depth`, `max-params`)은 **AI가 자동 리팩토링하지 않는다.** 내 변경으로 새 warn이 생기면 위반 위치와 이유를 사용자에게 보고만 하고, 분리·설계 판단은 개발자가 직접 내린다. 의도된 규칙: 설계 훈련은 개발자의 몫.
 
 ## 명령어
 ```
