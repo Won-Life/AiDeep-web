@@ -2,12 +2,13 @@
 
 ## Optimistic Update 패턴 (필수)
 
-본인 action → REST 응답 즉시 local state 반영 → WS 이벤트 수신 시 `userId === currentUserId`이면 무시.
-이 필터링을 빠뜨리면 노드/엣지가 중복 삽입된다.
+본인 action → REST 응답 즉시 local state 반영. 협업자 action → WS 이벤트로만 반영.
+서버는 WS 이벤트를 **발신자 제외**로 broadcast하므로(Aideep_backend#47, per-user 룸 `.except()`) 본인 이벤트는 원래 되돌아오지 않는다.
 
 ```typescript
-// useWorkspaceWS.ts 패턴
-if (event.userId === currentUserId) return  // 내가 만든 이벤트 무시
+// useWorkspaceWS.ts — 안전망 필터 (서버 회귀·재연결 시 룸 join 어긋남 대비)
+// 이 필터가 실동작하는 상황이면 서버 발신자 제외가 깨진 것 — 없으면 노드/엣지 중복 삽입
+if (event.userId === currentUserId) return
 ```
 
 ## Ref 기반 최신값 추적
