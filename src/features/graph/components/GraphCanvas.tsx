@@ -218,9 +218,15 @@ function areSiblings(aId: string, bId: string, edges: Edge[]): boolean {
 function isInvalidConnection(
   sourceId: string,
   targetId: string,
+  nodes: Node[],
   edges: Edge[],
 ): boolean {
   if (sourceId === targetId) return true;
+
+  // 프로젝트(main) 노드끼리는 직접 연결 불가 — 모든 연결 경로(핸들 드래그·노드 드래그·드롭)가 이 함수를 거친다
+  const sourceIsMain = nodes.find((n) => n.id === sourceId)?.data?.isMain;
+  const targetIsMain = nodes.find((n) => n.id === targetId)?.data?.isMain;
+  if (sourceIsMain && targetIsMain) return true;
 
   // 둘이 서로 연결되어 있는지 확인
   const targetParent = getParentId(targetId, edges);
@@ -306,7 +312,7 @@ function findClosestNodeInRange(
     if (node.id === draggedNode.id) continue;
 
     // 연결 유효성 체크
-    if (isInvalidConnection(node.id, draggedNode.id, edges)) continue;
+    if (isInvalidConnection(node.id, draggedNode.id, nodes, edges)) continue;
 
     // 대상 노드의 실제 크기
     const nodeWidth = node.width ?? NODE_WIDTH;
@@ -1213,7 +1219,9 @@ function GraphCanvasInner({
       if (!sourceNode || !targetNode) return false;
 
       // 기존 유효성 체크
-      if (isInvalidConnection(connection.source, connection.target, edges)) {
+      if (
+        isInvalidConnection(connection.source, connection.target, nodes, edges)
+      ) {
         return false;
       }
 
@@ -1648,7 +1656,7 @@ function GraphCanvasInner({
       const closestNode = findClosestNodeInRange(draggedPreview, nodes, edges);
       const isInvalid =
         closestNode &&
-        isInvalidConnection(closestNode.id, draggedPreview.id, edges);
+        isInvalidConnection(closestNode.id, draggedPreview.id, nodes, edges);
       setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
     },
     [screenToFlowPosition, nodes, edges, setNodes],
@@ -1681,7 +1689,8 @@ function GraphCanvasInner({
       const targetParent =
         hoveredNodeId && nodes.find((node) => node.id === hoveredNodeId);
       const shouldConnect =
-        targetParent && !isInvalidConnection(targetParent.id, '__new__', edges);
+        targetParent &&
+        !isInvalidConnection(targetParent.id, '__new__', nodes, edges);
 
       // hoveredNode(sourceNode)가 handleSide를 가지면 상속, 없으면(root) 위치 기반
       const dropSide: 'left' | 'right' | undefined = (() => {
@@ -1849,7 +1858,7 @@ function GraphCanvasInner({
       // 이미 연결된 노드는 hover 효과 제외
       const isInvalid =
         closestNode &&
-        isInvalidConnection(closestNode.id, draggedNode.id, edges);
+        isInvalidConnection(closestNode.id, draggedNode.id, nodes, edges);
       setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
 
       // 좌우 전환 시 서브트리 대칭 이동 + 노드/엣지 핸들 및 hub 정보 업데이트
@@ -2050,6 +2059,7 @@ function GraphCanvasInner({
           !isInvalidConnection(
             draggedIsMain ? draggedNode.id : newParent.id,
             draggedIsMain ? newParent.id : draggedNode.id,
+            nodes,
             edges,
           )
         ) {
