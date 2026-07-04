@@ -142,16 +142,16 @@ export function useWorkspaceWS({
      * - Problem      : 노드 생성 시 REST 응답(nodeId만 포함)과 WS NODE_CREATE 이벤트(DB 저장값 전체 포함)가
      *                  모두 도착해, "누가 먼저 왔냐"를 GraphCanvas 곳곳에서 판단하는
      *                  race condition guard가 3벌 중복됐었음.
-     * - Why          : WS 이벤트를 본인 이벤트 필터링으로 차단하고, 클라이언트는 REST 응답 대신
-     *                  자신이 보낸 로컬 값으로 낙관적 업데이트(Optimistic Update)를 수행.
-     *                  단, 서버가 저장 값을 변환하는 로직이 생기면 reconciliation 없이 stale data가
-     *                  렌더링될 수 있음 — REST 응답 필드 확장으로 해소 가능 (관련 이슈 참고).
+     * - Why          : 본인 변경은 REST 응답으로 반영하고, 서버가 발신자 제외 broadcast
+     *                  (Aideep_backend#47, per-user 룸 .except())를 하므로 본인 WS 이벤트는
+     *                  원래 오지 않음. 아래 currentUserId 필터는 서버 회귀·재연결 시
+     *                  룸 join 어긋남에 대비한 안전망 — 없으면 중복 삽입.
      * - Alternatives : GraphCanvas에서 계속 중복 guard — 유지보수 비용이 채널이 늘수록 증가.
      * - Trade-offs   : currentUserId가 없으면(undefined) 필터링을 건너뜀 — 중복 방어 없이 동작.
      * - Edge Case    : currentUserId 미전달 시 이전과 동일하게 동작(하위 호환).
      */
     const handleNodeCreate = (e: WsNodeCreateEvent) => {
-      // 본인이 생성한 노드는 REST 응답에서 이미 처리하므로 무시
+      // 안전망: 서버 발신자 제외가 깨진 경우에만 도달 (본인 노드는 REST 응답에서 이미 처리됨)
       if (currentUserId && e.userId === currentUserId) return;
 
       const newNode: Node = {
@@ -220,7 +220,7 @@ export function useWorkspaceWS({
     };
 
     const handleEdgeCreate = (e: WsEdgeCreateEvent) => {
-      // 본인이 생성한 엣지는 REST 응답에서 이미 처리하므로 무시
+      // 안전망: 서버 발신자 제외가 깨진 경우에만 도달 (본인 엣지는 REST 응답에서 이미 처리됨)
       if (currentUserId && e.userId === currentUserId) return;
 
       const newEdge: Edge = {
