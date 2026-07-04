@@ -302,7 +302,9 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
       <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setIsChatOpen(true)} />
 
-      <AiChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} sidebarWidth={sidebarWidth} />
+      {isChatOpen && (
+        <AiChatPanel onClose={() => setIsChatOpen(false)} sidebarWidth={sidebarWidth} />
+      )}
 
       <UserMenu
         username={userMe?.username ?? ''}

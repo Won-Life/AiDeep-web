@@ -173,6 +173,13 @@ export function useWorkspaceWS({
       setNodesRef.current((prev) =>
         prev.filter((node) => node.id !== e.nodeId),
       );
+      // 임시 처리: 서버가 NODE_DELETE만 broadcast하고 엣지별 EDGE_DELETED를 안 보내서 연결 엣지를 여기서 정리.
+      // 서버가 EDGE_DELETED를 함께 broadcast하면(Aideep_backend#49) handleEdgeDelete가 처리 — 이 필터는 멱등이라 안전망으로 유지 가능
+      setEdgesRef.current((prev) =>
+        prev.filter(
+          (edge) => edge.source !== e.nodeId && edge.target !== e.nodeId,
+        ),
+      );
     };
 
     const handleEdgeDelete = (e: WsEdgeDeletedEvent) => {

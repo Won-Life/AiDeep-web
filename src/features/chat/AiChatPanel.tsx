@@ -5,7 +5,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 type Phase = 'input' | 'loading' | 'response';
 
 interface AiChatPanelProps {
-  isOpen: boolean;
   onClose: () => void;
   sidebarWidth: number;
 }
@@ -44,20 +43,17 @@ function AiIcon() {
   );
 }
 
-export default function AiChatPanel({ isOpen, onClose, sidebarWidth }: AiChatPanelProps) {
+export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps) {
   const [phase, setPhase] = useState<Phase>('input');
   const [question, setQuestion] = useState('');
   const [response, setResponse] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 닫힐 때 부모(layout)에서 언마운트되므로 열릴 때마다 state는 초기값으로 시작한다
   useEffect(() => {
-    if (isOpen) {
-      setPhase('input');
-      setQuestion('');
-      setResponse('');
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [isOpen]);
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!question.trim() || phase !== 'input') return;
@@ -78,8 +74,6 @@ export default function AiChatPanel({ isOpen, onClose, sidebarWidth }: AiChatPan
     },
     [handleSubmit, onClose],
   );
-
-  if (!isOpen) return null;
 
   return (
     <>
