@@ -30,14 +30,16 @@ Explore 에이전트를 사용해 이슈와 연관된 파일을 찾는다.
 ────────────────────────────────────────────────────
 ```
 
-## 3. 브랜치 생성
+## 3. 브랜치 생성 — 반드시 `gh issue develop`로 (이슈 Development 연결)
 
 ```bash
 git checkout dev && git pull origin dev
-git checkout -b feat/issue-{N}-{slug}
+gh issue develop {N} --base dev --name feat/issue-{N}-{slug} --checkout
 ```
 
 `{slug}`: 이슈 제목에서 영문 키워드만 추출해 kebab-case로 변환, 최대 5단어.
+
+`git checkout -b`가 아니라 `gh issue develop`를 쓰는 이유: 브랜치가 이슈에 연결된 상태로 생성되어(Development 섹션), 이후 이 브랜치에서 만든 PR이 이슈의 Development에 **자동 표시**된다. base가 dev인 PR은 `Closes` 키워드가 무시되고, 기존 브랜치·PR을 소급 연결하는 API도 없으므로 이 시점이 유일한 자동 연결 기회다.
 
 ## 4. Phase 분해 및 승인
 
@@ -136,3 +138,9 @@ gh pr create --base dev --title "feat(issue-{N}): {이슈 제목}" --body "..."
 ```
 
 PR 본문 템플릿: `.claude/skills/harness/report-template.md`의 "PR 본문" 섹션. 간결하게, 의사결정 중심으로.
+
+### 이슈 자동 연결 (Development 섹션)
+
+- **base가 default 브랜치가 아닌 PR에서는 `Closes #{N}` 키워드가 무시된다** — Development 연결도, 이슈 auto-close도 안 된다. 연결은 3단계의 `gh issue develop`가 만든 브랜치-이슈 연결이 담당한다.
+- PR 생성 후 `gh issue develop --list {N}`으로 브랜치가 이슈에 연결돼 있는지 확인한다. 누락됐다면(브랜치를 `git checkout -b`로 만든 경우) 소급 연결 API가 없으므로 GitHub 이슈 페이지 Development 섹션에서 수동 연결하고 사용자에게 보고한다.
+- `Closes #{N}`은 본문 첫 줄에 그대로 유지한다 — 자동 동작은 없지만 리뷰어가 대상 이슈를 바로 찾는 관례적 표기.
