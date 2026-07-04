@@ -760,6 +760,7 @@ function GraphCanvasInner({
   );
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
   const isConnectingRef = useRef(false);
+  const isMultiDragRef = useRef(false);
   const lastLiveEmitRef = useRef(0);
   const LIVE_EMIT_INTERVAL = 50; // ms
 
@@ -1591,6 +1592,10 @@ function GraphCanvasInner({
       // (선택) 우클릭은 제외
       if (event.button !== 0) return;
 
+      // 다중 선택 해제 중이면 노드 생성 스킵 (ReactFlow가 자동으로 선택 해제)
+      const hasSelection = nodesRef.current.some((n) => n.selected);
+      if (hasSelection) return;
+
       // wrapper 기준 좌표로 변환 (screenToFlowPosition은 clientX/Y 기반으로 처리)
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -1817,6 +1822,16 @@ function GraphCanvasInner({
       const childrenIds = getMovableDescendantIds(draggedNode, nodes, edges);
       const fixedNodeIds = new Set([draggedNode.id, ...childrenIds]);
 
+      // 다중 선택 드래그: 선택된 모든 노드와 그 서브트리도 고정
+      const selectedNodes = nodesRef.current.filter((n) => n.selected);
+      isMultiDragRef.current = selectedNodes.length > 1;
+      if (isMultiDragRef.current) {
+        selectedNodes.forEach((sel) => {
+          fixedNodeIds.add(sel.id);
+          getDescendantIds(sel.id, edges).forEach((id) => fixedNodeIds.add(id));
+        });
+      }
+
       // React Flow nodes에서 d3 노드 데이터 추출
       const d3Nodes: D3Node[] = nodes.map((n) => ({
         id: n.id,
@@ -1865,7 +1880,7 @@ function GraphCanvasInner({
       // dragged node 자체는 사용자가 드래그하는 위치를 따라가므로 위치 변경 없음
       let didMirrorSubtree = false;
       const previousPosition = previousDragPositionRef.current;
-      if (previousPosition && !draggedNode.data?.isMain) {
+      if (previousPosition && !draggedNode.data?.isMain && !isMultiDragRef.current) {
         const mainNode = getMainNodeForSubtree(draggedNode.id, nodes, edges);
         const isDirectChildOfMain =
           mainNode && getParentId(draggedNode.id, edges) === mainNode.id;
@@ -2028,6 +2043,30 @@ function GraphCanvasInner({
             d3ChildNode.fy += delta.y;
           }
         });
+
+        // 다중 선택 드래그: 다른 선택 노드들과 그 서브트리도 delta만큼 이동
+        if (isMultiDragRef.current) {
+          const alreadyMoved = new Set<string>([
+            draggedNode.id,
+            ...childrenIds,
+          ]);
+          const otherSelected = nodesRef.current.filter(
+            (n) => n.selected && n.id !== draggedNode.id,
+          );
+          otherSelected.forEach((selNode) => {
+            [selNode.id, ...getDescendantIds(selNode.id, edges)].forEach(
+              (id) => {
+                if (alreadyMoved.has(id)) return;
+                alreadyMoved.add(id);
+                const d3n = d3NodesRef.current.find((n) => n.id === id);
+                if (d3n && d3n.fx != null && d3n.fy != null) {
+                  d3n.fx += delta.x;
+                  d3n.fy += delta.y;
+                }
+              },
+            );
+          });
+        }
       }
 
       // WS: 실시간 위치 브로드캐스트 (50ms throttle)
@@ -2050,8 +2089,8 @@ function GraphCanvasInner({
       // hover-snap 발생 시 adjustedPosition을 추적하여 moveNode에 전달
       let finalPosition = draggedNode.position;
 
-      // hover된 노드가 있으면 연결 생성
-      if (hoveredNodeId) {
+      // hover된 노드가 있으면 연결 생성 (다중 선택 드래그 중에는 hover-snap 비활성화)
+      if (hoveredNodeId && !isMultiDragRef.current) {
         const newParent = nodes.find((n) => n.id === hoveredNodeId);
         const draggedIsMain = draggedNode.data?.isMain === true;
         if (
@@ -2246,6 +2285,22 @@ function GraphCanvasInner({
         }
       });
 
+      // 다중 선택 드래그: 다른 선택 노드들과 그 서브트리도 fx/fy 해제
+      if (isMultiDragRef.current) {
+        const otherSelected = nodesRef.current.filter(
+          (n) => n.selected && n.id !== draggedNode.id,
+        );
+        otherSelected.forEach((selNode) => {
+          [selNode.id, ...getDescendantIds(selNode.id, edges)].forEach((id) => {
+            const d3n = d3NodesRef.current.find((n) => n.id === id);
+            if (d3n) {
+              d3n.fx = null;
+              d3n.fy = null;
+            }
+          });
+        });
+      }
+
       const simulation = simulationRef.current;
       if (simulation) {
         simulation.alphaTarget(0);
@@ -2264,20 +2319,52 @@ function GraphCanvasInner({
       }).catch((err) => console.error('[moveNode] failed', err));
 
       // API: 함께 이동된 자식 노드들 위치 저장
+      // 주의: fx/fy는 위에서 이미 해제되었으므로 d3Node의 x/y(중심점)를 사용
       draggedChildrenIds.forEach((childId) => {
         const d3Child = d3NodesRef.current.find((n) => n.id === childId);
-        if (d3Child?.fx != null && d3Child?.fy != null) {
+        if (d3Child?.x != null && d3Child?.y != null) {
           const childNode = nodes.find((n) => n.id === childId);
           const childWidth = childNode?.width ?? NODE_WIDTH;
           const childHeight = childNode?.height ?? NODE_HEIGHT;
           moveNode(workspaceId, childId, {
-            x: d3Child.fx - childWidth / 2,
-            y: d3Child.fy - childHeight / 2,
+            x: d3Child.x - childWidth / 2,
+            y: d3Child.y - childHeight / 2,
           }).catch((err) =>
             console.error(`[moveNode child ${childId}] failed`, err),
           );
         }
       });
+
+      // 다중 선택 드래그: 다른 선택 노드들과 그 서브트리 위치 저장
+      if (isMultiDragRef.current) {
+        const otherSelected = nodesRef.current.filter(
+          (n) => n.selected && n.id !== draggedNode.id,
+        );
+        otherSelected.forEach((selNode) => {
+          const d3sel = d3NodesRef.current.find((n) => n.id === selNode.id);
+          if (d3sel?.x != null && d3sel?.y != null) {
+            moveNode(workspaceId, selNode.id, {
+              x: d3sel.x - (selNode.width ?? NODE_WIDTH) / 2,
+              y: d3sel.y - (selNode.height ?? NODE_HEIGHT) / 2,
+            }).catch((err) =>
+              console.error(`[moveNode selected ${selNode.id}] failed`, err),
+            );
+          }
+          getDescendantIds(selNode.id, edges).forEach((childId) => {
+            const d3c = d3NodesRef.current.find((n) => n.id === childId);
+            if (d3c?.x != null && d3c?.y != null) {
+              const childNode = nodesRef.current.find((n) => n.id === childId);
+              moveNode(workspaceId, childId, {
+                x: d3c.x - (childNode?.width ?? NODE_WIDTH) / 2,
+                y: d3c.y - (childNode?.height ?? NODE_HEIGHT) / 2,
+              }).catch((err) =>
+                console.error(`[moveNode selected child ${childId}] failed`, err),
+              );
+            }
+          });
+        });
+        isMultiDragRef.current = false;
+      }
     },
     [
       nodes,
