@@ -19,6 +19,20 @@ else
   echo "⚠️ SessionStart: git fetch 실패 (네트워크 또는 인증 문제). 원격 최신 여부를 확인하지 못했다."
 fi
 
+# ── 서버 레포(Aideep_backend) 변경 감지 — 클라 문서·주석의 서버 동작 서술이 낡을 수 있음 ──
+# ponytail: 감지·보고만 하고 auto-pull 없음 — 서버 레포는 별도 작업 트리라 덮어쓰기 위험
+if [ -d ../server/.git ]; then
+  if git -C ../server fetch --quiet 2>/dev/null || env -u GH_TOKEN git -C ../server fetch --quiet 2>/dev/null; then
+    server_behind=$(git -C ../server rev-list --count 'HEAD..origin/develop' 2>/dev/null || echo 0)
+    if [ "${server_behind:-0}" -gt 0 ]; then
+      echo "## 서버 레포 변경 감지 (Aideep_backend — 자동 주입)"
+      echo "로컬 ../server가 origin/develop보다 ${server_behind}커밋 뒤. 최근 커밋:"
+      git -C ../server log --oneline 'HEAD..origin/develop' 2>/dev/null | head -5
+      echo "→ 클라 CLAUDE.md의 서버 동작 서술(WS broadcast·REST 응답 등)과 어긋날 수 있다. 그래프·WS·API 작업 전 ../server 코드로 검증하고, 어긋난 문서는 갱신을 제안할 것."
+    fi
+  fi
+fi
+
 [ -f phases/index.json ] || exit 0
 echo "## Harness 진행 상태 (phases/index.json — 자동 주입)"
 cat phases/index.json
