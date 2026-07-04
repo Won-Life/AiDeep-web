@@ -15,9 +15,25 @@ if echo "$cmd" | grep -qE 'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20
   exit 2
 fi
 
+# 새 의존성 추가는 차단이 아닌 사용자 확인(ask) — 조용한 설치만 방지
 if echo "$cmd" | grep -qE '(yarn|pnpm)\s+add\s+|npm\s+i(nstall)?\s+[^- ]'; then
-  echo 'BLOCKED: 새 의존성 추가 금지(ponytail). 기존 의존성·stdlib·네이티브 기능으로 해결하라. 사용자가 명시 승인한 경우에만 SKIP_GUARD=1 접두로 재실행.' >&2
-  exit 2
+  printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"새 의존성 추가 감지 (ponytail) — 기존 의존성·stdlib로 해결 가능한지 검토 후 승인하세요"}}'
+  exit 0
+fi
+
+if echo "$cmd" | grep -qE 'git\s+push'; then
+  # ponytail: 휴리스틱 — 명시적 dev/main 타깃 또는 (refspec 생략 시) 현재 브랜치가 dev/main이면 차단
+  if echo "$cmd" | grep -qE 'git\s+push[^;&|]*[[:space:]:](dev|main)([[:space:]]|$)'; then
+    echo 'BLOCKED: dev/main 직접 push 금지. feature 브랜치에서 PR을 생성하라 (gh pr create --base dev).' >&2
+    exit 2
+  fi
+  if ! echo "$cmd" | grep -qE 'git\s+push\s+(-\S+\s+)*\S+\s+\S+'; then
+    br=$(cd "${CLAUDE_PROJECT_DIR:-.}" && git branch --show-current 2>/dev/null)
+    if [ "$br" = "dev" ] || [ "$br" = "main" ]; then
+      echo "BLOCKED: 현재 브랜치($br)로의 직접 push 금지. feature 브랜치에서 PR을 생성하라." >&2
+      exit 2
+    fi
+  fi
 fi
 
 if echo "$cmd" | grep -qE '(^|[;&|]\s*|rtk\s+)git\s+commit' && echo "$cmd" | grep -qE '\-m'; then
