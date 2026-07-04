@@ -866,6 +866,31 @@ function GraphCanvasInner({
     },
     [workspaceId, handleNodeViewChange],
   );
+  // ponytail: 로컬 상태만 토글 — 백엔드에 node_type 변경 API가 없음. 서버 영속·협업자 동기화는 백엔드 엔드포인트 추가 시 연동
+  const handleToggleNodeType = (nodeId: string) => {
+    setNodes((prev) =>
+      prev.map((node) => {
+        if (node.id !== nodeId) return node;
+        const toProject = !node.data?.isMain;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isMain: toProject,
+            nodeType: toProject ? 'PROJECT' : 'DATA',
+          },
+        };
+      }),
+    );
+    setContextMenuNodeId(null);
+  };
+
+  // 키보드 Backspace 삭제(onBeforeDelete)와 동일 플로우: 확인 모달 → 서브트리 삭제 + WS 동기화
+  const handleDeleteNode = (nodeId: string) => {
+    setContextMenuNodeId(null);
+    requestArchiveForNodes([nodeId]);
+  };
+
   const nodesWithCallbacks = nodes.map((node) => {
     const parentId = getParentId(node.id, edges);
 
@@ -888,6 +913,8 @@ function GraphCanvasInner({
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
         viewers: nodeViewers[node.id] ?? [], // 현재 이 노드를 보고 있는 다른 유저들
+        onToggleNodeType: handleToggleNodeType,
+        onDeleteNode: handleDeleteNode,
         onClosePanel: handleClosePanel,
         onForwardPanel: handleForwardPanel,
         onChange: handleTitleChange,

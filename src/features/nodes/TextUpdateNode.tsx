@@ -43,6 +43,8 @@ export type NodeView = {
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
   isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
+  onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
+  onDeleteNode?: (nodeId: string) => void; // 노드 삭제 (확인 모달 경유)
   onClosePanel?: (nodeId: string) => void; // 패널 닫기
   onForwardPanel?: (nodeId: string) => void; // 패널 포커스
   onChange?: (nodeId: string, value: string) => void;
@@ -165,19 +167,22 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
         </div>
       )}
 
-      {/* 컨텍스트 메뉴 - 노드 위에 배치 */}
+      {/* 컨텍스트 메뉴 - 노드 아래 배치. 루트 기준 왼쪽 노드는 오른쪽 테두리 정렬(왼쪽으로 펼침), 오른쪽 노드는 왼쪽 테두리 정렬(오른쪽으로 펼침) */}
       {isContextMenuOpen && (
         <div
           className="absolute"
           style={{
-            bottom: '100%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            marginBottom: 8,
+            top: '100%',
+            marginTop: 8,
             zIndex: 50,
+            ...(sideRelativeToParent === 'left' ? { right: 0 } : { left: 0 }),
           }}
         >
-          <NodeContextMenu />
+          <NodeContextMenu
+            isProjectNode={isMain}
+            onToggleNodeType={() => nodeData.onToggleNodeType?.(id)}
+            onDeleteNode={() => nodeData.onDeleteNode?.(id)}
+          />
         </div>
       )}
 
