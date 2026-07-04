@@ -11,7 +11,10 @@ import {
 import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
 import { useWorkspaceLayout } from '@/app/workspace/context';
-import { COLOR_PALETTE } from '@/features/graph/constants/colors';
+import {
+  COLOR_PALETTE,
+  MAIN_NODE_COLOR,
+} from '@/features/graph/constants/colors';
 import NodeContextMenu from '@/components/ui/NodeContextMenu';
 
 // 같은 userId는 항상 같은 커서 색상을 갖도록 보장 (협업 시 사용자 식별용)
@@ -103,7 +106,8 @@ export function TextUpdaterNode({ data, id }: NodeProps) {
 
   const containerStyle = isMain
     ? {
-        backgroundColor: nodeData.color || '#ffffff',
+        // 프로젝트(main) 노드는 그래프 색을 데이터로 보유하더라도 항상 흰 배경으로 표시 (도메인 규칙)
+        backgroundColor: MAIN_NODE_COLOR.bg,
         borderColor: isHovered ? '#93C5FD' : (viewerBorderColor ?? EDGE_COLOR),
         borderWidth: isHovered || viewerBorderColor ? '2px' : '1px',
       }

@@ -43,10 +43,12 @@ next-env.d.ts
 # local config
 .mcp.json
 
-# harness — phase execution outputs
-phases/**/phase*-output.json
-phases/**/step*-output.json
+# harness — 이슈별 phase 작업 파일은 로컬 전용 (index.json만 추적)
+phases/*/
 
 # harness — 하네스 관련 파일 복사본 모음
 /harness/
 repo.zip
+
+# 로컬 Claude 지침 (개인용, 커밋 금지)
+CLAUDE.local.md

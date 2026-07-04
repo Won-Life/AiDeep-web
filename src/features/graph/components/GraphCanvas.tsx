@@ -40,7 +40,10 @@ import { createEdge, deleteEdge } from '../api/edges';
 import type { EdgeDto, NodeDto } from '../types';
 import { rectCollide } from '../layout/rectCollide';
 import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
-import { getDescendantIds } from '../utils/graphUtils';
+import {
+  getDescendantIds,
+  getSameColorDescendantIds,
+} from '../utils/graphUtils';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
 import { getCursorColor } from '@/utils/cursorColor';
@@ -94,12 +97,21 @@ function getGraphColor(
   const parentNode = nodes.find((n) => n.id === parentNodeId);
 
   if (parentNode?.data?.isMain) {
+    // main 노드도 그래프 색을 data.color에 저장한다 (표시만 흰색) — 본인 색 우선
+    if (isCustomColorNode(parentNodeId, nodes)) {
+      return {
+        bg: parentNode.data.color as string,
+        text: (parentNode.data.textColor as string) || DEFAULT_NODE_COLOR.text,
+      };
+    }
+
+    // ponytail: legacy 폴백 — 색 미저장 main은 첫 커스텀 색 자식의 색으로 추정.
+    // 서버에서 PROJECT 노드 content.color 백필 마이그레이션 완료 후 이 블록 삭제.
     const children = edges
       .filter((e) => e.source === parentNodeId)
       .map((e) => nodes.find((n) => n.id === e.target))
       .filter((n): n is Node => n !== undefined);
 
-    // 기본 색상이 아닌 커스텀 색상을 가진 첫 번째 자식의 색상을 사용
     const coloredChild = children.find((child) =>
       isCustomColorNode(child.id, nodes),
     );
@@ -130,13 +142,57 @@ function isCustomColorNode(nodeId: string, nodes: Node[]): boolean {
   return Boolean(color && color !== DEFAULT_NODE_COLOR.bg);
 }
 
+function colorOfNodeIn(nodes: Node[]) {
+  return (id: string) =>
+    nodes.find((n) => n.id === id)?.data?.color as string | undefined;
+}
+
+/*
+ * CONTEXT
+ * - Problem      : 크로스 그래프 엣지(색이 다른 노드 간 연결)가 있으면 서브트리 이동·색 전파가
+ *                  경계를 넘어 다른 그래프의 노드까지 끌고 간다.
+ * - Why          : 이동/전파 대상을 루트의 그래프 색과 같은 색의 자손으로 제한한다.
+ *                  main 노드도 그래프 색을 data.color에 저장하므로(표시만 흰색) 본인 색을
+ *                  기준색으로 사용한다. 색이 확정되는 시점에 backfillMainColor가 저장한다.
+ * - Alternatives : 서버 그래프 ID·크로스 엣지 플래그 — getSameColorDescendantIds CONTEXT 참고.
+ * - Trade-offs   : 색 미저장 legacy main은 첫 커스텀 색 자식의 색으로 추정하는 폴백을 거침
+ *                  (크로스 그래프 자식이 먼저면 오판 가능 — 서버 백필 마이그레이션 후 제거).
+ * - Edge Case    : 그래프 색을 알 수 없으면(색 없는 루트 등) 전체 자손 순회로 폴백.
+ */
+function getMovableDescendantIds(
+  rootNode: Node,
+  nodes: Node[],
+  edges: Edge[],
+): Set<string> {
+  const colorOf = colorOfNodeIn(nodes);
+
+  // main 노드도 그래프 색을 data.color에 저장하므로 본인 색을 그대로 사용
+  let rootColor = rootNode.data?.color as string | undefined;
+  if (rootNode.data?.isMain && !isCustomColorNode(rootNode.id, nodes)) {
+    // ponytail: legacy 폴백 — 색 미저장 main은 첫 커스텀 색 자식의 색으로 추정.
+    // 서버에서 PROJECT 노드 content.color 백필 마이그레이션 완료 후 이 블록 삭제.
+    rootColor = edges
+      .filter((e) => e.source === rootNode.id)
+      .map((e) => e.target)
+      .filter((id) => isCustomColorNode(id, nodes))
+      .map(colorOf)[0];
+  }
+
+  if (!rootColor) return getDescendantIds(rootNode.id, edges);
+  return getSameColorDescendantIds(rootNode.id, edges, rootColor, colorOf);
+}
+
 function updateSubtreeColors(
   rootId: string,
   nodes: Node[],
   edges: Edge[],
   colorPair: { bg: string; text: string },
 ): Node[] {
-  const descendantIds = getDescendantIds(rootId, edges);
+  const rootColor = colorOfNodeIn(nodes)(rootId);
+  // 색상 경계(다른 그래프)를 넘어 전파하지 않는다
+  const descendantIds = rootColor
+    ? getSameColorDescendantIds(rootId, edges, rootColor, colorOfNodeIn(nodes))
+    : getDescendantIds(rootId, edges);
   const idsToUpdate = new Set([rootId, ...descendantIds]);
 
   return nodes.map((node) =>
@@ -162,9 +218,15 @@ function areSiblings(aId: string, bId: string, edges: Edge[]): boolean {
 function isInvalidConnection(
   sourceId: string,
   targetId: string,
+  nodes: Node[],
   edges: Edge[],
 ): boolean {
   if (sourceId === targetId) return true;
+
+  // 프로젝트(main) 노드끼리는 직접 연결 불가 — 모든 연결 경로(핸들 드래그·노드 드래그·드롭)가 이 함수를 거친다
+  const sourceIsMain = nodes.find((n) => n.id === sourceId)?.data?.isMain;
+  const targetIsMain = nodes.find((n) => n.id === targetId)?.data?.isMain;
+  if (sourceIsMain && targetIsMain) return true;
 
   // 둘이 서로 연결되어 있는지 확인
   const targetParent = getParentId(targetId, edges);
@@ -250,7 +312,7 @@ function findClosestNodeInRange(
     if (node.id === draggedNode.id) continue;
 
     // 연결 유효성 체크
-    if (isInvalidConnection(node.id, draggedNode.id, edges)) continue;
+    if (isInvalidConnection(node.id, draggedNode.id, nodes, edges)) continue;
 
     // 대상 노드의 실제 크기
     const nodeWidth = node.width ?? NODE_WIDTH;
@@ -481,11 +543,9 @@ function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
 
 function mirrorSubtree(
   nodes: Node[],
-  rootId: string,
-  edges: Edge[],
+  subtreeIds: Set<string>, // root 제외, 함께 이동하는(같은 그래프) 자식들만
   parentAxisX: number,
 ): Node[] {
-  const subtreeIds = getDescendantIds(rootId, edges); // rootId 제외, 자식들만
   const beforePositions = new Map(
     nodes
       .filter((node) => subtreeIds.has(node.id))
@@ -834,6 +894,39 @@ function GraphCanvasInner({
     [setNodes],
   );
 
+  // 그래프 색이 확정되는 시점에 색 없는 main 노드에도 저장 — 이후 getGraphColor·
+  // getMovableDescendantIds가 edges 탐색 없이 본인 data.color를 바로 사용한다.
+  // (lazy backfill: 서버 마이그레이션으로 PROJECT 노드 color가 모두 채워지면
+  //  getGraphColor·getMovableDescendantIds의 legacy 폴백과 함께 정리 가능)
+  const backfillMainColor = useCallback(
+    (nodeId: string, colorPair: { bg: string; text: string }) => {
+      const node = nodesRef.current.find((n) => n.id === nodeId);
+      if (!node?.data?.isMain || isCustomColorNode(nodeId, nodesRef.current)) {
+        return;
+      }
+
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  color: colorPair.bg,
+                  textColor: colorPair.text,
+                },
+              }
+            : n,
+        ),
+      );
+      updateNodeContent(workspaceId, nodeId, {
+        color: colorPair.bg,
+        textColor: colorPair.text,
+      }).catch((err) => console.error('[backfillMainColor] failed', err));
+    },
+    [workspaceId, setNodes],
+  );
+
   const titleDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
@@ -1126,7 +1219,9 @@ function GraphCanvasInner({
       if (!sourceNode || !targetNode) return false;
 
       // 기존 유효성 체크
-      if (isInvalidConnection(connection.source, connection.target, edges)) {
+      if (
+        isInvalidConnection(connection.source, connection.target, nodes, edges)
+      ) {
         return false;
       }
 
@@ -1151,13 +1246,6 @@ function GraphCanvasInner({
       const sourceIsMain = sourceNode?.data?.isMain === true;
       const targetIsMain = targetNode?.data?.isMain === true;
 
-      // 케이스 2: target은 main 그래프 하위, source는 어떤 main 그래프에도 속하지 않음
-      const targetInMainGraph =
-        getMainNodeForSubtree(params.target, nodes, edges) !== undefined;
-      const sourceInMainGraph =
-        getMainNodeForSubtree(params.source, nodes, edges) !== undefined;
-
-      // 케이스 3: source는 엣지가 없는 단독 노드, target은 1개 이상 연결됨
       const sourceEdgeCount = edges.filter(
         (e) => e.source === params.source || e.target === params.source,
       ).length;
@@ -1165,12 +1253,26 @@ function GraphCanvasInner({
         (e) => e.source === params.target || e.target === params.target,
       ).length;
 
+      /*
+       * CONTEXT
+       * - Problem      : 핸들 드래그로 두 그래프를 연결할 때 source/target이 뒤집히거나
+       *                  target 그래프가 재배치·재색칠되면 양쪽 그래프의 정체성이 깨진다.
+       * - Why          : 도메인 규칙 — 핸들 드래그 A→B는 "연결만" 생성한다. source=A,
+       *                  target=B를 유지하고 색상·위치 모두 보존. 유일한 예외는 프로젝트
+       *                  (main) 노드가 target일 때로, 프로젝트 노드는 항상 부모(source)다.
+       * - Alternatives : 기존 "main 그래프 소속 노드가 부모" swap 규칙 — 그래프 간 연결에서
+       *                  드래그 방향을 무시하게 되어 제거.
+       * - Trade-offs   : 단독 노드 → 그래프 연결(케이스 2)은 여전히 그래프 쪽이 부모가 되어
+       *                  색을 전파한다 (단독 노드가 그래프에 편입되는 시나리오).
+       * - Edge Case    : B가 이미 부모를 가진 노드면 incoming 엣지가 2개가 된다 (허용).
+       */
+      // 두 노드 모두 기존 그래프(1개 이상의 연결)에 속함 → 색상·위치 유지, 연결만 생성
+      const bothInGraphs = sourceEdgeCount > 0 && targetEdgeCount > 0;
+
       const shouldSwap =
-        // 케이스 1: main 노드는 항상 부모
+        // 케이스 1: main(프로젝트) 노드는 항상 부모
         ((sourceIsMain || targetIsMain) && !sourceIsMain) ||
-        // 케이스 2: main 그래프에 속한 노드가 부모
-        (targetInMainGraph && !sourceInMainGraph) ||
-        // 케이스 3: 1개 이상의 연결된 노드를 가지는 노드가 부모
+        // 케이스 2: 단독 노드가 그래프에 연결되면 그래프 쪽이 부모
         (sourceEdgeCount === 0 && targetEdgeCount > 0);
 
       const sourceId = shouldSwap ? params.target : params.source;
@@ -1203,8 +1305,19 @@ function GraphCanvasInner({
       const resolvedSourceHandle = `source-${computedSide}`;
       const resolvedTargetHandle = resolveHandleId('target', computedSide);
 
+      // 그래프 ↔ 그래프 연결은 양쪽 색상을 유지한다 (도메인 규칙)
+      // 한 번만 계산해 로컬 반영·API 전파에 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
+      const colorToPropagate = bothInGraphs
+        ? null
+        : getGraphColor(sourceId, nodes, edges);
+      if (colorToPropagate) {
+        backfillMainColor(sourceId, colorToPropagate);
+      }
+
       // 연결된 target 노드 위치(및 subtree)와 색상을 source 기준으로 업데이트
-      setNodes((currentNodes) => {
+      // 그래프 ↔ 그래프 연결은 위치·색상 모두 유지하므로 스킵
+      if (!bothInGraphs) {
+        setNodes((currentNodes) => {
         const sourceNode = currentNodes.find((node) => node.id === sourceId);
         const targetNode = currentNodes.find((node) => node.id === targetId);
 
@@ -1246,30 +1359,15 @@ function GraphCanvasInner({
           );
         }
 
-        const sourceHasCustomColor = isCustomColorNode(sourceId, currentNodes);
-        const targetHasCustomColor = isCustomColorNode(targetId, currentNodes);
-
-        if (!shouldSwap && sourceHasCustomColor && targetHasCustomColor) {
-          return positionedNodes;
-        }
-
-        const graphColor = getGraphColor(sourceId, positionedNodes, edges);
         return updateSubtreeColors(
           targetId,
           positionedNodes,
           edges,
-          graphColor,
+          colorToPropagate ?? DEFAULT_NODE_COLOR,
         );
-      });
+        });
+      }
 
-      // 색상 전파 여부 판단 (setNodes 내부 로직과 동일 조건)
-      const sourceHasCustomColor = isCustomColorNode(sourceId, nodes);
-      const targetHasCustomColor = isCustomColorNode(targetId, nodes);
-      const shouldSkipColor =
-        !shouldSwap && sourceHasCustomColor && targetHasCustomColor;
-      const colorToPropagate = shouldSkipColor
-        ? null
-        : getGraphColor(sourceId, nodes, edges);
       createEdge(
         workspaceId,
         sourceId,
@@ -1299,7 +1397,7 @@ function GraphCanvasInner({
         })
         .catch((err) => console.error('[createEdge] failed', err));
     },
-    [nodes, edges, workspaceId, setNodes, setEdges],
+    [nodes, edges, workspaceId, setNodes, setEdges, backfillMainColor],
   );
 
   /* =========================
@@ -1371,11 +1469,8 @@ function GraphCanvasInner({
         );
 
         // source 노드의 색상 가져오기
-        const colorPair = getGraphColor(
-          fromNode.id,
-          nodes,
-          edges,
-        );
+        const colorPair = getGraphColor(fromNode.id, nodes, edges);
+        backfillMainColor(fromNode.id, colorPair);
 
         try {
           const { nodeId } = await createMdNode(
@@ -1443,7 +1538,15 @@ function GraphCanvasInner({
         isConnectingRef.current = false;
       }, 0);
     },
-    [screenToFlowPosition, nodes, edges, workspaceId, setNodes, setEdges],
+    [
+      screenToFlowPosition,
+      nodes,
+      edges,
+      workspaceId,
+      setNodes,
+      setEdges,
+      backfillMainColor,
+    ],
   );
 
   /* =========================
@@ -1553,7 +1656,7 @@ function GraphCanvasInner({
       const closestNode = findClosestNodeInRange(draggedPreview, nodes, edges);
       const isInvalid =
         closestNode &&
-        isInvalidConnection(closestNode.id, draggedPreview.id, edges);
+        isInvalidConnection(closestNode.id, draggedPreview.id, nodes, edges);
       setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
     },
     [screenToFlowPosition, nodes, edges, setNodes],
@@ -1586,7 +1689,8 @@ function GraphCanvasInner({
       const targetParent =
         hoveredNodeId && nodes.find((node) => node.id === hoveredNodeId);
       const shouldConnect =
-        targetParent && !isInvalidConnection(targetParent.id, '__new__', edges);
+        targetParent &&
+        !isInvalidConnection(targetParent.id, '__new__', nodes, edges);
 
       // hoveredNode(sourceNode)가 handleSide를 가지면 상속, 없으면(root) 위치 기반
       const dropSide: 'left' | 'right' | undefined = (() => {
@@ -1615,6 +1719,9 @@ function GraphCanvasInner({
       const colorPair = shouldConnect
         ? getGraphColor(targetParent.id, nodes, edges)
         : DEFAULT_NODE_COLOR;
+      if (shouldConnect) {
+        backfillMainColor(targetParent.id, colorPair);
+      }
 
       try {
         const { nodeId } = await createMdNode(
@@ -1680,7 +1787,16 @@ function GraphCanvasInner({
 
       setHoveredNodeId(null);
     },
-    [screenToFlowPosition, nodes, edges, hoveredNodeId, workspaceId, setNodes, setEdges],
+    [
+      screenToFlowPosition,
+      nodes,
+      edges,
+      hoveredNodeId,
+      workspaceId,
+      setNodes,
+      setEdges,
+      backfillMainColor,
+    ],
   );
 
   const onDragLeave = useCallback((event: DragEvent) => {
@@ -1697,8 +1813,8 @@ function GraphCanvasInner({
       // D3 force simulation 시작
       isDraggingRef.current = true;
 
-      // 드래그 노드와 자식들을 함께 고정
-      const childrenIds = getDescendantIds(draggedNode.id, edges);
+      // 드래그 노드와 같은 그래프(같은 색)의 자식들만 함께 고정 — 크로스 그래프 노드는 제외
+      const childrenIds = getMovableDescendantIds(draggedNode, nodes, edges);
       const fixedNodeIds = new Set([draggedNode.id, ...childrenIds]);
 
       // React Flow nodes에서 d3 노드 데이터 추출
@@ -1742,7 +1858,7 @@ function GraphCanvasInner({
       // 이미 연결된 노드는 hover 효과 제외
       const isInvalid =
         closestNode &&
-        isInvalidConnection(closestNode.id, draggedNode.id, edges);
+        isInvalidConnection(closestNode.id, draggedNode.id, nodes, edges);
       setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
 
       // 좌우 전환 시 서브트리 대칭 이동 + 노드/엣지 핸들 및 hub 정보 업데이트
@@ -1765,7 +1881,11 @@ function GraphCanvasInner({
 
           if (beforeSide !== afterSide) {
             const newSide: 'left' | 'right' = afterSide;
-            const subtreeIds = getDescendantIds(draggedNode.id, edges);
+            const subtreeIds = getMovableDescendantIds(
+              draggedNode,
+              nodes,
+              edges,
+            );
             const beforeDraggedCenterY = previousPosition.y + nodeHeight / 2;
 
             // 1. 서브트리 노드들: dragged node 기준 거리 유지 + 방향 반전
@@ -1898,7 +2018,7 @@ function GraphCanvasInner({
 
       // 자식 노드들도 delta만큼 이동 (대칭 이동한 프레임은 제외, Alt 키 누르면 단독 이동)
       if (!didMirrorSubtree && !event.altKey) {
-        const childrenIds = getDescendantIds(draggedNode.id, edges);
+        const childrenIds = getMovableDescendantIds(draggedNode, nodes, edges);
 
         childrenIds.forEach((childId) => {
           const d3ChildNode = d3NodesRef.current.find((n) => n.id === childId);
@@ -1939,6 +2059,7 @@ function GraphCanvasInner({
           !isInvalidConnection(
             draggedIsMain ? draggedNode.id : newParent.id,
             draggedIsMain ? newParent.id : draggedNode.id,
+            nodes,
             edges,
           )
         ) {
@@ -1987,7 +2108,11 @@ function GraphCanvasInner({
           const deltaY = adjustedPosition.y - childNode.position.y;
 
           setNodes((currentNodes) => {
-            const childrenIds = getDescendantIds(childNode.id, edges);
+            const childrenIds = getMovableDescendantIds(
+              childNode,
+              currentNodes,
+              edges,
+            );
             const affectedNodeIds = new Set([childNode.id, ...childrenIds]);
 
             return currentNodes.map((node) => {
@@ -2014,8 +2139,8 @@ function GraphCanvasInner({
             });
           });
 
-          // 5. 서브트리 대칭 이동이 필요한지 확인 후 실행
-          const childrenIds = getDescendantIds(childNode.id, edges);
+          // 5. 서브트리 대칭 이동이 필요한지 확인 후 실행 (같은 그래프 노드만)
+          const childrenIds = getMovableDescendantIds(childNode, nodes, edges);
           if (childrenIds.size > 0) {
             const adjustedCenterX =
               adjustedPosition.x + (childNode.width ?? NODE_WIDTH) / 2;
@@ -2035,28 +2160,29 @@ function GraphCanvasInner({
 
             if (needsMirror) {
               setNodes((currentNodes) =>
-                mirrorSubtree(
-                  currentNodes,
-                  childNode.id,
-                  edges,
-                  adjustedCenterX,
-                ),
+                mirrorSubtree(currentNodes, childrenIds, adjustedCenterX),
               );
             }
           }
 
           // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
-          // 기존 부모 연결 먼저 제거
+          // 기존 부모 연결 먼저 제거 — 로컬 state와 서버 모두 삭제해야 재접속 시 복원되지 않음
           setEdges((prev) =>
             existingParentEdge
               ? prev.filter((edge) => edge.id !== existingParentEdge.id)
               : prev,
           );
+          if (existingParentEdge) {
+            deleteEdge(workspaceId, existingParentEdge.id).catch((err) =>
+              console.error('[deleteEdge re-parent] failed', err),
+            );
+          }
 
           // API: 새 부모 연결 — REST 응답으로 edgeId 취득 후 state 추가
           const dragStopSourceHandle = `source-${sideRelativeToParent}`;
           const dragStopTargetHandle = `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`;
           const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
+          backfillMainColor(parentNode.id, dragStopColor);
           createEdge(
             workspaceId,
             parentNode.id,
@@ -2089,28 +2215,28 @@ function GraphCanvasInner({
             );
 
           // 7. childNode 서브트리 색상을 parentNode 색상으로 업데이트
-          setNodes((currentNodes) => {
-            const graphColor = getGraphColor(
-              parentNode.id,
-              currentNodes,
-              edges,
-            );
-            return updateSubtreeColors(
+          // dragStopColor 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
+          setNodes((currentNodes) =>
+            updateSubtreeColors(
               childNode.id,
               currentNodes,
               edges,
-              graphColor,
-            );
-          });
+              dragStopColor,
+            ),
+          );
         }
       }
 
       // D3 시뮬레이션 종료: fx, fy 해제 및 alphaTarget(0) 설정
       isDraggingRef.current = false;
 
-      // 드래그 노드와 자식들의 fx, fy 모두 해제
-      const childrenIds = getDescendantIds(draggedNode.id, edges);
-      const allNodesToRelease = [draggedNode.id, ...childrenIds];
+      // 드래그 노드와 함께 이동한(같은 그래프) 자식들의 fx, fy 모두 해제
+      const draggedChildrenIds = getMovableDescendantIds(
+        draggedNode,
+        nodes,
+        edges,
+      );
+      const allNodesToRelease = [draggedNode.id, ...draggedChildrenIds];
 
       allNodesToRelease.forEach((nodeId) => {
         const d3Node = d3NodesRef.current.find((n) => n.id === nodeId);
@@ -2138,7 +2264,6 @@ function GraphCanvasInner({
       }).catch((err) => console.error('[moveNode] failed', err));
 
       // API: 함께 이동된 자식 노드들 위치 저장
-      const draggedChildrenIds = getDescendantIds(draggedNode.id, edges);
       draggedChildrenIds.forEach((childId) => {
         const d3Child = d3NodesRef.current.find((n) => n.id === childId);
         if (d3Child?.fx != null && d3Child?.fy != null) {
@@ -2154,7 +2279,15 @@ function GraphCanvasInner({
         }
       });
     },
-    [nodes, edges, hoveredNodeId, workspaceId, setNodes, setEdges],
+    [
+      nodes,
+      edges,
+      hoveredNodeId,
+      workspaceId,
+      setNodes,
+      setEdges,
+      backfillMainColor,
+    ],
   );
 
   useEffect(() => {
