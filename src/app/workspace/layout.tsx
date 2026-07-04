@@ -11,6 +11,7 @@ import Sidebar, {
 } from '@/components/layout/Sidebar';
 import ChipHeader from '@/components/layout/ChipHeader';
 import DropDown from '@/components/ui/DropDown';
+import AiChatPanel from '@/features/chat/AiChatPanel';
 import UserMenu from '@/components/layout/UserMenu';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
@@ -91,6 +92,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     const stored = sessionStorage.getItem('sidebar_open');
     return stored !== null ? stored === 'true' : true;
   });
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -298,7 +300,9 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         workspaceId={workspaceId}
       />
 
-      <DropDown sidebarWidth={sidebarWidth} />
+      <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setIsChatOpen(true)} />
+
+      <AiChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} sidebarWidth={sidebarWidth} />
 
       <UserMenu
         username={userMe?.username ?? ''}
