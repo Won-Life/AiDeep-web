@@ -24,7 +24,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head><script dangerouslySetInnerHTML={{ __html: 'console.warn=console.error=()=>{}' }} /></head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
