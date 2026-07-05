@@ -52,3 +52,9 @@ repo.zip
 
 # 로컬 Claude 지침 (개인용, 커밋 금지)
 CLAUDE.local.md
+
+# AI 작업 산출물 (로컬 전용)
+docs/superpowers/
+screenshot-*.png
+.playwright-mcp/
+.claude/plans/
