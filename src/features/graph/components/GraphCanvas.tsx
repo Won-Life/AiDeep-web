@@ -1007,6 +1007,11 @@ function GraphCanvasInner({
     setWorkingOnEditorNodeId(nodeId);
   }, []);
 
+  const handleCloseAllPanels = useCallback(() => {
+    setMyOpenEditorNodeIds([]);
+    setWorkingOnEditorNodeId(null);
+  }, []);
+
   const handleTitleChange = useCallback(
     (nodeId: string, value: string) => {
       handleNodeViewChange(nodeId, { title: value });
@@ -2535,6 +2540,15 @@ function GraphCanvasInner({
         connectionLineType={ConnectionLineType.SmoothStep}
       />
       <CursorOverlay cursors={cursors} />
+      {myOpenEditorNodeIds.length > 0 && (
+        <button
+          type="button"
+          onClick={handleCloseAllPanels}
+          className="absolute top-4 right-4 z-40 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+        >
+          에디터 모두 닫기
+        </button>
+      )}
       {isArchiveModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[360px] rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
