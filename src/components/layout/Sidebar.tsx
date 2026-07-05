@@ -144,47 +144,62 @@ function ResourceTree({
         const isSelected = selectedSubItemId === item.id;
 
         return (
-          <div key={item.id}>
+          <div key={item.id} style={{ position: 'relative' }}>
+            {/* 수직 스파인: wrapper 높이(행 + 인라인 에디터)를 자동으로 채워
+                에디터 오픈 시에도 선이 끊기지 않는다 */}
+            {!isLast && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: VX,
+                  top: isFirst ? -BRIDGE_H : 0,
+                  bottom: 0,
+                  width: 1,
+                  background: 'rgb(var(--ds-black))',
+                }}
+              />
+            )}
+
             <div
               className="flex items-center"
               style={{ height: ITEM_H }}
             >
-              <svg
-                width="20"
-                height={ITEM_H}
-                style={{ flexShrink: 0, overflow: 'visible' }}
+              <div
+                style={{
+                  width: 20,
+                  height: ITEM_H,
+                  position: 'relative',
+                  flexShrink: 0,
+                }}
               >
                 {isLast ? (
-                  <path
-                    d={`M ${VX} ${-topExtend} L ${VX} ${ITEM_H / 2 - R} Q ${VX} ${ITEM_H / 2} ${VX + R} ${ITEM_H / 2} L 20 ${ITEM_H / 2}`}
-                    fill="none"
-                    stroke="rgb(var(--ds-black))"
-                    strokeWidth="1"
-                    strokeLinecap="round"
+                  /* L커브: 스파인·수평선과 같은 CSS 프리미티브로 그려야
+                     서브픽셀이 정확히 맞는다 (SVG stroke는 중심선 기준이라 0.5px 어긋남) */
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: VX,
+                      right: 0,
+                      top: -topExtend,
+                      height: ITEM_H / 2 + 1 + topExtend,
+                      borderLeft: '1px solid rgb(var(--ds-black))',
+                      borderBottom: '1px solid rgb(var(--ds-black))',
+                      borderBottomLeftRadius: R,
+                    }}
                   />
                 ) : (
-                  <>
-                    <line
-                      x1={VX}
-                      y1={-topExtend}
-                      x2={VX}
-                      y2={ITEM_H}
-                      stroke="rgb(var(--ds-black))"
-                      strokeWidth="1"
-                      strokeLinecap="round"
-                    />
-                    <line
-                      x1={VX}
-                      y1={ITEM_H / 2}
-                      x2="20"
-                      y2={ITEM_H / 2}
-                      stroke="rgb(var(--ds-black))"
-                      strokeWidth="1"
-                      strokeLinecap="round"
-                    />
-                  </>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: VX,
+                      right: 0,
+                      top: ITEM_H / 2,
+                      height: 1,
+                      background: 'rgb(var(--ds-black))',
+                    }}
+                  />
                 )}
-              </svg>
+              </div>
 
               {item.isEditing ? (
                 <input
@@ -238,9 +253,11 @@ function ResourceTree({
               )}
             </div>
 
-            {/* 선택된 서브 아이템 아래 인라인 에디터 */}
+            {/* 선택된 서브 아이템 아래 인라인 에디터.
+                아래 간격은 margin이 아니라 padding이어야 함 — margin은 wrapper
+                밖으로 빠져나가 스파인(top:0~bottom:0)이 그 구간을 못 덮는다 */}
             {isSelected && (
-              <div className="mb-2">
+              <div style={{ marginLeft: 20, paddingBottom: 8 }}>
                 <NodeEditorPanel
                   nodeId={item.id}
                   inline
@@ -567,7 +584,7 @@ export default function Sidebar({
         className="scrollbar-hide flex-1 overflow-y-auto px-4 pt-5 pb-4"
         style={{ overflow: isOpen ? undefined : 'hidden' }}
       >
-        {/* Project 섹션 */}
+        {/* Workspaces 섹션 */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
