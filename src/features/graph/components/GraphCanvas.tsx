@@ -2544,7 +2544,9 @@ function GraphCanvasInner({
         <button
           type="button"
           onClick={handleCloseAllPanels}
-          className="absolute top-4 right-4 z-40 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+          // top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
+          // top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치.
+          className="absolute top-20 right-4 z-40 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
         >
           에디터 모두 닫기
         </button>
