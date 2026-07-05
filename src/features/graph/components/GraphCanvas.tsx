@@ -30,6 +30,7 @@ import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
 import {
   createMdNode,
+  createProjectNode,
   moveNode,
   deleteNode,
   updateNodeContent,
@@ -39,7 +40,7 @@ import { emitLivePosition, emitCursorMove } from '@/api/ws';
 import { createEdge, deleteEdge } from '../api/edges';
 import type { EdgeDto, NodeDto } from '../types';
 import { rectCollide } from '../layout/rectCollide';
-import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
+import { getRandomColorPair, DEFAULT_NODE_COLOR, MAIN_NODE_COLOR } from '../constants/colors';
 import {
   getDescendantIds,
   getSameColorDescendantIds,
@@ -1657,27 +1658,29 @@ function GraphCanvasInner({
   }, []);
 
   /* =========================
-     Empty pane click → create node
+     Empty pane click → close context menu only
      ========================= */
   const onPaneClick = useCallback(
-    async (event: React.MouseEvent) => {
-      // 연결 드래그 중이면 노드 생성하지 않음
+    (event: React.MouseEvent) => {
       if (isConnectingRef.current) return;
-
-      // 컨텍스트 메뉴가 열려 있으면 닫기
       if (contextMenuNodeId) {
         setContextMenuNodeId(null);
         return;
       }
-
-      // (선택) 우클릭은 제외
       if (event.button !== 0) return;
+    },
+    [contextMenuNodeId],
+  );
 
-      // 다중 선택 해제 중이면 노드 생성 스킵 (ReactFlow가 자동으로 선택 해제)
-      const hasSelection = nodesRef.current.some((n) => n.selected);
-      if (hasSelection) return;
+  /* =========================
+     Empty pane double-click → create MD node
+     ========================= */
+  const onPaneDoubleClick = useCallback(
+    async (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.classList.contains('react-flow__pane')) return;
+      if (isConnectingRef.current) return;
 
-      // wrapper 기준 좌표로 변환 (screenToFlowPosition은 clientX/Y 기반으로 처리)
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
@@ -1694,8 +1697,6 @@ function GraphCanvasInner({
 
         const { nodeId } = await createMdNode(workspaceId, '', position, body);
 
-        // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
-        // 본인 생성 노드의 WS 이벤트는 무시되므로 REST 응답이 항상 최초 삽입.
         setNodes((prev) => [
           ...prev,
           {
@@ -1711,10 +1712,47 @@ function GraphCanvasInner({
           },
         ]);
       } catch (err) {
-        console.error('[onPaneClick] createMdNode failed', err);
+        console.error('[onPaneDoubleClick] createMdNode failed', err);
       }
     },
-    [screenToFlowPosition, workspaceId, contextMenuNodeId, setNodes],
+    [screenToFlowPosition, workspaceId, setNodes],
+  );
+
+  /* =========================
+     Empty pane right-click → create PROJECT node
+     ========================= */
+  const onPaneContextMenu = useCallback(
+    async (event: React.MouseEvent | MouseEvent) => {
+      event.preventDefault();
+      if (isConnectingRef.current) return;
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      try {
+        const { nodeId } = await createProjectNode(workspaceId, '', position);
+
+        setNodes((prev) => [
+          ...prev,
+          {
+            id: nodeId,
+            type: 'textUpdater',
+            position,
+            data: {
+              title: '',
+              isMain: true,
+              color: MAIN_NODE_COLOR.bg,
+              textColor: MAIN_NODE_COLOR.text,
+            },
+          },
+        ]);
+      } catch (err) {
+        console.error('[onPaneContextMenu] createProjectNode failed', err);
+      }
+    },
+    [screenToFlowPosition, workspaceId, setNodes],
   );
 
   const onDragOver = useCallback(
@@ -2505,7 +2543,7 @@ function GraphCanvasInner({
   }, [focusedNodeId, nodes, setCenter]);
 
   return (
-    <div className="relative w-full h-full bg-background">
+    <div className="relative w-full h-full bg-background" onDoubleClick={onPaneDoubleClick}>
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edgesWithPresentation}
@@ -2523,6 +2561,7 @@ function GraphCanvasInner({
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onPaneClick={onPaneClick}
+        onPaneContextMenu={onPaneContextMenu}
         onDragOver={onDragOver}
         onDrop={onDrop}
         onDragLeave={onDragLeave}
