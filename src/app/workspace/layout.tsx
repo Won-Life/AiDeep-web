@@ -10,8 +10,7 @@ import Sidebar, {
   VISIBLE_BUTTON_WIDTH,
 } from '@/components/layout/Sidebar';
 import ChipHeader from '@/components/layout/ChipHeader';
-import DropDown from '@/components/ui/DropDown';
-import AiChatPanel from '@/features/chat/AiChatPanel';
+import AiSidebar, { AI_SIDEBAR_WIDTH, AI_SIDEBAR_VISIBLE_WIDTH } from '@/features/ai/AiSidebar';
 import UserMenu from '@/components/layout/UserMenu';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
@@ -92,7 +91,11 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     const stored = sessionStorage.getItem('sidebar_open');
     return stored !== null ? stored === 'true' : true;
   });
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = sessionStorage.getItem('ai_sidebar_open');
+    return stored !== null ? stored === 'true' : false;
+  });
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -102,6 +105,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   );
 
   const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
+  const aiSidebarWidth = isAiSidebarOpen ? AI_SIDEBAR_WIDTH : AI_SIDEBAR_VISIBLE_WIDTH;
 
   useEffect(() => {
     setSidebarWidth(sidebarWidth);
@@ -111,6 +115,14 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     setIsSidebarOpen((prev) => {
       const next = !prev;
       sessionStorage.setItem('sidebar_open', String(next));
+      return next;
+    });
+  }, []);
+
+  const handleToggleAiSidebar = useCallback(() => {
+    setIsAiSidebarOpen((prev) => {
+      const next = !prev;
+      sessionStorage.setItem('ai_sidebar_open', String(next));
       return next;
     });
   }, []);
@@ -270,7 +282,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
-      <div className="absolute inset-0 z-0">{children}</div>
+      {/* 캔버스 영역 — 오른쪽 AI 사이드바 공간 확보 */}
+      <div className="absolute inset-0 z-0" style={{ right: aiSidebarWidth }}>{children}</div>
 
       <Sidebar
         isOpen={isSidebarOpen}
@@ -300,9 +313,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         workspaceId={workspaceId}
       />
 
-      <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setIsChatOpen(true)} />
-
-      <AiChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} sidebarWidth={sidebarWidth} />
+      <AiSidebar isOpen={isAiSidebarOpen} onToggle={handleToggleAiSidebar} />
 
       <UserMenu
         username={userMe?.username ?? ''}
