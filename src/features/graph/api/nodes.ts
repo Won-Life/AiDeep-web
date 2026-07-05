@@ -82,7 +82,7 @@ export async function deleteNode(
 export async function updateNodeContent(
   workspaceId: string,
   nodeId: string,
-  data: { title?: string; color?: string; textColor?: string; propagateToChildren?: boolean },
+  data: { title?: string; color?: string; textColor?: string },
 ): Promise<string> {
   return api<string>(`/workspace/${workspaceId}/node/${nodeId}`, {
     method: "PATCH",

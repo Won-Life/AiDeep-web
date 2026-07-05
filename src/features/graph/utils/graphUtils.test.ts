@@ -76,8 +76,8 @@ describe('getSameColorDescendantIds', () => {
     )
   })
 
-  it('색 정보가 없는 노드는 rootColor와 다르므로 제외한다', () => {
-    const edges = [e('A', 'X')]
+  it('색 조회가 안 되는(undefined) 노드는 경계로 보고 순회를 멈춘다', () => {
+    const edges = [e('A', 'X'), e('X', 'D')]
     expect(getSameColorDescendantIds('A', edges, 'red', colorOf).size).toBe(0)
   })
 })
