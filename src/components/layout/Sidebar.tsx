@@ -64,7 +64,7 @@ function ProjectList({
               defaultValue={project.name}
               className="sidebar-new-input bg-transparent border-none outline-none"
               style={{
-                fontSize: 14,
+                fontSize: 15,
                 color: 'rgb(var(--foreground))',
                 flex: 1,
                 minWidth: 0,
@@ -77,7 +77,7 @@ function ProjectList({
           ) : (
             <span
               style={{
-                fontSize: 14,
+                fontSize: 15,
                 color: 'rgb(var(--foreground))',
                 cursor: 'text',
                 overflow: 'hidden',
@@ -208,7 +208,7 @@ function ResourceTree({
                   defaultValue={item.name}
                   className="sidebar-new-input rounded-full px-3 py-1 border-none outline-none"
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     background: 'rgb(var(--ds-gray-800))',
                     color: 'rgb(var(--foreground))',
                     width: '90%',
@@ -224,7 +224,7 @@ function ResourceTree({
                   className="rounded-full px-3 py-1"
                   draggable
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     background: isSelected ? '#000' : 'rgb(var(--ds-gray-800))',
                     color: isSelected ? '#fff' : 'rgb(var(--foreground))',
                     cursor: 'pointer',
@@ -340,7 +340,7 @@ function ResourceList({
                 }
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer"
                 style={{
-                  fontSize: 13,
+                  fontSize: 14,
                   color: 'rgb(var(--foreground))',
                   borderColor: 'rgb(var(--ds-black))',
                   background: 'transparent',
@@ -356,7 +356,7 @@ function ResourceList({
                     defaultValue={resource.name}
                     className="sidebar-new-input bg-transparent border-none outline-none"
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color: 'rgb(var(--foreground))',
                       flex: 1,
                       minWidth: 0,
@@ -413,7 +413,7 @@ function ResourceList({
                 onClick={() => onAddSubItem(resource.id)}
                 className="flex items-center justify-center cursor-pointer"
                 style={{
-                  fontSize: 18,
+                  fontSize: 19,
                   color: 'rgb(var(--ds-gray-400))',
                   background: 'transparent',
                   flexShrink: 0,
@@ -538,7 +538,7 @@ export default function Sidebar({
       const dragPreview = document.createElement('div');
       dragPreview.textContent = item.name || ' ';
       dragPreview.style.padding = '4px 12px';
-      dragPreview.style.fontSize = '13px';
+      dragPreview.style.fontSize = '14px';
       dragPreview.style.borderRadius = '9999px';
       dragPreview.style.background = 'rgb(var(--ds-gray-800))';
       dragPreview.style.color = 'rgb(var(--foreground))';
@@ -590,7 +590,7 @@ export default function Sidebar({
             <div className="flex items-center gap-2">
               <span
                 style={{
-                  fontSize: 18,
+                  fontSize: 19,
                   fontWeight: 700,
                   color: 'rgb(var(--foreground))',
                 }}
@@ -600,7 +600,7 @@ export default function Sidebar({
               <button
                 onClick={onAddProject}
                 style={{
-                  fontSize: 22,
+                  fontSize: 23,
                   color: 'rgb(var(--ds-black))',
                   lineHeight: 1,
                 }}
@@ -613,7 +613,7 @@ export default function Sidebar({
               onClick={onToggle}
               className="cursor-pointer"
               style={{
-                fontSize: 20,
+                fontSize: 21,
                 color: 'rgb(var(--ds-gray-500))',
                 fontWeight: 600,
               }}
@@ -634,7 +634,7 @@ export default function Sidebar({
           <div className="flex items-center gap-2 mb-4">
             <span
               style={{
-                fontSize: 18,
+                fontSize: 19,
                 fontWeight: 700,
                 color: 'rgb(var(--foreground))',
               }}
@@ -644,7 +644,7 @@ export default function Sidebar({
             <button
               onClick={onAddResource}
               style={{
-                fontSize: 22,
+                fontSize: 23,
                 color: 'rgb(var(--ds-black))',
                 lineHeight: 1,
               }}
@@ -686,7 +686,7 @@ export default function Sidebar({
           style={{
             width: 24,
             height: 24,
-            fontSize: 13,
+            fontSize: 14,
             color: 'rgb(var(--ds-gray-500))',
             border: '1.5px solid rgb(var(--ds-gray-600))',
           }}

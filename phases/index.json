@@ -9,6 +9,11 @@
       "dir": "issue-32-close-all-editors",
       "status": "completed",
       "completed_at": "2026-07-06T01:40:38+0900"
+    },
+    {
+      "dir": "issue-95-font-size-bump",
+      "status": "completed",
+      "completed_at": "2026-07-06T01:50:58+0900"
     }
   ]
 }

@@ -70,31 +70,31 @@
     --font-mono: var(--font-geist-mono);
 
     /* sizes / line-heights */
-    --typo-h1-size: 16px;
+    --typo-h1-size: 17px;
     --typo-h1-leading: 26px;
     --typo-h1-weight: 700;
 
-    --typo-sub1-size: 12px;
+    --typo-sub1-size: 13px;
     --typo-sub1-leading: 20px;
     --typo-sub1-weight: 600;
 
-    --typo-body1-size: 14px;
+    --typo-body1-size: 15px;
     --typo-body1-leading: 24px;
     --typo-body1-weight: 400;
 
-    --typo-body2-size: 14px;
+    --typo-body2-size: 15px;
     --typo-body2-leading: 24px;
     --typo-body2-weight: 400;
 
-    --typo-cap1-size: 12px;
+    --typo-cap1-size: 13px;
     --typo-cap1-leading: 20px;
     --typo-cap1-weight: 700;
 
-    --typo-cap2-size: 12px;
+    --typo-cap2-size: 13px;
     --typo-cap2-leading: 20px;
     --typo-cap2-weight: 400;
 
-    --typo-cap3-size: 10px;
+    --typo-cap3-size: 11px;
     --typo-cap3-leading: 18px;
     --typo-cap3-weight: 400;
   }
@@ -121,6 +121,14 @@
      bg-background, text-foreground, border-border, bg-ds-gray-100, etc.
    ========================= */
 @theme inline {
+  /* =========================
+     Text size overrides (issue #95 — 전체 +1px)
+     line-height는 크기 대비 비율이라 자동 비례 조정됨
+     ========================= */
+  --text-xs: 13px;
+  --text-sm: 15px;
+  --text-base: 17px;
+
   /* =========================
      Semantic (components use these)
      ========================= */
@@ -230,21 +238,21 @@
 @layer components {
   /* ── Headings ── */
   .ne-h1 {
-    font-size: 20px;
+    font-size: 21px;
     font-weight: 700;
     line-height: 1.35;
     margin: 12px 0 3px;
     color: inherit;
   }
   .ne-h2 {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 600;
     line-height: 1.35;
     margin: 10px 0 2px;
     color: inherit;
   }
   .ne-h3 {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     line-height: 1.35;
     margin: 8px 0 2px;
@@ -263,7 +271,7 @@
     margin: 4px 0;
   }
   .ne-li {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.7;
     margin: 2px 0;
   }
@@ -319,7 +327,7 @@
     color: rgb(var(--ds-gray-400));
     font-style: italic;
     margin: 6px 0;
-    font-size: 13px;
+    font-size: 14px;
   }
 
   /* ── Code block ── */
@@ -329,7 +337,7 @@
     padding: 10px 14px;
     margin: 6px 0;
     font-family: var(--font-mono), ui-monospace, monospace;
-    font-size: 12px;
+    font-size: 13px;
     display: block;
     white-space: pre-wrap;
     overflow-x: auto;
@@ -349,7 +357,7 @@
     border-radius: 3px;
     padding: 1px 5px;
     font-family: var(--font-mono), ui-monospace, monospace;
-    font-size: 12px;
+    font-size: 13px;
     color: #D44;
   }
 
@@ -378,7 +386,7 @@
   .ne-root {
     outline: none;
     min-height: 80px;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.75;
     color: rgb(var(--foreground));
   }
@@ -394,7 +402,7 @@
     position: relative;
   }
   .collaboration-cursor-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     padding: 1px 6px;
     border-radius: 4px;
