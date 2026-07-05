@@ -14,6 +14,10 @@
       "dir": "issue-95-font-size-bump",
       "status": "completed",
       "completed_at": "2026-07-06T01:50:58+0900"
+    },
+    {
+      "dir": "issue-94-edge-length",
+      "status": "pending"
     }
   ]
 }
