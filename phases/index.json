@@ -1,5 +1,9 @@
 {
   "phases": [
-    { "dir": "resource-tree-spine", "status": "pending" }
+    {
+      "dir": "resource-tree-spine",
+      "status": "completed",
+      "completed_at": "2026-07-06T00:22:39+0900"
+    }
   ]
 }
