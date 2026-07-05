@@ -164,29 +164,30 @@ function ResourceTree({
               className="flex items-center"
               style={{ height: ITEM_H }}
             >
-              {isLast ? (
-                <svg
-                  width="20"
-                  height={ITEM_H}
-                  style={{ flexShrink: 0, overflow: 'visible' }}
-                >
-                  <path
-                    d={`M ${VX} ${-topExtend} L ${VX} ${ITEM_H / 2 - R} Q ${VX} ${ITEM_H / 2} ${VX + R} ${ITEM_H / 2} L 20 ${ITEM_H / 2}`}
-                    fill="none"
-                    stroke="rgb(var(--ds-black))"
-                    strokeWidth="1"
-                    strokeLinecap="round"
+              <div
+                style={{
+                  width: 20,
+                  height: ITEM_H,
+                  position: 'relative',
+                  flexShrink: 0,
+                }}
+              >
+                {isLast ? (
+                  /* L커브: 스파인·수평선과 같은 CSS 프리미티브로 그려야
+                     서브픽셀이 정확히 맞는다 (SVG stroke는 중심선 기준이라 0.5px 어긋남) */
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: VX,
+                      right: 0,
+                      top: -topExtend,
+                      height: ITEM_H / 2 + 1 + topExtend,
+                      borderLeft: '1px solid rgb(var(--ds-black))',
+                      borderBottom: '1px solid rgb(var(--ds-black))',
+                      borderBottomLeftRadius: R,
+                    }}
                   />
-                </svg>
-              ) : (
-                <div
-                  style={{
-                    width: 20,
-                    height: ITEM_H,
-                    position: 'relative',
-                    flexShrink: 0,
-                  }}
-                >
+                ) : (
                   <div
                     style={{
                       position: 'absolute',
@@ -197,8 +198,8 @@ function ResourceTree({
                       background: 'rgb(var(--ds-black))',
                     }}
                   />
-                </div>
-              )}
+                )}
+              </div>
 
               {item.isEditing ? (
                 <input
