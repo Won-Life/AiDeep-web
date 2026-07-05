@@ -254,8 +254,8 @@ function ResourceTree({
             </div>
 
             {/* 선택된 서브 아이템 아래 인라인 에디터.
-                mb-2 대신 paddingBottom: margin은 wrapper 밖으로 collapse되어
-                스파인(bottom: 0)이 에디터 아래 8px 구간을 못 덮는다 */}
+                아래 간격은 margin이 아니라 padding이어야 함 — margin은 wrapper
+                밖으로 빠져나가 스파인(top:0~bottom:0)이 그 구간을 못 덮는다 */}
             {isSelected && (
               <div style={{ marginLeft: 20, paddingBottom: 8 }}>
                 <NodeEditorPanel
