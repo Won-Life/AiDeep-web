@@ -149,7 +149,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             <div
               key={v.clientId}
               title={v.name}
-              className="flex items-center justify-center rounded-full text-white text-[9px] font-bold leading-none select-none"
+              className="flex items-center justify-center rounded-full text-white text-[10px] font-bold leading-none select-none"
               style={{
                 width: 20,
                 height: 20,
@@ -163,7 +163,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           ))}
           {overflowCount > 0 && (
             <div
-              className="flex items-center justify-center rounded-full bg-gray-400 text-white text-[8px] font-bold leading-none select-none"
+              className="flex items-center justify-center rounded-full bg-gray-400 text-white text-[9px] font-bold leading-none select-none"
               style={{
                 width: 20,
                 height: 20,

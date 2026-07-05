@@ -113,7 +113,7 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
           <span
             style={{
               fontFamily: 'Pretendard, -apple-system, sans-serif',
-              fontSize: 16,
+              fontSize: 17,
               color: '#2C2C2B',
               whiteSpace: 'pre',
               lineHeight: '31px',
@@ -133,7 +133,7 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
               outline: 'none',
               background: 'transparent',
               fontFamily: 'Pretendard, -apple-system, sans-serif',
-              fontSize: 16,
+              fontSize: 17,
               color: '#2C2C2B',
               lineHeight: '31px',
               width: Math.max(72, question.length * 9.5),
@@ -204,7 +204,7 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
                 paddingBottom: 16,
                 paddingLeft: 48,
                 fontFamily: 'Pretendard, -apple-system, sans-serif',
-                fontSize: 16,
+                fontSize: 17,
                 color: '#2C2C2B',
                 lineHeight: 1.75,
                 wordBreak: 'break-word',

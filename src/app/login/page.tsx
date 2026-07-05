@@ -103,7 +103,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[400px] px-6">
         {/* Logo */}
         <div className="mb-10 text-center">
-          <h1 className="text-[28px] font-bold tracking-tight text-foreground">
+          <h1 className="text-[29px] font-bold tracking-tight text-foreground">
             Ai<span className="text-main">Deep</span>
           </h1>
           <p className="mt-2 text-sm text-muted">

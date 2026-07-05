@@ -84,7 +84,7 @@ function AttachmentSection({
                     display: "block",
                     width: "100%",
                     textAlign: "center",
-                    fontSize: 11,
+                    fontSize: 12,
                     color: "#999",
                     background: "transparent",
                     border: "none",
@@ -120,10 +120,10 @@ function AttachmentSection({
                   <path d="M9 1H2C1.46957 1 0.960859 1.21071 0.585786 1.58579C0.210714 1.96086 0 2.46957 0 3V15C0 15.5304 0.210714 16.0391 0.585786 16.4142C0.960859 16.7893 1.46957 17 2 17H13C13.5304 17 14.0391 16.7893 14.4142 16.4142C14.7893 16.0391 15 15.5304 15 15V7L9 1Z" fill="#F0F0F0" stroke="#CCCCCC" strokeWidth="1" strokeLinejoin="round" />
                   <path d="M9 1V7H15" stroke="#CCCCCC" strokeWidth="1" strokeLinejoin="round" />
                 </svg>
-                <span style={{ flex: 1, fontSize: 12, color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ flex: 1, fontSize: 13, color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {att.name}
                 </span>
-                <span style={{ fontSize: 11, color: "#AAA", flexShrink: 0 }}>{formatSize(att.size)}</span>
+                <span style={{ fontSize: 12, color: "#AAA", flexShrink: 0 }}>{formatSize(att.size)}</span>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onRemove(att.id); }}
@@ -146,7 +146,7 @@ function AttachmentSection({
           type="button"
           onClick={() => imageRef.current?.click()}
           className="flex items-center gap-1.5 rounded-full cursor-pointer hover:bg-gray-100 transition-colors px-2.5 py-1"
-          style={{ fontSize: 12, color: "#888", border: "1px solid #E8E8E8" }}
+          style={{ fontSize: 13, color: "#888", border: "1px solid #E8E8E8" }}
         >
           <svg width="12" height="12" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
             <rect x="0.7" y="0.7" width="11.6" height="11.6" rx="1.5" />
@@ -159,7 +159,7 @@ function AttachmentSection({
           type="button"
           onClick={() => fileRef.current?.click()}
           className="flex items-center gap-1.5 rounded-full cursor-pointer hover:bg-gray-100 transition-colors px-2.5 py-1"
-          style={{ fontSize: 12, color: "#888", border: "1px solid #E8E8E8" }}
+          style={{ fontSize: 13, color: "#888", border: "1px solid #E8E8E8" }}
         >
           <svg width="10" height="12" viewBox="0 0 11 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9.5 5.5L4.5 10.5a2.5 2.5 0 01-3.535-3.536L5.5 2.43a1.5 1.5 0 012.121 2.121L3.086 9.086a.5.5 0 01-.707-.707L7 3.76" />
@@ -274,7 +274,7 @@ export function NodeEditorPanel({
         {updatedAt && (
           <div
             className="shrink-0 px-3 py-2"
-            style={{ borderTop: "1px solid #F0F0F0", fontSize: 11, color: "#AAAAAA" }}
+            style={{ borderTop: "1px solid #F0F0F0", fontSize: 12, color: "#AAAAAA" }}
           >
             최종 수정일: {new Date(updatedAt).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" })}
           </div>
