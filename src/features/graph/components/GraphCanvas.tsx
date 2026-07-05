@@ -54,8 +54,8 @@ import { MdBody, type WorkspaceRole } from '@/api/types';
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 48;
 const NODE_PADDING = 0; // 완전히 부딪힐 때만 충돌
-const HUB_OFFSET = 50;
-const DEFAULT_NODE_DISTANCE = 100; // 노드 간 기본 거리
+const HUB_OFFSET = 25; // Figma 메인 화면 디자인 실측: 엣지 elbow 수평 거리 25px
+const DEFAULT_NODE_DISTANCE = 64; // Figma 메인 화면 디자인 실측: 부모-자식 수평 빈 간격 64px
 
 function getParentId(nodeId: string, edges: Edge[]): string | null {
   const incoming = edges.find((edge) => edge.target === nodeId);
