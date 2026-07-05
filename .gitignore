@@ -50,3 +50,9 @@ phases/**/step*-output.json
 # harness — 하네스 관련 파일 복사본 모음
 /harness/
 repo.zip
+
+# AI 작업 산출물 (로컬 전용)
+docs/superpowers/
+screenshot-*.png
+.playwright-mcp/
+.claude/plans/
