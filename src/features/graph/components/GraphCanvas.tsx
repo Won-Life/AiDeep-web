@@ -221,11 +221,15 @@ function findCrossColorChildEdges(
   // source/target 정규화(isMain·엣지 수 우선) 때문에 크로스 그래프 엣지는 다른 그래프
   // 쪽이 source일 수도 있다 → 방향 무관하게 한쪽 끝이 미러 집합에 속하면 검사한다.
   // 양쪽 다 집합 안이면 같은 서브트리(같은 색)라 색 비교에서 걸러진다.
-  return edges.filter(
-    (edge) =>
-      (ids.has(edge.source) || ids.has(edge.target)) &&
-      colorOf(edge.source) !== colorOf(edge.target),
-  );
+  return edges.filter((edge) => {
+    if (!ids.has(edge.source) && !ids.has(edge.target)) return false;
+    const srcColor = colorOf(edge.source);
+    const tgtColor = colorOf(edge.target);
+    // 한쪽 색이 미확정(색 없는 legacy main 등)이면 크로스 그래프로 단정하지 않는다
+    // — 오판 시 자기 그래프의 엣지를 끊어 서브트리가 고아가 된다 (Aideep_backend#52 전까지 방어)
+    if (srcColor === undefined || tgtColor === undefined) return false;
+    return srcColor !== tgtColor;
+  });
 }
 
 function updateSubtreeColors(
