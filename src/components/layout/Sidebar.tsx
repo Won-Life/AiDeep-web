@@ -144,17 +144,32 @@ function ResourceTree({
         const isSelected = selectedSubItemId === item.id;
 
         return (
-          <div key={item.id}>
+          <div key={item.id} style={{ position: 'relative' }}>
+            {/* 수직 스파인: wrapper 높이(행 + 인라인 에디터)를 자동으로 채워
+                에디터 오픈 시에도 선이 끊기지 않는다 */}
+            {!isLast && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: VX,
+                  top: isFirst ? -BRIDGE_H : 0,
+                  bottom: 0,
+                  width: 1,
+                  background: 'rgb(var(--ds-black))',
+                }}
+              />
+            )}
+
             <div
               className="flex items-center"
               style={{ height: ITEM_H }}
             >
-              <svg
-                width="20"
-                height={ITEM_H}
-                style={{ flexShrink: 0, overflow: 'visible' }}
-              >
-                {isLast ? (
+              {isLast ? (
+                <svg
+                  width="20"
+                  height={ITEM_H}
+                  style={{ flexShrink: 0, overflow: 'visible' }}
+                >
                   <path
                     d={`M ${VX} ${-topExtend} L ${VX} ${ITEM_H / 2 - R} Q ${VX} ${ITEM_H / 2} ${VX + R} ${ITEM_H / 2} L 20 ${ITEM_H / 2}`}
                     fill="none"
@@ -162,29 +177,28 @@ function ResourceTree({
                     strokeWidth="1"
                     strokeLinecap="round"
                   />
-                ) : (
-                  <>
-                    <line
-                      x1={VX}
-                      y1={-topExtend}
-                      x2={VX}
-                      y2={ITEM_H}
-                      stroke="rgb(var(--ds-black))"
-                      strokeWidth="1"
-                      strokeLinecap="round"
-                    />
-                    <line
-                      x1={VX}
-                      y1={ITEM_H / 2}
-                      x2="20"
-                      y2={ITEM_H / 2}
-                      stroke="rgb(var(--ds-black))"
-                      strokeWidth="1"
-                      strokeLinecap="round"
-                    />
-                  </>
-                )}
-              </svg>
+                </svg>
+              ) : (
+                <div
+                  style={{
+                    width: 20,
+                    height: ITEM_H,
+                    position: 'relative',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: VX,
+                      right: 0,
+                      top: ITEM_H / 2,
+                      height: 1,
+                      background: 'rgb(var(--ds-black))',
+                    }}
+                  />
+                </div>
+              )}
 
               {item.isEditing ? (
                 <input
@@ -240,7 +254,7 @@ function ResourceTree({
 
             {/* 선택된 서브 아이템 아래 인라인 에디터 */}
             {isSelected && (
-              <div className="mb-2">
+              <div className="mb-2" style={{ marginLeft: 20 }}>
                 <NodeEditorPanel
                   nodeId={item.id}
                   inline

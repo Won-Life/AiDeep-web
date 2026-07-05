@@ -1,3 +1,5 @@
 {
-  "phases": []
+  "phases": [
+    { "dir": "resource-tree-spine", "status": "pending" }
+  ]
 }
