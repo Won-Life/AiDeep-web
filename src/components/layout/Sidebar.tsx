@@ -252,9 +252,11 @@ function ResourceTree({
               )}
             </div>
 
-            {/* 선택된 서브 아이템 아래 인라인 에디터 */}
+            {/* 선택된 서브 아이템 아래 인라인 에디터.
+                mb-2 대신 paddingBottom: margin은 wrapper 밖으로 collapse되어
+                스파인(bottom: 0)이 에디터 아래 8px 구간을 못 덮는다 */}
             {isSelected && (
-              <div className="mb-2" style={{ marginLeft: 20 }}>
+              <div style={{ marginLeft: 20, paddingBottom: 8 }}>
                 <NodeEditorPanel
                   nodeId={item.id}
                   inline
@@ -581,7 +583,7 @@ export default function Sidebar({
         className="scrollbar-hide flex-1 overflow-y-auto px-4 pt-5 pb-4"
         style={{ overflow: isOpen ? undefined : 'hidden' }}
       >
-        {/* Project 섹션 */}
+        {/* Workspaces 섹션 */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
