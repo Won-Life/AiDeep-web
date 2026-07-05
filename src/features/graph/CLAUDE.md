@@ -35,6 +35,6 @@ WS 핸들러·이벤트 리스너는 마운트 시점의 클로저를 사용한�
 
 ## 엣지 연결 (onConnect)
 
-색상 전파: 엣지 생성 성공 후 `updateSubtreeColors` → REST PATCH. 실패해도 로컬 색상은 이미 변경 (롤백 없음).
+색상 전파: 엣지 생성 성공 후 `updateSubtreeColors`로 로컬 페인트하고, 같은 집합(`getRecolorTargetIds`)에 **노드별** REST PATCH로 저장한다. 서버의 `propagateToChildren` 전파는 그래프 색 경계를 모르고 크로스 그래프 엣지 너머까지 덮어쓰므로(Aideep_backend#51) 사용하지 않는다. PATCH 실패해도 로컬 색상은 이미 변경 (롤백 없음).
 
 source/target 정규화 순서: ① isMain 노드 → source, ② 엣지 수 더 많은 노드 → source.
