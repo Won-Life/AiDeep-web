@@ -72,8 +72,8 @@
   - `AiSidebar` import 추가
   - `isChatOpen` state 제거
   - `aiSidebarOpen` state 추가
+  - `aiSidebarWidth` 로컬 state 추가 (context 불필요, layout 내부에서만 사용)
   - 캔버스 영역 `right` 값을 `aiSidebarWidth`로 지정
-  - `WorkspaceLayoutContext`에 `aiSidebarWidth` 추가 (캔버스 오프셋 전달용)
 
 ### 삭제
 - `src/features/chat/AiChatPanel.tsx`
