@@ -15,7 +15,7 @@ import AiChatPanel from '@/features/chat/AiChatPanel';
 import UserMenu from '@/components/layout/UserMenu';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
-import { getWorkspaces /*, getWorkspaceMembers */ } from '@/api/workspace'; // getWorkspaceMembers — GET /workspace/:id/members 백엔드 미구현
+import { getWorkspaces /*, getWorkspaceMembers */ } from '@/api/workspace'; // getWorkspaceMembers — GET /workspace/members?workspaceId= 서버 구현됨, 클라 연동은 미착수
 import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/components/GraphCanvas';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';

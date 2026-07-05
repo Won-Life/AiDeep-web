@@ -50,9 +50,9 @@ export async function syncWorkspace(workspaceId: string): Promise<SyncResponse> 
 export async function getWorkspaceMembers(
   workspaceId: string,
 ): Promise<WorkspaceMember[]> {
-  const { data } = await client.get<WorkspaceMember[]>(
-    `/workspace/${workspaceId}/members`,
-  );
+  const { data } = await client.get<WorkspaceMember[]>('/workspace/members', {
+    params: { workspaceId },
+  });
   return data;
 }
 
