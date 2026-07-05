@@ -26,7 +26,7 @@ export function getDescendantIds(
  * CONTEXT
  * - Problem      : 두 그래프가 엣지로 연결되면 getDescendantIds가 색상(그래프) 경계를 넘어
  *                  다른 그래프의 노드까지 서브트리로 취급한다 (이동 시 남의 그래프가 딸려옴).
- * - Why          : 그래프 소속의 단일 식별자가 색상이므로, 순회 중 rootColor와 다른 색의
+ * - Why          : 그래프 소속의 단일 식별자가 색상(모든 노드가 색을 가진다)이므로, 순회 중 rootColor와 다른 색의
  *                  노드를 만나면 그 노드와 하위 경로 전체를 제외한다.
  * - Alternatives : ① 서버 그래프 ID 관리 — 백엔드 스키마·API 변경에 더해, 그래프 병합/분리
  *                  시점(엣지 생성·삭제·재연결)마다 ID 재계산·전파 로직이 필요하고 WS 동기화
@@ -54,7 +54,7 @@ export function getSameColorDescendantIds(
 
     for (const edge of edges) {
       if (edge.source !== current || descendants.has(edge.target)) continue;
-      // 색상이 다르면 다른 그래프 소속 → 이 경로 순회 중단
+      // 다른 색 = 다른 그래프 소속 → 이 경로 순회 중단
       if (colorOf(edge.target) !== rootColor) continue;
       descendants.add(edge.target);
       queue.push(edge.target);

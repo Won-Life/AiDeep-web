@@ -160,7 +160,7 @@ function colorOfNodeIn(nodes: Node[]) {
  * - Alternatives : 서버 그래프 ID·크로스 엣지 플래그 — getSameColorDescendantIds CONTEXT 참고.
  * - Trade-offs   : 색 미저장 legacy main은 첫 커스텀 색 자식의 색으로 추정하는 폴백을 거침
  *                  (크로스 그래프 자식이 먼저면 오판 가능 — Aideep_backend#52 완료 후 제거).
- * - Edge Case    : 그래프 색을 알 수 없으면(색 없는 루트 등) 전체 자손 순회로 폴백.
+ * - Edge Case    : 그래프 색을 알 수 없으면 전체 자손 순회로 폴백.
  */
 function getSameGraphDescendantIds(
   rootNode: Node,
@@ -170,7 +170,7 @@ function getSameGraphDescendantIds(
   const colorOf = colorOfNodeIn(nodes);
 
   // main 노드도 그래프 색을 data.color에 저장하므로 본인 색을 그대로 사용
-  let rootColor = rootNode.data?.color as string | undefined;
+  let rootColor = colorOf(rootNode.id);
   if (rootNode.data?.isMain && !isCustomColorNode(rootNode.id, nodes)) {
     // ponytail: legacy 폴백 — 색 미저장 main은 첫 커스텀 색 자식의 색으로 추정.
     // 같은 그래프의 자식은 색이 같으므로 대부분 정답이지만, 크로스 그래프 엣지의
@@ -204,6 +204,27 @@ function getRecolorTargetIds(
     : getDescendantIds(rootId, edges);
   return [rootId, ...descendantIds].filter(
     (id) => !nodes.find((n) => n.id === id)?.data?.isMain,
+  );
+}
+
+// 대칭이동(미러)은 서브트리를 축 반대편으로 보내는데, 색이 다른(다른 그래프) 직계
+// 자식은 함께 이동하지 않으므로 연결 방향 규칙이 꼬인다 → 대칭이동 시점에 그 크로스
+// 그래프 엣지를 끊는다. 불변식: 같은 그래프의 자식은 항상 부모와 같은 색
+// (legacy 무색 노드는 2026-07-05 데이터 정리로 소거 — 색 다름 = 크로스 그래프 확정)
+function findCrossColorChildEdges(
+  mirroredIds: Iterable<string>,
+  nodes: Node[],
+  edges: Edge[],
+): Edge[] {
+  const colorOf = colorOfNodeIn(nodes);
+  const ids = new Set(mirroredIds);
+  // source/target 정규화(isMain·엣지 수 우선) 때문에 크로스 그래프 엣지는 다른 그래프
+  // 쪽이 source일 수도 있다 → 방향 무관하게 한쪽 끝이 미러 집합에 속하면 검사한다.
+  // 양쪽 다 집합 안이면 같은 서브트리(같은 색)라 색 비교에서 걸러진다.
+  return edges.filter(
+    (edge) =>
+      (ids.has(edge.source) || ids.has(edge.target)) &&
+      colorOf(edge.source) !== colorOf(edge.target),
   );
 }
 
@@ -2059,6 +2080,23 @@ function GraphCanvasInner({
               }),
             );
 
+            // 색이 다른(다른 그래프) 직계 자식은 대칭이동을 따라오지 않아 연결
+            // 방향 규칙이 꼬인다 → 해당 크로스 그래프 엣지는 대칭이동과 함께 끊는다
+            const crossEdges = findCrossColorChildEdges(
+              [draggedNode.id, ...subtreeIds],
+              nodes,
+              edges,
+            );
+            if (crossEdges.length > 0) {
+              const crossEdgeIds = new Set(crossEdges.map((e) => e.id));
+              setEdges((prev) => prev.filter((e) => !crossEdgeIds.has(e.id)));
+              crossEdges.forEach((e) =>
+                deleteEdge(workspaceId, e.id).catch((err) =>
+                  console.error(`[deleteEdge mirror ${e.id}] failed`, err),
+                ),
+              );
+            }
+
             didMirrorSubtree = true;
           }
         }
@@ -2257,6 +2295,21 @@ function GraphCanvasInner({
               setNodes((currentNodes) =>
                 mirrorSubtree(currentNodes, childrenIds, adjustedCenterX),
               );
+              // 색이 다른 직계 자식과의 엣지는 대칭이동과 함께 끊는다 (연결 규칙 꼬임 방지)
+              const crossEdges = findCrossColorChildEdges(
+                [childNode.id, ...childrenIds],
+                nodes,
+                edges,
+              );
+              if (crossEdges.length > 0) {
+                const crossEdgeIds = new Set(crossEdges.map((e) => e.id));
+                setEdges((prev) => prev.filter((e) => !crossEdgeIds.has(e.id)));
+                crossEdges.forEach((e) =>
+                  deleteEdge(workspaceId, e.id).catch((err) =>
+                    console.error(`[deleteEdge mirror ${e.id}] failed`, err),
+                  ),
+                );
+              }
             }
           }
 
