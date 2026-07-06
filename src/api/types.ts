@@ -103,10 +103,8 @@ export interface JoinWorkspaceRequest {
 }
 
 export interface WorkspaceMember {
-  userId: string;
-  username: string;
+  userName: string;
   role: WorkspaceRole;
-  joinedAt: string;
 }
 
 // ─── Node ────────────────────────────────────────────────────────────
