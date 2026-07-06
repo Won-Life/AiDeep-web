@@ -143,12 +143,14 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
               .catch(() => false),
           ),
         ).then((personalFlags) => {
-          setProjects(
-            list.map((w, i) => ({
-              id: w.workspaceId,
-              name: w.title,
-              isPersonal: personalFlags[i],
-            })),
+          // 함수형 업데이트 + id 매칭: 조회 동안 사용자가 추가/수정한 로컬 항목을 덮어쓰지 않는다
+          const flagById = new Map(
+            list.map((w, i) => [w.workspaceId, personalFlags[i]]),
+          );
+          setProjects((prev) =>
+            prev.map((p) =>
+              flagById.has(p.id) ? { ...p, isPersonal: flagById.get(p.id) } : p,
+            ),
           );
         });
 
