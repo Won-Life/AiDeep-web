@@ -27,7 +27,8 @@
     },
     {
       "dir": "issue-88-token-storage",
-      "status": "pending"
+      "status": "completed",
+      "completed_at": "2026-07-06T12:54:05+0900"
     }
   ]
 }
