@@ -85,7 +85,7 @@ src/
 ```
 
 **요청 흐름**:
-1. Request interceptor: `localStorage.aideep_access_token` → `Authorization: Bearer {token}`
+1. Request interceptor: 메모리 access token (`client.ts` 모듈 변수) → `Authorization: Bearer {token}`
 2. Response interceptor: `ApiResponse` envelope 언래핑
    - `resultType=SUCCESS` → `response.data = body.success`
    - `resultType=FAIL` → `ApiError` throw (errorCode, reason, data)

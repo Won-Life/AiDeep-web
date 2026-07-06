@@ -18,7 +18,7 @@
 - 앱 전체가 `'use client'` 기반. 캔버스·에디터 인터랙션 특성상 Server Components는 사용하지 않는다.
 - 기능 단위 코드는 `src/features/{domain}/`에, 공통 UI는 `src/components/`에, 타입은 `src/types/`에, API 함수는 `src/api/`에 배치한다.
 - 전역 상태는 `WorkspaceLayoutContext`(`src/app/workspace/context.tsx`)로 관리. 필요 없는 전역 상태 라이브러리를 도입하지 않는다.
-- JWT 토큰은 localStorage 저장 (`aideep_access_token`, `aideep_refresh_token`). 401 시 `client.ts`의 refresh queue가 자동 처리하므로 개별 API 함수에서 재처리하지 않는다.
+- JWT access token은 `client.ts` 메모리 변수에만 보관, refresh token은 localStorage 저장 (`aideep_refresh_token`). 401 시(새로고침 부팅 포함) `client.ts`의 refresh queue가 자동 처리하므로 개별 API 함수에서 재처리하지 않는다.
 - React Compiler가 활성화되어 있어 `useMemo`·`useCallback` 남용을 피한다. D3 시뮬레이션처럼 레퍼런스 안정이 필수인 복잡한 핸들러에만 명시한다.
 
 ## 개발 프로세스
