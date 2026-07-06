@@ -97,19 +97,21 @@
 
 ---
 
-### ADR-007: JWT를 localStorage에 저장, Axios interceptor로 자동 갱신
+### ADR-007: access token은 JS 메모리, refresh token은 localStorage 저장, Axios interceptor로 자동 갱신
 
-**결정**: `aideep_access_token`, `aideep_refresh_token`을 localStorage에 저장하고, `client.ts`의 401 interceptor에서 refresh queue를 통해 자동 갱신한다.
+**결정**: access token은 `client.ts` 모듈 스코프 메모리 변수에만 보관하고, refresh token(`aideep_refresh_token`)은 localStorage에 저장한다. `client.ts`의 401 interceptor에서 refresh queue를 통해 자동 갱신한다. (이슈 #88 — 이전에는 둘 다 localStorage 저장이었다.)
 
-**이유**: 앱 전체가 클라이언트 컴포넌트여서 httpOnly 쿠키 + Server Component 기반 세션 관리의 이점이 없다. localStorage + Axios interceptor가 이 구조에서 가장 단순하고 명시적인 구현이다.
+**이유**: 앱 전체가 클라이언트 컴포넌트여서 httpOnly 쿠키 + Server Component 기반 세션 관리의 이점이 없다. access token을 메모리로 옮기면 XSS 스크립트가 localStorage 스캔만으로 access token을 탈취할 수 없다(OWASP 권고 1단계). refresh token까지 메모리로 옮기면 새로고침 시 재로그인이 강제되므로, 백엔드가 httpOnly 쿠키를 지원할 때까지 localStorage에 유지한다.
 
-**트레이드오프**: XSS 취약점 시 토큰 탈취 위험. httpOnly 쿠키 방식보다 보안이 약하다. 현 MVP 단계에서 허용하고, 추후 BFF 도입 시 재검토한다.
+**트레이드오프**: refresh token은 여전히 XSS 탈취 가능. httpOnly 쿠키 방식보다 보안이 약하다. 백엔드 Set-Cookie 전환은 별도 이슈로 진행한다.
 
 **에러 케이스**:
+- 새로고침 부팅: 메모리 access token이 비어 있어 첫 요청이 Authorization 헤더 없이 나가 401 → 기존 refresh queue가 재발급 → 메모리 적재 → 원요청 재시도. 별도 부팅 refresh 코드 불필요.
 - 동시 다발 401: `pendingQueue`에 누적 → 토큰 갱신 완료 후 일괄 재시도. `isRefreshing` 플래그로 refresh 중복 호출 방지.
 - refresh 요청에 client.ts interceptor 재적용: `axios.post` (raw axios)를 사용해 interceptor 순환 방지.
 - refresh 실패: `clearTokens()` + `window.location.href = '/login'`. `_retry=true`인 요청은 다시 refresh 시도 없이 즉시 reject.
 - localStorage 접근 불가 (SSR): `typeof window === 'undefined'` 가드로 `null` 반환.
+- 구버전 잔존값: 모듈 로드 시 1회 `localStorage.removeItem('aideep_access_token')`으로 기존 사용자의 localStorage 잔존 access token 제거.
 
 ---
 
