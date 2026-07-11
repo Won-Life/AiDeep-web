@@ -65,7 +65,9 @@ function getParentId(nodeId: string, edges: Edge[]): string | null {
 function getAncestorIds(nodeId: string, edges: Edge[]): Set<string> {
   const ancestors = new Set<string>();
   let current = getParentId(nodeId, edges);
-  while (current) {
+  // 방문 체크로 순환에서 무한 루프 방지 (§10-4/10-5). 정상 트리에선 부모가 null이
+  // 되며 끝나지만, 레거시·경합으로 순환 엣지가 남으면 !has 조건이 루프를 끊는다.
+  while (current && !ancestors.has(current)) {
     ancestors.add(current);
     current = getParentId(current, edges);
   }
@@ -254,12 +256,6 @@ function updateSubtreeColors(
   );
 }
 
-function areSiblings(aId: string, bId: string, edges: Edge[]): boolean {
-  const parentA = getParentId(aId, edges);
-  const parentB = getParentId(bId, edges);
-  return parentA !== null && parentA === parentB;
-}
-
 function isInvalidConnection(
   sourceId: string,
   targetId: string,
@@ -277,6 +273,12 @@ function isInvalidConnection(
   const targetParent = getParentId(targetId, edges);
   const sourceParent = getParentId(sourceId, edges);
   if (targetParent === sourceId || sourceParent === targetId) return true;
+
+  // 순환 방지 (§10-4/10-5): source→target 엣지는 source를 부모로 만든다. source가
+  // 이미 target의 자손이면 target→…→source→target 순환이 생겨 getAncestorIds가
+  // 폭주하므로(과거 탭 정지 원인) 연결 자체를 막는다. 모든 경로가 이 함수를 거치므로
+  // 핸들 드래그(isValidConnection)·편입(onNodeDragStop)·hover 감지가 한 번에 차단된다.
+  if (getDescendantIds(targetId, edges).has(sourceId)) return true;
 
   return false;
 }
@@ -632,13 +634,7 @@ function mirrorSubtree(
   subtreeIds: Set<string>, // root 제외, 함께 이동하는(같은 그래프) 자식들만
   parentAxisX: number,
 ): Node[] {
-  const beforePositions = new Map(
-    nodes
-      .filter((node) => subtreeIds.has(node.id))
-      .map((node) => [node.id, { x: node.position.x, y: node.position.y }]),
-  );
-
-  const next = nodes.map((node) =>
+  return nodes.map((node) =>
     subtreeIds.has(node.id)
       ? {
           ...node,
@@ -649,24 +645,6 @@ function mirrorSubtree(
         }
       : node,
   );
-
-  if (subtreeIds.size > 0) {
-    const diffs = next
-      .filter((node) => subtreeIds.has(node.id))
-      .map((node) => {
-        const before = beforePositions.get(node.id);
-        return {
-          id: node.id,
-          beforeX: before?.x,
-          beforeY: before?.y,
-          afterX: node.position.x,
-          afterY: node.position.y,
-        };
-      });
-    console.log('[mirrorSubtree] before/after', diffs);
-  }
-
-  return next;
 }
 
 function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
@@ -1370,6 +1348,17 @@ function GraphCanvasInner({
         return false;
       }
 
+      // 부모가 있는 노드의 부모 방향(target-*) 핸들로는 연결 불가 —
+      // 연결은 부모 반대 방향으로만 가능 (docs/GRAPH_RULES.md §3-2).
+      // swap으로 그래프 쪽이 부모가 되는 케이스(단독 노드 편입)도 드롭 지점이
+      // 부모 방향이면 막는다. 부모 없는 노드의 target 핸들 드롭은 허용.
+      if (
+        connection.targetHandle?.startsWith('target-') &&
+        getParentId(connection.target, edges) !== null
+      ) {
+        return false;
+      }
+
       return true;
     },
     [nodes, edges],
@@ -1400,6 +1389,13 @@ function GraphCanvasInner({
       // 단일 부모 불변식 (#92): 실제 자식이 이미 부모를 가지면 연결하지 않는다.
       // isValidConnection이 드래그 중에 걸러주지만, 프로그래매틱 연결 대비 이중 방어.
       if (getParentId(targetId, edges) !== null) return;
+
+      // 부모 있는 노드의 부모 방향(target-*) 핸들 연결 차단 — isValidConnection과 동일 규칙
+      if (
+        params.targetHandle?.startsWith('target-') &&
+        getParentId(params.target, edges) !== null
+      )
+        return;
 
       const srcNode = nodes.find((n) => n.id === sourceId);
       const tgtNode = nodes.find((n) => n.id === targetId);
@@ -1591,6 +1587,23 @@ function GraphCanvasInner({
           nodes,
           edges,
         );
+
+        // 생성 위치에 이미 노드가 있으면 아무것도 생성하지 않는다.
+        // isConnectingRef 해제는 함수 끝 공통 처리와 동일하게 수행 —
+        // 그냥 return하면 플래그가 남아 직후 pane 클릭 노드 생성이 막힌다.
+        const candidate = {
+          id: '__connect_end_candidate__',
+          position: adjustedPosition,
+          width: NODE_WIDTH,
+          height: NODE_HEIGHT,
+          data: {},
+        } as Node;
+        if (nodes.some((node) => isOverlapping(candidate, node))) {
+          setTimeout(() => {
+            isConnectingRef.current = false;
+          }, 0);
+          return;
+        }
 
         // source 노드의 색상 가져오기
         const colorPair = getGraphColor(fromNode.id, nodes, edges);
@@ -2008,7 +2021,8 @@ function GraphCanvasInner({
         const isDirectChildOfMain =
           mainNode && getParentId(draggedNode.id, edges) === mainNode.id;
         if (mainNode && isDirectChildOfMain) {
-          const mainAxisX = mainNode.position.x + NODE_WIDTH / 2;
+          const mainAxisX =
+            mainNode.position.x + (mainNode.width ?? NODE_WIDTH) / 2;
           const nodeWidth = draggedNode.width ?? NODE_WIDTH;
           const nodeHeight = draggedNode.height ?? NODE_HEIGHT;
           const beforeCenterX = previousPosition.x + nodeWidth / 2;
@@ -2229,6 +2243,10 @@ function GraphCanvasInner({
       // hover-snap 발생 시 adjustedPosition을 추적하여 moveNode에 전달
       let finalPosition = draggedNode.position;
 
+      // 메인 노드 드래그로 다른 노드를 편입시킨 경우, 편입되는 상대 노드+서브트리.
+      // 저장 대상 집합(draggedChildrenIds = 메인의 같은 색 자손)에 안 잡혀 별도 저장이 필요(§10-7).
+      let incorporatedIds: string[] = [];
+
       // hover된 노드가 있으면 연결 생성 (다중 선택 드래그 중에는 hover-snap 비활성화)
       if (hoveredNodeId && !isMultiDragRef.current) {
         const newParent = nodes.find((n) => n.id === hoveredNodeId);
@@ -2318,6 +2336,23 @@ function GraphCanvasInner({
             });
           });
 
+          // 자손 위치 저장은 d3 좌표를 읽으므로(§5-3), 화면에 적용한 스냅 보정 delta를
+          // d3ref에도 반영한다 — 누락하면 보정 전 좌표가 서버에 저장됨(§10-7).
+          // (드래그 노드 본인은 finalPosition으로 별도 저장되므로 여기 포함돼도 무해)
+          const snapMovedIds = new Set([
+            childNode.id,
+            ...getSameGraphDescendantIds(childNode, nodes, edges),
+          ]);
+          d3NodesRef.current.forEach((d3n) => {
+            if (!snapMovedIds.has(d3n.id)) return;
+            if (d3n.x != null) d3n.x += deltaX;
+            if (d3n.y != null) d3n.y += deltaY;
+          });
+
+          // 메인 드래그 편입: 상대 노드(childNode)+서브트리는 draggedNode 기준 저장 집합에
+          // 안 잡히므로 여기서 집합을 넘겨 종료 시 별도 저장(§10-7). 비메인은 childNode===draggedNode라 불필요.
+          if (draggedIsMain) incorporatedIds = [...snapMovedIds];
+
           // 5. 서브트리 대칭 이동이 필요한지 확인 후 실행 (같은 그래프 노드만)
           const childrenIds = getSameGraphDescendantIds(childNode, nodes, edges);
           if (childrenIds.size > 0) {
@@ -2340,6 +2375,31 @@ function GraphCanvasInner({
             if (needsMirror) {
               setNodes((currentNodes) =>
                 mirrorSubtree(currentNodes, childrenIds, adjustedCenterX),
+              );
+              // 대칭도 화면(react)에만 반영되므로 d3ref에 동기화 — 중심점 대칭은
+              // 2*axis - center (top-left 폭 항이 상쇄). 미반영 시 자손이 보정 전 좌표로 저장됨(§10-7).
+              d3NodesRef.current.forEach((d3n) => {
+                if (childrenIds.has(d3n.id) && d3n.x != null) {
+                  d3n.x = adjustedCenterX * 2 - d3n.x;
+                }
+              });
+              // 대칭으로 자손이 반대편으로 넘어갔으니 handleSide도 새 방향으로 갱신한다.
+              // 렌더 엣지는 buildEdgePresentation이 타깃 노드의 handleSide에서 핸들·hub를
+              // 매 렌더 재계산하므로(§4), handleSide만 고치면 로컬 교차 렌더링이 사라진다.
+              // 서버의 sourceHandle 저장은 엣지 PATCH API 부재로 여전히 미해결(새로고침 시
+              // 교차 재발) — 백엔드 Aideep_backend#56 대기, §10-3.
+              setNodes((currentNodes) =>
+                currentNodes.map((node) =>
+                  childrenIds.has(node.id)
+                    ? {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          handleSide: sideRelativeToParent,
+                        },
+                      }
+                    : node,
+                ),
               );
               // 색이 다른 직계 자식과의 엣지는 대칭이동과 함께 끊는다 (연결 규칙 꼬임 방지)
               const crossEdges = findCrossColorChildEdges(
@@ -2487,6 +2547,21 @@ function GraphCanvasInner({
             y: d3Child.y - childHeight / 2,
           }).catch((err) =>
             console.error(`[moveNode child ${childId}] failed`, err),
+          );
+        }
+      });
+
+      // 메인 노드 드래그 편입: 상대 노드+서브트리 위치 저장. d3ref는 위 스냅/대칭 동기화로
+      // 보정돼 있고, 이 노드들은 fx/fy가 걸린 적 없어(드래그 대상 아님) 해제 불필요(§10-7).
+      incorporatedIds.forEach((id) => {
+        const d3n = d3NodesRef.current.find((n) => n.id === id);
+        if (d3n?.x != null && d3n?.y != null) {
+          const n = nodes.find((m) => m.id === id);
+          moveNode(workspaceId, id, {
+            x: d3n.x - (n?.width ?? NODE_WIDTH) / 2,
+            y: d3n.y - (n?.height ?? NODE_HEIGHT) / 2,
+          }).catch((err) =>
+            console.error(`[moveNode incorporated ${id}] failed`, err),
           );
         }
       });
