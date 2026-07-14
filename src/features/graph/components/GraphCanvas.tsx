@@ -976,6 +976,11 @@ function GraphCanvasInner({
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(
     new Map(),
   );
+  // 드래그 시작 시점 엣지 핸들 스냅샷 — 드래그 중 좌우 반전으로 로컬에서만 바뀐
+  // 핸들을 드래그 종료 시 diff로 골라 서버에 저장하기 위한 기준값
+  const dragStartEdgeHandlesRef = useRef<
+    Map<string, { source?: string | null; target?: string | null }>
+  >(new Map());
   const isConnectingRef = useRef(false);
   const isMultiDragRef = useRef(false);
   const lastLiveEmitRef = useRef(0);
@@ -2289,6 +2294,14 @@ function GraphCanvasInner({
       dragStartPositionsRef.current = new Map(
         nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]),
       );
+
+      // 엣지 핸들 스냅샷 — 드래그 중 반전으로 바뀐 핸들의 서버 저장 diff 기준
+      dragStartEdgeHandlesRef.current = new Map(
+        edges.map((e) => [
+          e.id,
+          { source: e.sourceHandle, target: e.targetHandle },
+        ]),
+      );
     },
     [nodes, edges],
   );
@@ -2573,6 +2586,9 @@ function GraphCanvasInner({
     (_: React.MouseEvent, draggedNode: Node) => {
       // hover-snap 발생 시 adjustedPosition을 추적하여 moveNode에 전달
       let finalPosition = draggedNode.position;
+      // 재부모화가 실행되면 그 경로의 persistSubtreeEdgeHandles가 핸들을
+      // 저장하므로, 아래 드래그 반전 diff 스윕은 건너뛴다 (동일 엣지 이중 PATCH 방지)
+      let didReparent = false;
 
       // hover된 노드가 있으면 연결 생성 (다중 선택 드래그 중에는 hover-snap 비활성화)
       if (hoveredNodeId && !isMultiDragRef.current) {
@@ -2587,6 +2603,8 @@ function GraphCanvasInner({
             edges,
           )
         ) {
+          didReparent = true;
+
           // source/target 역할 결정: main 노드가 드래그된 경우 항상 source
           const parentNode = draggedIsMain ? draggedNode : newParent;
           const childNode = draggedIsMain ? newParent : draggedNode;
@@ -2919,6 +2937,50 @@ function GraphCanvasInner({
 
       // 드래그 위치 초기화
       previousDragPositionRef.current = null;
+
+      // 드래그 중 좌우 반전으로 로컬에서만 바뀐 엣지 핸들을 서버에 저장.
+      // 반전 후 빈 공간에 놓는 경로는 persistSubtreeEdgeHandles(재부모화·병합
+      // 전용)가 닿지 않아, 드래그 시작 스냅샷과의 diff로 변경분을 골라낸다.
+      const startHandles = dragStartEdgeHandlesRef.current;
+      const edgesToSweep = didReparent ? [] : edges;
+      edgesToSweep.forEach((e) => {
+        const start = startHandles.get(e.id);
+        if (!start) return;
+        if (
+          start.source === e.sourceHandle &&
+          start.target === e.targetHandle
+        ) {
+          return;
+        }
+        console.log(
+          '[handle:save] onNodeDragStop — 드래그 중 반전된 엣지 핸들 저장',
+          e.id,
+          {
+            before: { sourceHandle: start.source, targetHandle: start.target },
+            after: {
+              sourceHandle: e.sourceHandle,
+              targetHandle: e.targetHandle,
+            },
+          },
+        );
+        updateEdge(workspaceId, e.id, {
+          ...(typeof e.sourceHandle === 'string' && {
+            sourceHandle: e.sourceHandle,
+          }),
+          ...(typeof e.targetHandle === 'string' && {
+            targetHandle: e.targetHandle,
+          }),
+        })
+          .then(() =>
+            console.log(
+              '[handle:save] updateEdge PATCH 응답(서버 저장 완료)',
+              e.id,
+            ),
+          )
+          .catch((err) =>
+            console.error(`[updateEdge drag-mirror ${e.id}] failed`, err),
+          );
+      });
 
       // API: 위치 저장 — root만 PATCH하고 서버의 자손 delta 전파와 어긋나는
       // 자손만 순차 보정한다 (saveDragPositions CONTEXT 참고)
