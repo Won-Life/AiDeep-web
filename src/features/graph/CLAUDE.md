@@ -1,0 +1,47 @@
+# 그래프 캔버스 도메인 규칙
+
+> 기능 명세·구현 체크리스트는 `docs/GRAPH_RULES.md` (living document).
+> 그래프 동작을 바꾸는 작업을 마치면 해당 체크 항목을 같은 브랜치에서 갱신한다.
+
+## Optimistic Update 패턴 (필수)
+
+본인 action → REST 응답 즉시 local state 반영. 협업자 action → WS 이벤트로만 반영.
+서버는 WS 이벤트를 **발신자 제외**로 broadcast하므로(Aideep_backend#47, per-user 룸 `.except()`) 본인 이벤트는 원래 되돌아오지 않는다.
+
+```typescript
+// useWorkspaceWS.ts — 안전망 필터 (서버 회귀·재연결 시 룸 join 어긋남 대비)
+// 이 필터가 실동작하는 상황이면 서버 발신자 제외가 깨진 것 — 없으면 노드/엣지 중복 삽입
+if (event.userId === currentUserId) return
+```
+
+## Ref 기반 최신값 추적
+
+WS 핸들러·이벤트 리스너는 마운트 시점의 클로저를 사용한다. state가 필요하면 반드시 ref로 최신값을 추적한다.
+
+| ref | 용도 |
+|-----|------|
+| `edgesRef` | WS 핸들러에서 `getDescendantIds` 호출 시 최신 edges 참조 |
+| `setNodesRef`, `setEdgesRef` | WS 재구독 없이 최신 setter 참조 |
+| `nodesRef` | D3 시뮬레이션 tick에서 최신 nodes 참조 |
+| `isDraggingRef` | NODE_MOVE 수신 시 CSS transition 생략 판단 |
+| `isConnectingRef` | onConnectEnd 후 onPaneClick 이중 발화 방지 |
+
+## D3 Simulation
+
+- D3 시뮬레이션의 tick 핸들러·force 콜백은 레퍼런스 안정이 필수 → `useCallback` 명시 (React Compiler 예외).
+- `rectCollide` force는 `src/features/graph/layout/rectCollide.ts`에만 수정한다.
+
+## 노드 생성 규칙
+
+- 빈 공간 클릭 → `createMdNode` REST POST → 응답의 `nodeId`로 local state 삽입.
+- 낙관적 삽입(응답 전 삽입) 없음. 실패 시 노드 미생성.
+
+## 엣지 연결 (onConnect)
+
+색상 전파: 엣지 생성 성공 후 `updateSubtreeColors`로 로컬 페인트하고, 같은 집합(`getRecolorTargetIds`)에 **노드별** REST PATCH로 저장한다. 서버의 `propagateToChildren` 전파는 그래프 색 경계를 모르고 크로스 그래프 엣지 너머까지 덮어쓰므로(Aideep_backend#51) 사용하지 않는다. PATCH 실패해도 로컬 색상은 이미 변경 (롤백 없음).
+
+source/target 정규화: `resolveConnectionDirection` 헬퍼가 결정 — ① isMain 노드 → source, ② 단독 노드(엣지 0개)가 그래프에 연결되면 그래프 쪽 → source. `onConnect`와 `isValidConnection`이 같은 헬퍼를 공유한다.
+
+단일 부모 불변식 (#92): 정규화 이후의 실제 자식(target)이 이미 부모(incoming 엣지)를 가지면 연결을 차단한다. 노드 드래그로 붙이는 경로(`onNodeDragStop`)는 기존 부모 엣지를 끊고 재부모화하므로 별도 처리 불필요.
+
+부모 방향 핸들 차단: 부모가 있는 노드의 `target-*` 핸들로 들어오는 연결은 차단 — 연결은 부모 반대 방향으로만. swap으로 그 노드가 부모(source)가 되는 케이스도 드롭 지점이 부모 방향이면 막는다 (부모 방향엔 source 핸들이 렌더링되지 않아 React Flow #008 유발 경로이기도 함, #105 관련).

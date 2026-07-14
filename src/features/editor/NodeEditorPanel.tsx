@@ -98,7 +98,7 @@ function AttachmentSection({
                   onChange={(e) => onCaptionChange(att.id, e.target.value)}
                   placeholder="사진 설명"
                   className="block w-full text-center bg-transparent border-none outline-none text-gray-500 placeholder:text-gray-500"
-                  style={{ fontSize: 11, padding: "3px 0" }}
+                  style={{ fontSize: 12, padding: "3px 0" }}
                 />
                 <button
                   type="button"
@@ -130,7 +130,7 @@ function AttachmentSection({
                 <span className="flex-1 typo-cap2 text-foreground truncate">
                   {att.name}
                 </span>
-                <span className="typo-cap3 text-muted shrink-0">{formatSize(att.size)}</span>
+                <span className="text-[12px] text-muted shrink-0">{formatSize(att.size)}</span>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onRemove(att.id); }}
@@ -270,7 +270,7 @@ export function NodeEditorPanel({
         />
 
         {updatedAt && (
-          <div className="shrink-0 px-3 py-2 border-t border-gray-900 typo-cap3 text-gray-500">
+          <div className="shrink-0 px-3 py-2 border-t border-gray-900 text-[12px] text-gray-500">
             최종 수정일: {new Date(updatedAt).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" })}
           </div>
         )}

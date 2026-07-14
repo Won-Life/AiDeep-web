@@ -31,7 +31,7 @@ function AvatarCircle({
         height: size,
         backgroundColor: color,
         fontFamily: 'Pretendard, sans-serif',
-        fontSize: 11,
+        fontSize: 12,
         border: '2px solid white',
       }}
     >
@@ -116,7 +116,7 @@ export default function CollaboratorsList({
                     width: 28,
                     height: 28,
                     fontFamily: 'Pretendard, sans-serif',
-                    fontSize: 10,
+                    fontSize: 11,
                     border: '2px solid white',
                   }}
                 >

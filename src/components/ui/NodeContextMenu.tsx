@@ -1,26 +1,28 @@
 'use client';
 
 interface NodeContextMenuProps {
-  onChangeToProjectNode?: () => void;
+  isProjectNode?: boolean;
+  onToggleNodeType?: () => void;
   onMoveToArchive?: () => void;
   onDeleteNode?: () => void;
 }
 
 export default function NodeContextMenu({
-  onChangeToProjectNode,
+  isProjectNode = false,
+  onToggleNodeType,
   onMoveToArchive,
   onDeleteNode,
 }: NodeContextMenuProps) {
   return (
-    <div className="flex flex-col bg-white rounded-lg shadow-[0px_0px_4px_0px_rgba(44,44,44,0.25)] w-fit">
-      {/* 프로젝트 노드로 변경 */}
+    <div className="flex flex-col bg-white rounded-xl border border-border shadow-md w-max min-w-40">
+      {/* 노드 타입 토글 (프로젝트 ↔ 일반) */}
       <button
         type="button"
-        onClick={onChangeToProjectNode}
-        className="flex items-center px-[10px] pt-[10px] pb-[8px] rounded-t-lg hover:bg-surface-hover transition-colors cursor-pointer"
+        onClick={onToggleNodeType}
+        className="flex items-center px-4 pt-3.5 pb-2.5 rounded-t-xl hover:bg-surface-hover transition-colors cursor-pointer"
       >
         <span className="typo-cap2 text-black whitespace-nowrap">
-          프로젝트 노드로 변경
+          {isProjectNode ? '일반 노드로 변경' : '프로젝트 노드로 변경'}
         </span>
       </button>
 
@@ -28,7 +30,7 @@ export default function NodeContextMenu({
       <button
         type="button"
         onClick={onMoveToArchive}
-        className="flex items-center px-[10px] py-[8px] hover:bg-surface-hover transition-colors cursor-pointer"
+        className="flex items-center px-4 py-2.5 hover:bg-surface-hover transition-colors cursor-pointer"
       >
         <span className="typo-cap2 text-black whitespace-nowrap">
           아카이브로 이동
@@ -39,7 +41,7 @@ export default function NodeContextMenu({
       <button
         type="button"
         onClick={onDeleteNode}
-        className="flex items-center px-[10px] pt-[8px] pb-[10px] rounded-b-lg hover:bg-surface-hover transition-colors cursor-pointer"
+        className="flex items-center px-4 pt-2.5 pb-3.5 rounded-b-xl hover:bg-surface-hover transition-colors cursor-pointer"
       >
         <span className="typo-cap2 text-black whitespace-nowrap">
           노드 삭제

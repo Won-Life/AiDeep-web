@@ -121,7 +121,7 @@ function ImageCaptionEditor({ nodeKey, caption }: { nodeKey: NodeKey; caption: s
         display: 'block',
         width: '100%',
         textAlign: 'center',
-        fontSize: 12,
+        fontSize: 13,
         color: '#999',
         background: 'transparent',
         border: 'none',
@@ -266,7 +266,7 @@ class FileNode extends DecoratorNode<ReactNode> {
         <span
           style={{
             flex: 1,
-            fontSize: 13,
+            fontSize: 14,
             color: '#333',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -275,7 +275,7 @@ class FileNode extends DecoratorNode<ReactNode> {
         >
           {__name}
         </span>
-        <span style={{ fontSize: 12, color: '#AAA', flexShrink: 0 }}>{sizeLabel}</span>
+        <span style={{ fontSize: 13, color: '#AAA', flexShrink: 0 }}>{sizeLabel}</span>
       </div>
     );
   }
@@ -565,7 +565,7 @@ export function ToolbarPlugin() {
           type="button"
           onClick={() => setShowBlockMenu((v) => !v)}
           className="flex items-center gap-1 px-2 h-6 rounded cursor-pointer transition-colors hover:bg-[#F3F3F3]"
-          style={{ fontSize: 11, color: '#555', fontWeight: 500 }}
+          style={{ fontSize: 12, color: '#555', fontWeight: 500 }}
         >
           {currentLabel}
           <svg
@@ -600,13 +600,13 @@ export function ToolbarPlugin() {
               >
                 <span
                   className="shrink-0 flex items-center justify-center font-mono"
-                  style={{ width: 18, fontSize: 10, color: '#AAA' }}
+                  style={{ width: 18, fontSize: 11, color: '#AAA' }}
                 >
                   {icon}
                 </span>
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: blockType === value ? 600 : 400,
                   }}
                 >
@@ -628,7 +628,7 @@ export function ToolbarPlugin() {
           { format: 'italic' as const, label: 'I', active: isItalic, title: '기울임 ⌘I', extraStyle: { fontStyle: 'italic' } },
           { format: 'underline' as const, label: 'U', active: isUnderline, title: '밑줄 ⌘U', extraStyle: { textDecoration: 'underline' } },
           { format: 'strikethrough' as const, label: 'S', active: isStrikethrough, title: '취소선', extraStyle: { textDecoration: 'line-through' } },
-          { format: 'code' as const, label: '<>', active: isCode, title: '인라인 코드', extraStyle: { fontFamily: 'monospace', fontSize: 10 } },
+          { format: 'code' as const, label: '<>', active: isCode, title: '인라인 코드', extraStyle: { fontFamily: 'monospace', fontSize: 11 } },
         ] as const
       ).map(({ format, label, active, title, extraStyle }) => (
         <button
@@ -640,7 +640,7 @@ export function ToolbarPlugin() {
           style={{
             width: 26,
             height: 26,
-            fontSize: 11,
+            fontSize: 12,
             background: active ? '#E8E8E8' : 'transparent',
             color: active ? '#1A1A1A' : '#AAAAAA',
             ...extraStyle,
@@ -795,7 +795,7 @@ export function NotionEditor({
               placeholder={
                 <div
                   className="absolute top-3 left-4 pointer-events-none select-none"
-                  style={{ color: '#C4C4C4', fontSize: 13 }}
+                  style={{ color: '#C4C4C4', fontSize: 14 }}
                 >
                   노트를 작성하세요…&nbsp;
                   <span style={{ color: '#D5D5D5' }}>

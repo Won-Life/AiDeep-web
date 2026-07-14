@@ -16,6 +16,7 @@ export interface Project {
   id: string;
   name: string;
   isEditing?: boolean;
+  isPersonal?: boolean; // 멤버 1명 == 개인 워크스페이스 → 자물쇠 표시
 }
 
 export interface ResourceSubItem {
@@ -64,7 +65,7 @@ function ProjectList({
               defaultValue={project.name}
               className="sidebar-new-input bg-transparent border-none outline-none"
               style={{
-                fontSize: 14,
+                fontSize: 15,
                 color: 'rgb(var(--foreground))',
                 flex: 1,
                 minWidth: 0,
@@ -77,7 +78,7 @@ function ProjectList({
           ) : (
             <span
               style={{
-                fontSize: 14,
+                fontSize: 15,
                 color: 'rgb(var(--foreground))',
                 cursor: 'text',
                 overflow: 'hidden',
@@ -93,6 +94,22 @@ function ProjectList({
                 </span>
               )}
             </span>
+          )}
+          {project.isPersonal && (
+            <svg
+              width={13}
+              height={13}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgb(var(--ds-gray-400))"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
           )}
         </li>
       ))}
@@ -132,7 +149,6 @@ function ResourceTree({
   if (subItems.length === 0) return null;
 
   const ITEM_H = 38;
-  const SVG_W = 20;
   const VX = 8;
   const R = 6;
 
@@ -145,47 +161,62 @@ function ResourceTree({
         const isSelected = selectedSubItemId === item.id;
 
         return (
-          <div key={item.id}>
+          <div key={item.id} style={{ position: 'relative' }}>
+            {/* 수직 스파인: wrapper 높이(행 + 인라인 에디터)를 자동으로 채워
+                에디터 오픈 시에도 선이 끊기지 않는다 */}
+            {!isLast && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: VX,
+                  top: isFirst ? -BRIDGE_H : 0,
+                  bottom: 0,
+                  width: 1,
+                  background: 'rgb(var(--ds-black))',
+                }}
+              />
+            )}
+
             <div
               className="flex items-center"
-              style={{ height: ITEM_H, position: 'relative', zIndex: 1 }}
+              style={{ height: ITEM_H }}
             >
-              <svg
-                width={SVG_W}
-                height={ITEM_H}
-                style={{ flexShrink: 0, overflow: 'visible' }}
+              <div
+                style={{
+                  width: 20,
+                  height: ITEM_H,
+                  position: 'relative',
+                  flexShrink: 0,
+                }}
               >
                 {isLast ? (
-                  <path
-                    d={`M ${VX} ${-topExtend} L ${VX} ${ITEM_H / 2 - R} Q ${VX} ${ITEM_H / 2} ${VX + R} ${ITEM_H / 2} L 20 ${ITEM_H / 2}`}
-                    fill="none"
-                    stroke="rgb(var(--ds-black))"
-                    strokeWidth="1"
-                    strokeLinecap="round"
+                  /* L커브: 스파인·수평선과 같은 CSS 프리미티브로 그려야
+                     서브픽셀이 정확히 맞는다 (SVG stroke는 중심선 기준이라 0.5px 어긋남) */
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: VX,
+                      right: 0,
+                      top: -topExtend,
+                      height: ITEM_H / 2 + 1 + topExtend,
+                      borderLeft: '1px solid rgb(var(--ds-black))',
+                      borderBottom: '1px solid rgb(var(--ds-black))',
+                      borderBottomLeftRadius: R,
+                    }}
                   />
                 ) : (
-                  <>
-                    <line
-                      x1={VX}
-                      y1={-topExtend}
-                      x2={VX}
-                      y2={ITEM_H}
-                      stroke="rgb(var(--ds-black))"
-                      strokeWidth="1"
-                      strokeLinecap="round"
-                    />
-                    <line
-                      x1={VX}
-                      y1={ITEM_H / 2}
-                      x2="20"
-                      y2={ITEM_H / 2}
-                      stroke="rgb(var(--ds-black))"
-                      strokeWidth="1"
-                      strokeLinecap="round"
-                    />
-                  </>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: VX,
+                      right: 0,
+                      top: ITEM_H / 2,
+                      height: 1,
+                      background: 'rgb(var(--ds-black))',
+                    }}
+                  />
                 )}
-              </svg>
+              </div>
 
               {item.isEditing ? (
                 <input
@@ -194,7 +225,7 @@ function ResourceTree({
                   defaultValue={item.name}
                   className="sidebar-new-input rounded-full px-3 py-1 border-none outline-none"
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     background: 'rgb(var(--ds-gray-800))',
                     color: 'rgb(var(--foreground))',
                     width: '90%',
@@ -210,7 +241,7 @@ function ResourceTree({
                   className="rounded-full px-3 py-1"
                   draggable
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     background: isSelected ? '#000' : 'rgb(var(--ds-gray-800))',
                     color: isSelected ? '#fff' : 'rgb(var(--foreground))',
                     cursor: 'pointer',
@@ -239,9 +270,11 @@ function ResourceTree({
               )}
             </div>
 
-            {/* 선택된 서브 아이템 아래 인라인 에디터 */}
+            {/* 선택된 서브 아이템 아래 인라인 에디터.
+                아래 간격은 margin이 아니라 padding이어야 함 — margin은 wrapper
+                밖으로 빠져나가 스파인(top:0~bottom:0)이 그 구간을 못 덮는다 */}
             {isSelected && (
-              <div className="mb-2" style={{ marginTop: -12, marginLeft: SVG_W, position: 'relative', zIndex: 0 }}>
+              <div style={{ marginLeft: 20, paddingBottom: 8 }}>
                 <NodeEditorPanel
                   nodeId={item.id}
                   inline
@@ -324,7 +357,7 @@ function ResourceList({
                 }
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer"
                 style={{
-                  fontSize: 13,
+                  fontSize: 14,
                   color: 'rgb(var(--foreground))',
                   borderColor: 'rgb(var(--ds-black))',
                   background: 'transparent',
@@ -340,7 +373,7 @@ function ResourceList({
                     defaultValue={resource.name}
                     className="sidebar-new-input bg-transparent border-none outline-none"
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color: 'rgb(var(--foreground))',
                       flex: 1,
                       minWidth: 0,
@@ -397,7 +430,7 @@ function ResourceList({
                 onClick={() => onAddSubItem(resource.id)}
                 className="flex items-center justify-center cursor-pointer"
                 style={{
-                  fontSize: 18,
+                  fontSize: 19,
                   color: 'rgb(var(--ds-gray-400))',
                   background: 'transparent',
                   flexShrink: 0,
@@ -522,7 +555,7 @@ export default function Sidebar({
       const dragPreview = document.createElement('div');
       dragPreview.textContent = item.name || ' ';
       dragPreview.style.padding = '4px 12px';
-      dragPreview.style.fontSize = '13px';
+      dragPreview.style.fontSize = '14px';
       dragPreview.style.borderRadius = '9999px';
       dragPreview.style.background = 'rgb(var(--ds-gray-800))';
       dragPreview.style.color = 'rgb(var(--foreground))';
@@ -568,13 +601,13 @@ export default function Sidebar({
         className="scrollbar-hide flex-1 overflow-y-auto px-4 pt-5 pb-4"
         style={{ overflow: isOpen ? undefined : 'hidden' }}
       >
-        {/* Project 섹션 */}
+        {/* Workspaces 섹션 */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span
                 style={{
-                  fontSize: 18,
+                  fontSize: 19,
                   fontWeight: 700,
                   color: 'rgb(var(--foreground))',
                 }}
@@ -584,7 +617,7 @@ export default function Sidebar({
               <button
                 onClick={onAddProject}
                 style={{
-                  fontSize: 22,
+                  fontSize: 23,
                   color: 'rgb(var(--ds-black))',
                   lineHeight: 1,
                 }}
@@ -597,7 +630,7 @@ export default function Sidebar({
               onClick={onToggle}
               className="cursor-pointer"
               style={{
-                fontSize: 20,
+                fontSize: 21,
                 color: 'rgb(var(--ds-gray-500))',
                 fontWeight: 600,
               }}
@@ -618,7 +651,7 @@ export default function Sidebar({
           <div className="flex items-center gap-2 mb-4">
             <span
               style={{
-                fontSize: 18,
+                fontSize: 19,
                 fontWeight: 700,
                 color: 'rgb(var(--foreground))',
               }}
@@ -628,7 +661,7 @@ export default function Sidebar({
             <button
               onClick={onAddResource}
               style={{
-                fontSize: 22,
+                fontSize: 23,
                 color: 'rgb(var(--ds-black))',
                 lineHeight: 1,
               }}
@@ -670,7 +703,7 @@ export default function Sidebar({
           style={{
             width: 24,
             height: 24,
-            fontSize: 13,
+            fontSize: 14,
             color: 'rgb(var(--ds-gray-500))',
             border: '1.5px solid rgb(var(--ds-gray-600))',
           }}
