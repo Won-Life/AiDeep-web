@@ -36,7 +36,7 @@ import {
   EMPTY_LEXICAL_JSON,
 } from '../api/nodes';
 import { emitLivePosition, emitCursorMove } from '@/api/ws';
-import { createEdge, deleteEdge } from '../api/edges';
+import { createEdge, deleteEdge, updateEdge } from '../api/edges';
 import type { EdgeDto, NodeDto } from '../types';
 import { rectCollide } from '../layout/rectCollide';
 import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
@@ -551,6 +551,164 @@ function resolveHandleId(
   return `source-${side}`;
 }
 
+/*
+ * CONTEXT
+ * - Problem      : 비-root 노드는 source-{handleSide} 핸들 하나만 렌더링하므로, 서브트리
+ *                  방향이 바뀌는 지점(재부모화·트리 병합)에서 자손 handleSide·내부 엣지
+ *                  핸들을 함께 갱신하지 않으면 엣지가 존재하지 않는 핸들을 가리켜
+ *                  React Flow 에러 #008로 렌더링에서 탈락한다.
+ * - Why          : D3 대칭이동 경로(방향 반전 시 서브트리 전체 handleSide + 엣지 핸들
+ *                  동시 갱신)와 동일한 규칙을 나머지 두 경로에도 적용한다. 서버는 노드
+ *                  handleSide 개념이 없고 엣지 핸들만 저장하므로, 로컬 갱신분을 PATCH
+ *                  /edge/:edgeId로 동반 저장해야 새로고침 후에도 일관된다.
+ * - Alternatives : buildEdgePresentation에서 렌더링 시점 보정 — 데이터 모순을 화면에서만
+ *                  가리고 서버엔 그대로 남아 다른 클라이언트·재접속에서 재발, 기각.
+ * - Trade-offs   : 서브트리 내부 엣지 수만큼 PATCH 요청 발생 (엣지별 실패는 로그만,
+ *                  로컬 상태는 이미 일관 — 실패분은 새로고침 시 다시 어긋날 수 있음).
+ * - Edge Case    : 크로스 색 엣지는 같은 그래프 자손 집합에 포함되지 않아 정규화 대상에서
+ *                  자연 제외된다 (대칭이동 절단 로직이 별도 처리).
+ */
+function subtreeInternalEdgeFilter(
+  rootId: string,
+  subtreeIds: Set<string>,
+): (edge: Edge) => boolean {
+  return (edge) =>
+    (edge.source === rootId || subtreeIds.has(edge.source)) &&
+    subtreeIds.has(edge.target);
+}
+
+// 서브트리 내부 엣지 핸들의 서버 저장분 갱신 — 이미 새 방향인 엣지는 건너뛴다
+function persistSubtreeEdgeHandles(
+  workspaceId: string,
+  edges: Edge[],
+  isInternal: (edge: Edge) => boolean,
+  side: 'left' | 'right',
+): void {
+  const sourceHandle = resolveHandleId('source', side);
+  const targetHandle = resolveHandleId('target', side);
+  edges
+    .filter(isInternal)
+    .filter(
+      (e) => e.sourceHandle !== sourceHandle || e.targetHandle !== targetHandle,
+    )
+    .forEach((e) => {
+      console.log('[handle:save] updateEdge PATCH 요청 — 엣지 핸들 저장', e.id, {
+        before: { sourceHandle: e.sourceHandle, targetHandle: e.targetHandle },
+        after: { sourceHandle, targetHandle },
+      });
+      updateEdge(workspaceId, e.id, { sourceHandle, targetHandle })
+        .then(() =>
+          console.log(
+            '[handle:save] updateEdge PATCH 응답(서버 저장 완료)',
+            e.id,
+          ),
+        )
+        .catch(
+          (err) => console.error(`[updateEdge subtree ${e.id}] failed`, err),
+        );
+    });
+}
+
+/*
+ * CONTEXT
+ * - Problem      : 서버 PATCH /node/:id/move는 해당 노드를 절대 좌표로 저장하면서 DB 기준
+ *                  delta를 모든 자손에게도 전파한다(node.service.updateNodePosition).
+ *                  클라이언트가 드래그 종료 시 부모·자식 각각의 절대 좌표를 병렬 PATCH하면,
+ *                  자식 요청이 부모보다 먼저 처리되는 순서에서 자식 = 최종 좌표 + 부모 delta로
+ *                  이중 이동된다 (새로고침 시 서브트리만 밀려 보이는 증상).
+ * - Why          : root만 PATCH하고 서버 전파 결과를 로컬에서 시뮬레이션한 뒤, 로컬 최종
+ *                  위치와 어긋나는 자손만 root 응답 이후 순차 보정한다. 일반 드래그(순수
+ *                  평행이동)는 요청 1건, Alt 단독 이동·대칭이동·크로스 그래프 자손처럼
+ *                  전파 결과가 로컬과 다른 노드만 추가 PATCH가 나간다.
+ * - Alternatives : ① 전 노드 순차 저장 — 항상 자손 수만큼 왕복, 대부분 불필요.
+ *                  ② 자식 전송 완전 제거 — Alt 단독 이동·대칭이동에서 서버 전파값이 로컬과
+ *                  달라 새로고침 시 어긋남, 기각.
+ * - Trade-offs   : 서버 전파 규칙(전체 자손, 색 경계 무시)이 바뀌면 시뮬레이션도 함께
+ *                  바꿔야 한다. 보정은 순차 await라 어긋난 자손이 많으면(대칭이동) 왕복 누적.
+ * - Edge Case    : root PATCH 실패 시 서버 전파도 없었던 것이므로 보정 전체를 건너뛴다.
+ *                  보정 PATCH도 각자 자손에게 delta를 전파하므로 시뮬레이션에 누적 반영한다.
+ */
+async function saveDragPositions(
+  workspaceId: string,
+  roots: Array<{ id: string; final?: { x: number; y: number } }>,
+  latestNodes: Node[],
+  edges: Edge[],
+  startPositions: Map<string, { x: number; y: number }>,
+): Promise<void> {
+  const posOf = (id: string): { x: number; y: number } | undefined => {
+    const node = latestNodes.find((n) => n.id === id);
+    return node ? { x: node.position.x, y: node.position.y } : undefined;
+  };
+
+  for (const root of roots) {
+    const rootFinal = root.final ?? posOf(root.id);
+    if (!rootFinal) continue;
+
+    console.log(
+      '[pos:save] saveDragPositions — root 저장 (서버가 자손 delta 전파)',
+      root.id,
+      rootFinal,
+    );
+    try {
+      await moveNode(workspaceId, root.id, rootFinal);
+    } catch (err) {
+      console.error('[moveNode] failed', err);
+      continue; // root 실패 = 서버 전파도 없음 — 자손 보정 스킵
+    }
+
+    // 서버 전파 시뮬레이션: 자손 = 드래그 시작 위치 + root delta (색 경계 무시 — 서버 selectAllDescendantIds와 동일)
+    const descendantIds = getDescendantIds(root.id, edges);
+    const serverPos = new Map<string, { x: number; y: number }>();
+    descendantIds.forEach((id) => {
+      const start = startPositions.get(id);
+      if (start) serverPos.set(id, { ...start });
+    });
+    const rootStart = startPositions.get(root.id);
+    if (rootStart) {
+      const dx = rootFinal.x - rootStart.x;
+      const dy = rootFinal.y - rootStart.y;
+      serverPos.forEach((p) => {
+        p.x += dx;
+        p.y += dy;
+      });
+    }
+
+    // BFS 순서(조상 → 자손)로 어긋난 자손만 보정 — 보정 자체의 자손 전파도 누적 반영
+    for (const childId of descendantIds) {
+      const final = posOf(childId);
+      const expected = serverPos.get(childId);
+      if (!final || !expected) continue;
+      if (
+        Math.abs(expected.x - final.x) < 0.5 &&
+        Math.abs(expected.y - final.y) < 0.5
+      ) {
+        continue;
+      }
+      console.log(
+        '[pos:save] saveDragPositions — 자손 보정 (서버 전파 예상 ≠ 로컬 최종)',
+        childId,
+        { 서버예상: expected, 로컬최종: final },
+      );
+      try {
+        await moveNode(workspaceId, childId, final);
+      } catch (err) {
+        console.error(`[moveNode child ${childId}] failed`, err);
+        continue;
+      }
+      const cdx = final.x - expected.x;
+      const cdy = final.y - expected.y;
+      getDescendantIds(childId, edges).forEach((id) => {
+        const p = serverPos.get(id);
+        if (p) {
+          p.x += cdx;
+          p.y += cdy;
+        }
+      });
+      serverPos.set(childId, { ...final });
+    }
+  }
+}
+
 function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
   const source = nodes.find((node) => node.id === edge.source);
   const target = nodes.find((node) => node.id === edge.target);
@@ -625,7 +783,10 @@ function mirrorSubtree(
           afterY: node.position.y,
         };
       });
-    console.log('[mirrorSubtree] before/after', diffs);
+    console.log(
+      '[pos:move] mirrorSubtree — 서브트리 대칭이동 before/after',
+      diffs,
+    );
   }
 
   return next;
@@ -811,6 +972,10 @@ function GraphCanvasInner({
     new Map(),
   );
   const previousDragPositionRef = useRef<{ x: number; y: number } | null>(null);
+  // 드래그 시작 시점 전체 노드 위치 스냅샷 — 서버 move의 자손 delta 전파 시뮬레이션 기준값
+  const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(
+    new Map(),
+  );
   const isConnectingRef = useRef(false);
   const isMultiDragRef = useRef(false);
   const lastLiveEmitRef = useRef(0);
@@ -898,7 +1063,12 @@ function GraphCanvasInner({
       if (d3Nodes.length === 0) return;
 
       setNodes((currentNodes) => {
-        return currentNodes.map((node) => {
+        const moved: Array<{
+          id: string;
+          from: { x: number; y: number };
+          to: { x: number; y: number };
+        }> = [];
+        const next = currentNodes.map((node) => {
           const d3Node = d3Nodes.find((d) => d.id === node.id);
           if (!d3Node) return node;
 
@@ -906,15 +1076,26 @@ function GraphCanvasInner({
           const nodeWidth = node.width ?? NODE_WIDTH;
           const nodeHeight = node.height ?? NODE_HEIGHT;
 
+          const newPosition = {
+            x: (d3Node.x ?? node.position.x + nodeWidth / 2) - nodeWidth / 2,
+            y: (d3Node.y ?? node.position.y + nodeHeight / 2) - nodeHeight / 2,
+          };
+          if (
+            Math.abs(newPosition.x - node.position.x) > 0.5 ||
+            Math.abs(newPosition.y - node.position.y) > 0.5
+          ) {
+            moved.push({ id: node.id, from: node.position, to: newPosition });
+          }
+
           return {
             ...node,
-            position: {
-              x: (d3Node.x ?? node.position.x + nodeWidth / 2) - nodeWidth / 2,
-              y:
-                (d3Node.y ?? node.position.y + nodeHeight / 2) - nodeHeight / 2,
-            },
+            position: newPosition,
           };
         });
+        if (moved.length > 0) {
+          console.log('[pos:move] D3 tick — 충돌 회피로 밀려난 노드', moved);
+        }
+        return next;
       });
     });
 
@@ -1133,6 +1314,19 @@ function GraphCanvasInner({
       );
       if (nonRemoveChanges.length === 0) return;
 
+      nonRemoveChanges.forEach((change) => {
+        if (change.type === 'position' && change.position) {
+          console.log(
+            '[pos:move] onNodesChange — React Flow 드래그 위치 적용',
+            change.id,
+            '→',
+            change.position,
+            'dragging:',
+            change.dragging,
+          );
+        }
+      });
+
       setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
     },
     [requestArchiveForNodes, setNodes],
@@ -1329,6 +1523,41 @@ function GraphCanvasInner({
         return false;
       }
 
+      /*
+       * CONTEXT
+       * - Problem      : 서로 다른 그래프를 잇는 크로스 그래프 엣지는 이동·색 전파·삭제
+       *                  캐스케이드가 그래프 경계를 넘게 만들고, depth≠0 root 같은
+       *                  데이터 꼬임(Aideep_backend#64)을 낳는다.
+       * - Why          : 크로스 엣지의 유일한 신규 발생 경로가 핸들 드래그(onConnect)라서
+       *                  여기서 색 비교로 원천 차단한다. 색 = 그래프 정체성 (findCross-
+       *                  ColorChildEdges와 동일 기준). 둘 다 엣지를 가진 노드만 검사 —
+       *                  단독 노드는 색이 남아 있어도 그래프 편입(swap 케이스 2) 허용.
+       * - Alternatives : 서버 createEdge 검증 — 그래프 식별 기준(색? root?)을 서버가
+       *                  모르므로 백엔드 논의 필요, 클라 차단 후 후순위 이슈.
+       * - Trade-offs   : 두 그래프를 직접 잇는 기능(#117의 "양쪽 색 유지" 규칙)이 사라진다.
+       *                  같은 색 loose 트리끼리는 같은 그래프 취급이라 여전히 병합 가능.
+       * - Edge Case    : 색 미확정(legacy 무색 main)이면 차단하지 않는다 — 오판 방지,
+       *                  대칭이동 절단과 같은 맹점 (Aideep_backend#52 전까지).
+       */
+      const sourceInGraph = edges.some(
+        (e) => e.source === connection.source || e.target === connection.source,
+      );
+      const targetInGraph = edges.some(
+        (e) => e.source === connection.target || e.target === connection.target,
+      );
+      if (sourceInGraph && targetInGraph) {
+        const colorOf = colorOfNodeIn(nodes);
+        const srcColor = colorOf(connection.source);
+        const tgtColor = colorOf(connection.target);
+        if (
+          srcColor !== undefined &&
+          tgtColor !== undefined &&
+          srcColor !== tgtColor
+        ) {
+          return false;
+        }
+      }
+
       return true;
     },
     [nodes, edges],
@@ -1352,20 +1581,17 @@ function GraphCanvasInner({
 
       /*
        * CONTEXT
-       * - Problem      : 핸들 드래그로 두 그래프를 연결할 때 source/target이 뒤집히거나
-       *                  target 그래프가 재배치·재색칠되면 양쪽 그래프의 정체성이 깨진다.
-       * - Why          : 도메인 규칙 — 핸들 드래그 A→B는 "연결만" 생성한다. source=A,
-       *                  target=B를 유지하고 색상·위치 모두 보존. 유일한 예외는 프로젝트
-       *                  (main) 노드가 target일 때로, 프로젝트 노드는 항상 부모(source)다.
-       * - Alternatives : 기존 "main 그래프 소속 노드가 부모" swap 규칙 — 그래프 간 연결에서
-       *                  드래그 방향을 무시하게 되어 제거.
-       * - Trade-offs   : 단독 노드 → 그래프 연결(케이스 2)은 여전히 그래프 쪽이 부모가 되어
+       * - Problem      : 서로 다른 그래프(색 다름) 간 연결은 isValidConnection이 차단하므로
+       *                  onConnect에 도달하는 연결은 단독 노드·같은 색 트리뿐이다.
+       * - Why          : 남은 케이스는 전부 "target을 source 그래프에 편입"이 맞다 —
+       *                  항상 재배치·재색칠한다. main(프로젝트) 노드는 항상 부모(source).
+       * - Alternatives : 기존 "그래프 ↔ 그래프는 양쪽 색 유지, 연결만 생성" 분기(#117) —
+       *                  크로스 엣지의 유일한 신규 발생 경로였고, 차단 결정으로 도달 불가가
+       *                  되어 제거 (Aideep_backend#64 논의).
+       * - Trade-offs   : 단독 노드 → 그래프 연결(케이스 2)은 그래프 쪽이 부모가 되어
        *                  색을 전파한다 (단독 노드가 그래프에 편입되는 시나리오).
-       * - Edge Case    : B가 이미 부모를 가진 노드면 incoming 엣지가 2개가 된다 (허용).
+       * - Edge Case    : target이 이미 부모를 가진 노드면 incoming 엣지가 2개가 된다 (허용).
        */
-      // 두 노드 모두 기존 그래프(1개 이상의 연결)에 속함 → 색상·위치 유지, 연결만 생성
-      const bothInGraphs = sourceEdgeCount > 0 && targetEdgeCount > 0;
-
       const shouldSwap =
         // 케이스 1: main(프로젝트) 노드는 항상 부모
         ((sourceIsMain || targetIsMain) && !sourceIsMain) ||
@@ -1402,19 +1628,17 @@ function GraphCanvasInner({
       const resolvedSourceHandle = `source-${computedSide}`;
       const resolvedTargetHandle = resolveHandleId('target', computedSide);
 
-      // 그래프 ↔ 그래프 연결은 양쪽 색상을 유지한다 (도메인 규칙)
       // 한 번만 계산해 로컬 반영·API 전파에 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
-      const colorToPropagate = bothInGraphs
-        ? null
-        : getGraphColor(sourceId, nodes, edges);
-      if (colorToPropagate) {
-        backfillMainColor(sourceId, colorToPropagate);
-      }
+      const colorToPropagate = getGraphColor(sourceId, nodes, edges);
+      backfillMainColor(sourceId, colorToPropagate);
+
+      // target이 트리째 병합될 때 서브트리 방향 정규화 대상 (subtreeInternalEdgeFilter CONTEXT 참고)
+      const mergedSubtreeIds = tgtNode
+        ? getSameGraphDescendantIds(tgtNode, nodes, edges)
+        : new Set<string>();
 
       // 연결된 target 노드 위치(및 subtree)와 색상을 source 기준으로 업데이트
-      // 그래프 ↔ 그래프 연결은 위치·색상 모두 유지하므로 스킵
-      if (!bothInGraphs) {
-        setNodes((currentNodes) => {
+      setNodes((currentNodes) => {
         const sourceNode = currentNodes.find((node) => node.id === sourceId);
         const targetNode = currentNodes.find((node) => node.id === targetId);
 
@@ -1433,6 +1657,14 @@ function GraphCanvasInner({
           const deltaX = adjustedPosition.x - targetNode.position.x;
           const deltaY = adjustedPosition.y - targetNode.position.y;
           if (deltaX !== 0 || deltaY !== 0) {
+            console.log(
+              '[pos:move] onConnect — target 위치를 source 기준으로 조정',
+              targetNode.id,
+              targetNode.position,
+              '→',
+              adjustedPosition,
+              `(서브트리 delta: ${deltaX}, ${deltaY})`,
+            );
             const childrenIds = getDescendantIds(targetNode.id, edges);
             const affectedNodeIds = new Set([targetNode.id, ...childrenIds]);
             positionedNodes = currentNodes.map((node) =>
@@ -1448,23 +1680,105 @@ function GraphCanvasInner({
             );
           }
 
-          // 연결 방향이 확정된 시점에 handleSide를 node.data에 저장
+          // 연결 방향이 확정된 시점에 handleSide를 node.data에 저장 — 서브트리 자손 포함
+          console.log(
+            '[handle:move] onConnect — handleSide 변경',
+            targetId,
+            '서브트리:',
+            Array.from(mergedSubtreeIds),
+            '→',
+            computedSide,
+          );
           positionedNodes = positionedNodes.map((node) =>
-            node.id === targetId
+            node.id === targetId || mergedSubtreeIds.has(node.id)
               ? { ...node, data: { ...node.data, handleSide: computedSide } }
               : node,
           );
+
+          // 반대 방향으로 뻗어 있던 서브트리는 대칭이동 (재부모화 경로와 동일 규칙)
+          if (mergedSubtreeIds.size > 0) {
+            const movedTarget = positionedNodes.find((n) => n.id === targetId);
+            const subtreeNodes = positionedNodes.filter((n) =>
+              mergedSubtreeIds.has(n.id),
+            );
+            if (movedTarget && subtreeNodes.length > 0) {
+              const targetCenterX =
+                movedTarget.position.x + (movedTarget.width ?? NODE_WIDTH) / 2;
+              const avgChildCenterX =
+                subtreeNodes.reduce(
+                  (sum, n) => sum + n.position.x + (n.width ?? NODE_WIDTH) / 2,
+                  0,
+                ) / subtreeNodes.length;
+              const needsMirror =
+                computedSide === 'right'
+                  ? avgChildCenterX < targetCenterX
+                  : avgChildCenterX > targetCenterX;
+              if (needsMirror) {
+                console.log(
+                  '[pos:move] onConnect — 병합 서브트리 대칭이동 실행',
+                  targetId,
+                  '기준축 x:',
+                  targetCenterX,
+                );
+                positionedNodes = mirrorSubtree(
+                  positionedNodes,
+                  mergedSubtreeIds,
+                  targetCenterX,
+                );
+              }
+            }
+          }
         }
 
         return updateSubtreeColors(
           targetId,
           positionedNodes,
           edges,
-          colorToPropagate ?? DEFAULT_NODE_COLOR,
+          colorToPropagate,
         );
-        });
+      });
+
+      // 서브트리 내부 엣지 핸들도 새 방향으로 — 로컬 상태와 서버 저장분 동시 갱신
+      if (mergedSubtreeIds.size > 0) {
+        const isMergedInternal = subtreeInternalEdgeFilter(
+          targetId,
+          mergedSubtreeIds,
+        );
+        const mergedSourceHandle = resolveHandleId('source', computedSide);
+        const mergedTargetHandle = resolveHandleId('target', computedSide);
+        console.log(
+          '[handle:move] onConnect — 서브트리 내부 엣지 핸들 변경',
+          edges.filter(isMergedInternal).map((e) => e.id),
+          '→',
+          { sourceHandle: mergedSourceHandle, targetHandle: mergedTargetHandle },
+        );
+        setEdges((prev) =>
+          prev.map((e) =>
+            isMergedInternal(e)
+              ? {
+                  ...e,
+                  sourceHandle: mergedSourceHandle,
+                  targetHandle: mergedTargetHandle,
+                }
+              : e,
+          ),
+        );
+        persistSubtreeEdgeHandles(
+          workspaceId,
+          edges,
+          isMergedInternal,
+          computedSide,
+        );
       }
 
+      console.log(
+        '[handle:save] onConnect — 새 엣지 생성 요청(핸들 포함 서버 저장)',
+        { source: sourceId, target: targetId },
+        {
+          sourceHandle: resolvedSourceHandle,
+          targetHandle: resolvedTargetHandle,
+        },
+      );
       createEdge(
         workspaceId,
         sourceId,
@@ -1486,14 +1800,12 @@ function GraphCanvasInner({
           ]);
           // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
           setNodes((prev) => applyDepthOnEdgeCreate(prev, edges, sourceId, targetId));
-          if (colorToPropagate) {
-            getRecolorTargetIds(targetId, nodes, edges).forEach((id) =>
-              updateNodeContent(workspaceId, id, {
-                color: colorToPropagate.bg,
-                textColor: colorToPropagate.text,
-              }).catch((err) => console.error('[updateNodeColor] failed', err)),
-            );
-          }
+          getRecolorTargetIds(targetId, nodes, edges).forEach((id) =>
+            updateNodeContent(workspaceId, id, {
+              color: colorToPropagate.bg,
+              textColor: colorToPropagate.text,
+            }).catch((err) => console.error('[updateNodeColor] failed', err)),
+          );
         })
         .catch((err) => console.error('[createEdge] failed', err));
     },
@@ -1972,6 +2284,11 @@ function GraphCanvasInner({
         x: draggedNode.position.x,
         y: draggedNode.position.y,
       };
+
+      // 전체 노드 위치 스냅샷 — 드래그 종료 시 서버 delta 전파 시뮬레이션 기준
+      dragStartPositionsRef.current = new Map(
+        nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]),
+      );
     },
     [nodes, edges],
   );
@@ -2035,7 +2352,23 @@ function GraphCanvasInner({
               });
             });
 
+            console.log(
+              '[pos:move] onNodeDrag — 좌우 전환 서브트리 대칭이동',
+              draggedNode.id,
+              `${beforeSide} → ${afterSide}`,
+              '서브트리 새 중심점:',
+              Object.fromEntries(newSubtreeCenters),
+            );
+
             // 2. handleSide 업데이트: dragged node + 서브트리 모두 newSide로
+            console.log(
+              '[handle:move] onNodeDrag — 좌우 전환 handleSide 변경',
+              draggedNode.id,
+              '서브트리:',
+              Array.from(subtreeIds),
+              '→',
+              newSide,
+            );
             setNodes((currentNodes) =>
               currentNodes.map((node) => {
                 if (node.id === draggedNode.id || subtreeIds.has(node.id)) {
@@ -2052,6 +2385,12 @@ function GraphCanvasInner({
             const newSourceHandle = resolveHandleId('source', newSide);
             const newTargetHandle = resolveHandleId('target', newSide);
 
+            console.log(
+              '[handle:move] onNodeDrag — 좌우 전환 엣지 핸들 변경(로컬만, 서버 미저장)',
+              '대상: main→dragged 엣지 + 서브트리 내부 엣지',
+              '→',
+              { sourceHandle: newSourceHandle, targetHandle: newTargetHandle },
+            );
             setEdges((currentEdges) =>
               currentEdges.map((edge) => {
                 // mainNode와 draggedNode 사이 엣지 정보 업데이트: source 노드는 mainNode (위치 불변), 사용하는 source handle side만 바뀜
@@ -2121,6 +2460,10 @@ function GraphCanvasInner({
               edges,
             );
             if (crossEdges.length > 0) {
+              console.log(
+                '[edge:cut] onNodeDrag — 대칭이동에 따른 크로스 그래프 엣지 절단(서버 삭제 포함)',
+                crossEdges.map((e) => e.id),
+              );
               const crossEdgeIds = new Set(crossEdges.map((e) => e.id));
               const remainingEdges = edges.filter(
                 (e) => !crossEdgeIds.has(e.id),
@@ -2210,6 +2553,11 @@ function GraphCanvasInner({
       const now = Date.now();
       if (now - lastLiveEmitRef.current >= LIVE_EMIT_INTERVAL) {
         lastLiveEmitRef.current = now;
+        console.log(
+          '[pos:send] emitLivePosition — WS 실시간 위치 송신(저장 아님)',
+          draggedNode.id,
+          { x: draggedNode.position.x, y: draggedNode.position.y },
+        );
         emitLivePosition(
           workspaceId,
           draggedNode.id,
@@ -2283,6 +2631,15 @@ function GraphCanvasInner({
           const deltaX = adjustedPosition.x - childNode.position.x;
           const deltaY = adjustedPosition.y - childNode.position.y;
 
+          console.log(
+            '[pos:move] onNodeDragStop — hover-snap 위치 조정',
+            childNode.id,
+            childNode.position,
+            '→',
+            adjustedPosition,
+            `(서브트리 delta: ${deltaX}, ${deltaY})`,
+          );
+
           setNodes((currentNodes) => {
             const childrenIds = getSameGraphDescendantIds(
               childNode,
@@ -2335,6 +2692,14 @@ function GraphCanvasInner({
                 : avgChildCenterX > adjustedCenterX;
 
             if (needsMirror) {
+              console.log(
+                '[pos:move] onNodeDragStop — mirrorSubtree 서브트리 대칭이동',
+                childNode.id,
+                '기준축 x:',
+                adjustedCenterX,
+                '대상:',
+                Array.from(childrenIds),
+              );
               setNodes((currentNodes) =>
                 mirrorSubtree(currentNodes, childrenIds, adjustedCenterX),
               );
@@ -2345,6 +2710,10 @@ function GraphCanvasInner({
                 edges,
               );
               if (crossEdges.length > 0) {
+                console.log(
+                  '[edge:cut] onNodeDragStop — 대칭이동에 따른 크로스 그래프 엣지 절단(서버 삭제 포함)',
+                  crossEdges.map((e) => e.id),
+                );
                 const crossEdgeIds = new Set(crossEdges.map((e) => e.id));
                 const remainingEdges = edges.filter(
                   (e) => !crossEdgeIds.has(e.id),
@@ -2365,6 +2734,65 @@ function GraphCanvasInner({
                 );
               }
             }
+
+            // 서브트리 handleSide·내부 엣지 핸들을 새 방향으로 정규화
+            // (누락 시 에러 #008 — subtreeInternalEdgeFilter CONTEXT 참고)
+            console.log(
+              '[handle:move] onNodeDragStop — 재부모화 서브트리 handleSide 변경',
+              childNode.id,
+              '서브트리:',
+              Array.from(childrenIds),
+              '→',
+              sideRelativeToParent,
+            );
+            setNodes((prev) =>
+              prev.map((n) =>
+                childrenIds.has(n.id)
+                  ? {
+                      ...n,
+                      data: { ...n.data, handleSide: sideRelativeToParent },
+                    }
+                  : n,
+              ),
+            );
+            const isReparentInternal = subtreeInternalEdgeFilter(
+              childNode.id,
+              childrenIds,
+            );
+            const reparentSourceHandle = resolveHandleId(
+              'source',
+              sideRelativeToParent,
+            );
+            const reparentTargetHandle = resolveHandleId(
+              'target',
+              sideRelativeToParent,
+            );
+            console.log(
+              '[handle:move] onNodeDragStop — 재부모화 서브트리 내부 엣지 핸들 변경',
+              edges.filter(isReparentInternal).map((e) => e.id),
+              '→',
+              {
+                sourceHandle: reparentSourceHandle,
+                targetHandle: reparentTargetHandle,
+              },
+            );
+            setEdges((prev) =>
+              prev.map((e) =>
+                isReparentInternal(e)
+                  ? {
+                      ...e,
+                      sourceHandle: reparentSourceHandle,
+                      targetHandle: reparentTargetHandle,
+                    }
+                  : e,
+              ),
+            );
+            persistSubtreeEdgeHandles(
+              workspaceId,
+              edges,
+              isReparentInternal,
+              sideRelativeToParent,
+            );
           }
 
           // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
@@ -2389,6 +2817,14 @@ function GraphCanvasInner({
           const dragStopTargetHandle = `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`;
           const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
           backfillMainColor(parentNode.id, dragStopColor);
+          console.log(
+            '[handle:save] onNodeDragStop — 새 부모 엣지 생성 요청(핸들 포함 서버 저장)',
+            { source: parentNode.id, target: childNode.id },
+            {
+              sourceHandle: dragStopSourceHandle,
+              targetHandle: dragStopTargetHandle,
+            },
+          );
           createEdge(
             workspaceId,
             parentNode.id,
@@ -2484,59 +2920,35 @@ function GraphCanvasInner({
       // 드래그 위치 초기화
       previousDragPositionRef.current = null;
 
-      // API: 드래그된 노드 위치 저장 (hover-snap 시 adjustedPosition 사용)
-      moveNode(workspaceId, draggedNode.id, {
-        x: finalPosition.x,
-        y: finalPosition.y,
-      }).catch((err) => console.error('[moveNode] failed', err));
-
-      // API: 함께 이동된 자식 노드들 위치 저장
-      // 주의: fx/fy는 위에서 이미 해제되었으므로 d3Node의 x/y(중심점)를 사용
-      draggedChildrenIds.forEach((childId) => {
-        const d3Child = d3NodesRef.current.find((n) => n.id === childId);
-        if (d3Child?.x != null && d3Child?.y != null) {
-          const childNode = nodes.find((n) => n.id === childId);
-          const childWidth = childNode?.width ?? NODE_WIDTH;
-          const childHeight = childNode?.height ?? NODE_HEIGHT;
-          moveNode(workspaceId, childId, {
-            x: d3Child.x - childWidth / 2,
-            y: d3Child.y - childHeight / 2,
-          }).catch((err) =>
-            console.error(`[moveNode child ${childId}] failed`, err),
-          );
-        }
-      });
-
-      // 다중 선택 드래그: 다른 선택 노드들과 그 서브트리 위치 저장
+      // API: 위치 저장 — root만 PATCH하고 서버의 자손 delta 전파와 어긋나는
+      // 자손만 순차 보정한다 (saveDragPositions CONTEXT 참고)
+      const rootsToSave: Array<{
+        id: string;
+        final?: { x: number; y: number };
+      }> = [
+        {
+          id: draggedNode.id,
+          final: { x: finalPosition.x, y: finalPosition.y },
+        },
+      ];
       if (isMultiDragRef.current) {
-        const otherSelected = nodesRef.current.filter(
-          (n) => n.selected && n.id !== draggedNode.id,
-        );
-        otherSelected.forEach((selNode) => {
-          const d3sel = d3NodesRef.current.find((n) => n.id === selNode.id);
-          if (d3sel?.x != null && d3sel?.y != null) {
-            moveNode(workspaceId, selNode.id, {
-              x: d3sel.x - (selNode.width ?? NODE_WIDTH) / 2,
-              y: d3sel.y - (selNode.height ?? NODE_HEIGHT) / 2,
-            }).catch((err) =>
-              console.error(`[moveNode selected ${selNode.id}] failed`, err),
-            );
-          }
-          getDescendantIds(selNode.id, edges).forEach((childId) => {
-            const d3c = d3NodesRef.current.find((n) => n.id === childId);
-            if (d3c?.x != null && d3c?.y != null) {
-              const childNode = nodesRef.current.find((n) => n.id === childId);
-              moveNode(workspaceId, childId, {
-                x: d3c.x - (childNode?.width ?? NODE_WIDTH) / 2,
-                y: d3c.y - (childNode?.height ?? NODE_HEIGHT) / 2,
-              }).catch((err) =>
-                console.error(`[moveNode selected child ${childId}] failed`, err),
-              );
-            }
-          });
-        });
+        nodesRef.current
+          .filter((n) => n.selected && n.id !== draggedNode.id)
+          .forEach((n) => rootsToSave.push({ id: n.id }));
         isMultiDragRef.current = false;
       }
+      const startPositions = dragStartPositionsRef.current;
+      // setTimeout(0): 이 핸들러의 snap·대칭이동 setNodes가 커밋된 뒤
+      // nodesRef에서 최신 위치를 읽는다
+      setTimeout(() => {
+        void saveDragPositions(
+          workspaceId,
+          rootsToSave,
+          nodesRef.current,
+          edges,
+          startPositions,
+        );
+      }, 0);
     },
     [
       nodes,

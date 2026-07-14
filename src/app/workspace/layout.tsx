@@ -166,6 +166,10 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
           nodeData.nodes ?? [],
           nodeData.edges ?? [],
         );
+        console.log(
+          '[pos:recv] 초기 sync — 서버 저장 위치 전체 수신',
+          flowNodes.map((n) => ({ id: n.id, ...n.position })),
+        );
         setNodes(flowNodes);
         setEdges(flowEdges);
         // setWorkspaceMembers(members);
