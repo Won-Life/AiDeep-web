@@ -2824,9 +2824,11 @@ function GraphCanvasInner({
             if (d3n.y != null) d3n.y += deltaY;
           });
 
-          // 메인 드래그 편입: 상대 노드(childNode)+서브트리는 draggedNode 기준 저장 집합에
-          // 안 잡히므로 여기서 집합을 넘겨 종료 시 별도 저장(§10-7). 비메인은 childNode===draggedNode라 불필요.
-          if (draggedIsMain) incorporatedIds = [...snapMovedIds];
+          // 메인 드래그 편입: 상대 노드(childNode) 트리는 draggedNode 기준 저장 집합에
+          // 안 잡히므로 종료 시 별도 저장(§10-7). 비메인은 childNode===draggedNode라 불필요.
+          // 서브트리 root만 넘긴다 — saveDragPositions가 자손 보정까지 수행하므로
+          // 자손을 개별 root로 태우면 자손 수만큼 중복 PATCH가 된다.
+          if (draggedIsMain) incorporatedIds = [childNode.id];
 
           // 5. 서브트리 대칭 이동이 필요한지 확인 후 실행 (같은 그래프 노드만)
           const childrenIds = getSameGraphDescendantIds(childNode, nodes, edges);
