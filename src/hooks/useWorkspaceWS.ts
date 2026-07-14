@@ -14,7 +14,11 @@ import type {
 import type { Node, Edge } from '@xyflow/react';
 import type { Dispatch, SetStateAction, RefObject } from 'react';
 import { DEFAULT_NODE_COLOR } from '@/features/graph/constants/colors';
-import { getDescendantIds } from '@/features/graph/utils/graphUtils';
+import {
+  getDescendantIds,
+  applyDepthOnEdgeCreate,
+  applyDepthOnEdgeDelete,
+} from '@/features/graph/utils/graphUtils';
 
 const TRANSITION_DURATION = 300;
 const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;
@@ -161,6 +165,8 @@ export function useWorkspaceWS({
         data: {
           title: e.node.title,
           isMain: e.node.nodeType === 'PROJECT',
+          // NODE_CREATE payload에 depth가 없음(Aideep_backend#63) — 서버 생성 초기값 0과 동일
+          depth: 0,
           color: e.node.data?.color ?? DEFAULT_NODE_COLOR.bg,
           textColor: e.node.data?.textColor ?? DEFAULT_NODE_COLOR.text,
         },
@@ -183,9 +189,17 @@ export function useWorkspaceWS({
     };
 
     const handleEdgeDelete = (e: WsEdgeDeletedEvent) => {
+      // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용.
+      // target 식별을 위해 제거 전에 엣지를 찾아둔다.
+      const removedEdge = edgesRef.current.find((edge) => edge.id === e.edgeId);
       setEdgesRef.current((prev) =>
         prev.filter((edge) => edge.id !== e.edgeId),
       );
+      if (removedEdge) {
+        setNodesRef.current((prev) =>
+          applyDepthOnEdgeDelete(prev, edgesRef.current, removedEdge.target),
+        );
+      }
     };
 
     const handleNodeUpdate = (e: WsNodeUpdateEvent) => {
@@ -239,6 +253,16 @@ export function useWorkspaceWS({
         targetHandle: e.edge.targetHandle,
       };
       setEdgesRef.current((prev) => [...prev, newEdge]);
+      // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+      // (target의 자손 순회에 새 엣지는 불필요 — edgesRef가 아직 갱신 전이어도 안전)
+      setNodesRef.current((prev) =>
+        applyDepthOnEdgeCreate(
+          prev,
+          edgesRef.current,
+          e.edge.sourceId,
+          e.edge.targetId,
+        ),
+      );
     };
 
     const handleError = (err: unknown) => {

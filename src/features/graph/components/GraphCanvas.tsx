@@ -43,6 +43,8 @@ import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
 import {
   getDescendantIds,
   getSameColorDescendantIds,
+  applyDepthOnEdgeCreate,
+  applyDepthOnEdgeDelete,
 } from '../utils/graphUtils';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
@@ -690,6 +692,7 @@ export function convertToReactFlow(
       textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
       isMain: n.node_type === 'PROJECT',
       nodeType: n.node_type,
+      depth: n.depth ?? 0,
     },
   }));
 
@@ -1238,6 +1241,12 @@ function GraphCanvasInner({
                   let updatedNodes = currentNodes;
 
                   removedEdges.forEach((edge) => {
+                    // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+                    updatedNodes = applyDepthOnEdgeDelete(
+                      updatedNodes,
+                      updatedEdges,
+                      edge.target,
+                    );
                     const remainingParentId = getParentId(
                       edge.target,
                       updatedEdges,
@@ -1473,6 +1482,8 @@ function GraphCanvasInner({
               targetHandle: resolvedTargetHandle,
             },
           ]);
+          // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+          setNodes((prev) => applyDepthOnEdgeCreate(prev, edges, sourceId, targetId));
           if (colorToPropagate) {
             getRecolorTargetIds(targetId, nodes, edges).forEach((id) =>
               updateNodeContent(workspaceId, id, {
@@ -1583,6 +1594,7 @@ function GraphCanvasInner({
               data: {
                 title: '',
                 isMain: false,
+                depth: 0, // 서버 생성 초기값과 동일 — 엣지 생성 성공 시 전파로 갱신
                 color: colorPair.bg,
                 textColor: colorPair.text,
                 handleSide: side,
@@ -1611,6 +1623,10 @@ function GraphCanvasInner({
                   targetHandle: targetHandleId,
                 },
               ]);
+              // 방금 만든 노드는 자손이 없으므로 엣지 목록 없이 depth만 전파
+              setNodes((prev) =>
+                applyDepthOnEdgeCreate(prev, [], fromNode.id, nodeId),
+              );
             })
             .catch((err) =>
               console.error('[onConnectEnd] createEdge failed', err),
@@ -1710,6 +1726,7 @@ function GraphCanvasInner({
             data: {
               title: '',
               isMain: false,
+              depth: 0, // 서버 생성 초기값과 동일
               color: colorPair.bg,
               textColor: colorPair.text,
             },
@@ -1838,6 +1855,7 @@ function GraphCanvasInner({
             data: {
               title: payload.name,
               isMain: false,
+              depth: 0, // 서버 생성 초기값과 동일 — 연결 시 전파로 갱신
               color: colorPair.bg,
               textColor: colorPair.text,
               ...(dropSide && { handleSide: dropSide }),
@@ -1867,6 +1885,10 @@ function GraphCanvasInner({
                   targetHandle,
                 },
               ]);
+              // 방금 만든 노드는 자손이 없으므로 엣지 목록 없이 depth만 전파
+              setNodes((prev) =>
+                applyDepthOnEdgeCreate(prev, [], targetParent.id, nodeId),
+              );
             })
             .catch((err) => console.error('[onDrop] createEdge failed', err));
         }
