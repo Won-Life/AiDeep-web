@@ -2122,7 +2122,17 @@ function GraphCanvasInner({
             );
             if (crossEdges.length > 0) {
               const crossEdgeIds = new Set(crossEdges.map((e) => e.id));
+              const remainingEdges = edges.filter(
+                (e) => !crossEdgeIds.has(e.id),
+              );
               setEdges((prev) => prev.filter((e) => !crossEdgeIds.has(e.id)));
+              // 서버가 각 엣지 삭제 시 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+              setNodes((prev) =>
+                crossEdges.reduce(
+                  (acc, e) => applyDepthOnEdgeDelete(acc, remainingEdges, e.target),
+                  prev,
+                ),
+              );
               crossEdges.forEach((e) =>
                 deleteEdge(workspaceId, e.id).catch((err) =>
                   console.error(`[deleteEdge mirror ${e.id}] failed`, err),
@@ -2336,7 +2346,18 @@ function GraphCanvasInner({
               );
               if (crossEdges.length > 0) {
                 const crossEdgeIds = new Set(crossEdges.map((e) => e.id));
+                const remainingEdges = edges.filter(
+                  (e) => !crossEdgeIds.has(e.id),
+                );
                 setEdges((prev) => prev.filter((e) => !crossEdgeIds.has(e.id)));
+                // 서버가 각 엣지 삭제 시 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+                setNodes((prev) =>
+                  crossEdges.reduce(
+                    (acc, e) =>
+                      applyDepthOnEdgeDelete(acc, remainingEdges, e.target),
+                    prev,
+                  ),
+                );
                 crossEdges.forEach((e) =>
                   deleteEdge(workspaceId, e.id).catch((err) =>
                     console.error(`[deleteEdge mirror ${e.id}] failed`, err),
@@ -2354,6 +2375,10 @@ function GraphCanvasInner({
               : prev,
           );
           if (existingParentEdge) {
+            // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+            setNodes((prev) =>
+              applyDepthOnEdgeDelete(prev, edges, existingParentEdge.target),
+            );
             deleteEdge(workspaceId, existingParentEdge.id).catch((err) =>
               console.error('[deleteEdge re-parent] failed', err),
             );
@@ -2383,6 +2408,10 @@ function GraphCanvasInner({
                   targetHandle: dragStopTargetHandle,
                 },
               ]);
+              // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+              setNodes((prev) =>
+                applyDepthOnEdgeCreate(prev, edges, parentNode.id, childNode.id),
+              );
               getRecolorTargetIds(childNode.id, nodes, edges).forEach((id) =>
                 updateNodeContent(workspaceId, id, {
                   color: dragStopColor.bg,
