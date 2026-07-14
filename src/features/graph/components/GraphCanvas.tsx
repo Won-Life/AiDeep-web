@@ -45,6 +45,7 @@ import {
   getSameColorDescendantIds,
   applyDepthOnEdgeCreate,
   applyDepthOnEdgeDelete,
+  isRootNode,
 } from '../utils/graphUtils';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
@@ -634,6 +635,9 @@ function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
   return nodes.map((node) => {
     if (node.data?.isMain) return node;
 
+    // root 판별은 depth === 0 (issue #99) — 핸들 방향만 incoming edge에서 유도
+    const hasParent = !isRootNode(node);
+
     // Case 1: target 노드 (부모가 있음) → incoming edge의 sourceHandle로 방향 결정
     const incomingEdge = edges.find((e) => e.target === node.id);
     if (incomingEdge) {
@@ -645,12 +649,12 @@ function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
             : undefined;
       return {
         ...node,
-        data: { ...node.data, handleSide: side, hasParent: true },
+        data: { ...node.data, handleSide: side, hasParent },
       };
     }
 
-    // Case 2: 부모 없는 non-main 노드 → hasParent: false만 표시
-    return { ...node, data: { ...node.data, hasParent: false } };
+    // Case 2: 부모 없는 non-main 노드
+    return { ...node, data: { ...node.data, hasParent } };
   });
 }
 
@@ -1060,10 +1064,8 @@ function GraphCanvasInner({
   };
 
   const nodesWithCallbacks = nodes.map((node) => {
-    const parentId = getParentId(node.id, edges);
-
-    // 부모가 없는 서브 노드는 양쪽에 핸들 표시
-    const hasParent = parentId !== null;
+    // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
+    const hasParent = !isRootNode(node);
 
     const isContextMenuOpen = contextMenuNodeId === node.id;
     const isEditorOpen = aggregateOpenNodeIds.includes(node.id);
@@ -2239,7 +2241,7 @@ function GraphCanvasInner({
           // 2. 연결 방향 결정
           // 부모 노드가 root인 경우: 자식 노드의 위치 기준 (부모 좌우 어디에 있나)
           // 부모 노드가 depth>0 인 경우: 자식 노드는 부모 노드의 handleSide 계승 (같은 방향으로 뻗어나감)
-          const parentHasParent = getParentId(parentNode.id, edges) !== null;
+          const parentHasParent = !isRootNode(parentNode);
           const sideRelativeToParent: 'left' | 'right' = parentHasParent
             ? ((parentNode.data?.handleSide as 'left' | 'right' | undefined) ??
               getTargetSideRelativeToParent(

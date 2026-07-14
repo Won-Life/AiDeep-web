@@ -5,6 +5,7 @@ import {
   getSameColorDescendantIds,
   applyDepthOnEdgeCreate,
   applyDepthOnEdgeDelete,
+  isRootNode,
 } from './graphUtils'
 
 function e(source: string, target: string): Edge {
@@ -152,5 +153,20 @@ describe('applyDepthOnEdgeDelete', () => {
   it('target 노드가 없으면 아무것도 바꾸지 않는다', () => {
     const nodes = [n('A', 0)]
     expect(applyDepthOnEdgeDelete(nodes, [], 'X')).toBe(nodes)
+  })
+})
+
+describe('isRootNode', () => {
+  it('depth 0이면 root다', () => {
+    expect(isRootNode(n('A', 0))).toBe(true)
+  })
+
+  it('depth > 0이면 root가 아니다', () => {
+    expect(isRootNode(n('A', 1))).toBe(false)
+    expect(isRootNode(n('A', 3))).toBe(false)
+  })
+
+  it('depth가 없으면 0으로 취급해 root다', () => {
+    expect(isRootNode(n('A'))).toBe(true)
   })
 })

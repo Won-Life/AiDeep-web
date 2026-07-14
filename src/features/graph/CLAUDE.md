@@ -1,5 +1,12 @@
 # 그래프 캔버스 도메인 규칙
 
+## depth와 root 판별 (issue #99)
+
+- 모든 노드는 `data.depth`(트리 root로부터의 거리)를 가진다. 초기값은 sync 응답의 서버값, 신규 노드는 0.
+- **root(부모 없는 노드) 판별은 `isRootNode(node)`(= depth === 0) 단일 기준.** 엣지 스캔으로 재유도하지 않는다. `isMain`(PROJECT 노드)은 별개 개념 — 연결 안 된 일반 노드도 root다.
+- 서버는 depth를 엣지 생성·삭제 시에만 갱신하고(`propagateDepth`), 갱신값을 WS·REST 응답에 싣지 않는다. 따라서 클라이언트는 엣지 상태가 바뀌는 모든 지점(본인 REST 성공·WS EDGE_CREATE/EDGE_DELETED)에서 `applyDepthOnEdgeCreate/Delete`(graphUtils)로 서버와 동일 규칙을 로컬 적용한다. 규칙은 graphUtils 테스트가 고정 — 서버 `propagateDepth`가 바뀌면 함께 바꾼다. 서버가 갱신값을 보내주면(Aideep_backend#63) 수신값 적용으로 교체.
+- 알려진 공백: 서버 `deleteNode`가 depth를 전파하지 않아(Aideep_backend#64), 노드 삭제로 부모를 잃은 크로스 그래프 root는 depth≠0으로 남는다. 클라이언트도 동률 유지(미전파)한다 — 새로고침 시 sync가 서버값으로 되돌리므로.
+
 ## Optimistic Update 패턴 (필수)
 
 본인 action → REST 응답 즉시 local state 반영. 협업자 action → WS 이벤트로만 반영.

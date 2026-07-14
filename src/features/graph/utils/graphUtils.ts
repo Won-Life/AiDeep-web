@@ -74,6 +74,12 @@ function shiftSubtreeDepth(
   );
 }
 
+/** root(부모 없는 노드) 판별 — 서버가 유지하는 depth 0이 단일 기준 (issue #99).
+ *  주의: isMain(PROJECT 노드)과는 다른 개념 — 연결 안 된 일반 노드도 root다. */
+export function isRootNode(node: Node): boolean {
+  return depthOf(node) === 0;
+}
+
 /** 서버 규칙 미러링(node.service.ts propagateDepth, increase=true):
  *  엣지 생성 시 target과 그 자손 전체 depth += source.depth + 1 */
 export function applyDepthOnEdgeCreate(
