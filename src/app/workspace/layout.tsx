@@ -21,6 +21,7 @@ import { convertToReactFlow } from '@/features/graph/components/GraphCanvas';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
 import { onPresenceState } from '@/api/ws';
 import { getCursorColor } from '@/utils/cursorColor';
+import { SHOW_TEMP_HIDDEN_UI } from '@/lib/uiFlags';
 import { type NodeView } from '@/features/nodes/TextUpdateNode';
 import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
 
@@ -101,7 +102,11 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     ),
   );
 
-  const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
+  const sidebarWidth = !SHOW_TEMP_HIDDEN_UI
+    ? 0
+    : isSidebarOpen
+      ? SIDEBAR_WIDTH
+      : VISIBLE_BUTTON_WIDTH;
 
   useEffect(() => {
     setSidebarWidth(sidebarWidth);
@@ -161,7 +166,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
       })
       .then((results) => {
         if (!results) return;
-        const [nodeData, members] = results;
+        const [nodeData] = results;
         const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
           nodeData.nodes ?? [],
           nodeData.edges ?? [],
@@ -299,6 +304,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     <div className="relative w-full h-screen overflow-hidden">
       <div className="absolute inset-0 z-0">{children}</div>
 
+      {SHOW_TEMP_HIDDEN_UI && (
       <Sidebar
         isOpen={isSidebarOpen}
         onToggle={handleToggleSidebar}
@@ -316,6 +322,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         onStartEditSubItem={startEditSubItem}
         onToggleExpand={toggleExpand}
       />
+      )}
 
       <ChipHeader
         sidebarWidth={sidebarWidth}

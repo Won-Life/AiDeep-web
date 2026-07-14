@@ -31,6 +31,11 @@
       "completed_at": "2026-07-06T12:54:05+0900"
     },
     {
+      "dir": "issue-92-single-parent",
+      "status": "completed",
+      "completed_at": "2026-07-06T13:20:00+0900"
+    },
+    {
       "dir": "issue-99-depth-root",
       "status": "completed",
       "completed_at": "2026-07-14T17:56:04+0900"

@@ -36,8 +36,8 @@ export async function createProjectNode(
   workspaceId: string,
   title: string,
   position: Position,
-): Promise<void> {
-  await api(`/workspace/${workspaceId}/node/project`, {
+): Promise<{ nodeId: string }> {
+  return api<{ nodeId: string }>(`/workspace/${workspaceId}/node/project`, {
     method: "POST",
     body: JSON.stringify({ title, position }),
   });
