@@ -281,6 +281,47 @@ function isInvalidConnection(
   return false;
 }
 
+/**
+ * 핸들 드래그 연결의 실제 부모/자식 방향을 결정한다.
+ * onConnect와 isValidConnection이 같은 규칙을 공유해야 단일 부모 검사가
+ * swap 케이스(단독 노드 편입, main 노드가 target)에서 어긋나지 않는다.
+ */
+function resolveConnectionDirection(
+  source: string,
+  target: string,
+  nodes: Node[],
+  edges: Edge[],
+): {
+  sourceId: string;
+  targetId: string;
+  shouldSwap: boolean;
+  bothInGraphs: boolean;
+} {
+  const sourceIsMain = nodes.find((n) => n.id === source)?.data?.isMain === true;
+  const targetIsMain = nodes.find((n) => n.id === target)?.data?.isMain === true;
+
+  const sourceEdgeCount = edges.filter(
+    (e) => e.source === source || e.target === source,
+  ).length;
+  const targetEdgeCount = edges.filter(
+    (e) => e.source === target || e.target === target,
+  ).length;
+
+  const shouldSwap =
+    // 케이스 1: main(프로젝트) 노드는 항상 부모
+    ((sourceIsMain || targetIsMain) && !sourceIsMain) ||
+    // 케이스 2: 단독 노드가 그래프에 연결되면 그래프 쪽이 부모
+    (sourceEdgeCount === 0 && targetEdgeCount > 0);
+
+  return {
+    sourceId: shouldSwap ? target : source,
+    targetId: shouldSwap ? source : target,
+    shouldSwap,
+    // 두 노드 모두 기존 그래프(1개 이상의 연결)에 속함 → 색상·위치 유지, 연결만 생성
+    bothInGraphs: sourceEdgeCount > 0 && targetEdgeCount > 0,
+  };
+}
+
 function rectForNode(node: Node) {
   return {
     left: node.position.x,
@@ -1318,6 +1359,17 @@ function GraphCanvasInner({
         return false;
       }
 
+      // 단일 부모 불변식 (#92): swap 이후의 실제 자식이 이미 부모를 가지면 차단
+      const { targetId } = resolveConnectionDirection(
+        connection.source,
+        connection.target,
+        nodes,
+        edges,
+      );
+      if (getParentId(targetId, edges) !== null) {
+        return false;
+      }
+
       return true;
     },
     [nodes, edges],
@@ -1326,18 +1378,6 @@ function GraphCanvasInner({
   const onConnect = useCallback(
     (params: Connection) => {
       if (!params.source || !params.target) return;
-
-      const sourceNode = nodes.find((n) => n.id === params.source);
-      const targetNode = nodes.find((n) => n.id === params.target);
-      const sourceIsMain = sourceNode?.data?.isMain === true;
-      const targetIsMain = targetNode?.data?.isMain === true;
-
-      const sourceEdgeCount = edges.filter(
-        (e) => e.source === params.source || e.target === params.source,
-      ).length;
-      const targetEdgeCount = edges.filter(
-        (e) => e.source === params.target || e.target === params.target,
-      ).length;
 
       /*
        * CONTEXT
@@ -1350,19 +1390,16 @@ function GraphCanvasInner({
        *                  드래그 방향을 무시하게 되어 제거.
        * - Trade-offs   : 단독 노드 → 그래프 연결(케이스 2)은 여전히 그래프 쪽이 부모가 되어
        *                  색을 전파한다 (단독 노드가 그래프에 편입되는 시나리오).
-       * - Edge Case    : B가 이미 부모를 가진 노드면 incoming 엣지가 2개가 된다 (허용).
+       * - Edge Case    : 실제 자식(swap 이후 targetId)이 이미 부모를 가지면 연결 자체를
+       *                  차단한다 — 단일 부모 불변식 (#92). 과거에는 incoming 2개를
+       *                  허용했으나 트리 전제(getParentId 단일 반환)와 충돌해 버그로 재분류.
        */
-      // 두 노드 모두 기존 그래프(1개 이상의 연결)에 속함 → 색상·위치 유지, 연결만 생성
-      const bothInGraphs = sourceEdgeCount > 0 && targetEdgeCount > 0;
+      const { sourceId, targetId, shouldSwap, bothInGraphs } =
+        resolveConnectionDirection(params.source, params.target, nodes, edges);
 
-      const shouldSwap =
-        // 케이스 1: main(프로젝트) 노드는 항상 부모
-        ((sourceIsMain || targetIsMain) && !sourceIsMain) ||
-        // 케이스 2: 단독 노드가 그래프에 연결되면 그래프 쪽이 부모
-        (sourceEdgeCount === 0 && targetEdgeCount > 0);
-
-      const sourceId = shouldSwap ? params.target : params.source;
-      const targetId = shouldSwap ? params.source : params.target;
+      // 단일 부모 불변식 (#92): 실제 자식이 이미 부모를 가지면 연결하지 않는다.
+      // isValidConnection이 드래그 중에 걸러주지만, 프로그래매틱 연결 대비 이중 방어.
+      if (getParentId(targetId, edges) !== null) return;
 
       const srcNode = nodes.find((n) => n.id === sourceId);
       const tgtNode = nodes.find((n) => n.id === targetId);
@@ -2546,7 +2583,7 @@ function GraphCanvasInner({
           onClick={handleCloseAllPanels}
           // top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
           // top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치.
-          className="absolute top-20 right-4 z-40 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+          className="absolute top-20 right-4 z-40 rounded-md border border-main bg-background px-3 py-1.5 text-sm shadow-[0_0_8px_rgb(var(--ds-main)/0.5)] transition hover:scale-105"
         >
           에디터 모두 닫기
         </button>
