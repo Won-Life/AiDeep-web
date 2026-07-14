@@ -190,7 +190,7 @@ export default function UserMenu({
           className="text-[#2c2c2c] whitespace-nowrap"
           style={{
             fontFamily: "Pretendard, sans-serif",
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 400,
             lineHeight: "20px",
           }}
@@ -286,7 +286,7 @@ export default function UserMenu({
                     className="text-[#2c2c2c] bg-transparent border-b border-[#2c2c2c] outline-none text-center w-full"
                     style={{
                       fontFamily: "Pretendard, sans-serif",
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: 400,
                       lineHeight: "20px",
                     }}
@@ -298,7 +298,7 @@ export default function UserMenu({
                       className="text-[#2c2c2c] whitespace-nowrap"
                       style={{
                         fontFamily: "Pretendard, sans-serif",
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: 400,
                         lineHeight: "20px",
                       }}
@@ -321,7 +321,7 @@ export default function UserMenu({
                 className="text-[#b8b8b8] w-full text-center truncate"
                 style={{
                   fontFamily: "Pretendard, sans-serif",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 400,
                   lineHeight: "18px",
                 }}
@@ -346,7 +346,7 @@ export default function UserMenu({
                 className="text-[#2c2c2c] whitespace-nowrap"
                 style={{
                   fontFamily: "Pretendard, sans-serif",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 400,
                   lineHeight: "18px",
                 }}
@@ -368,7 +368,7 @@ export default function UserMenu({
                 className="text-[#6d3537] whitespace-nowrap"
                 style={{
                   fontFamily: "Pretendard, sans-serif",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 400,
                   lineHeight: "18px",
                 }}

@@ -49,7 +49,7 @@ export default function MembersModal() {
         <span
           style={{
             fontFamily: "Pretendard, sans-serif",
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 500,
             color: "#2c2c2c",
           }}
@@ -68,7 +68,7 @@ export default function MembersModal() {
           className="px-4"
           style={{
             fontFamily: "Pretendard, sans-serif",
-            fontSize: 11,
+            fontSize: 12,
             color: "#b8b8b8",
             lineHeight: "18px",
             marginBottom: 4,
@@ -82,7 +82,7 @@ export default function MembersModal() {
             className="px-4"
             style={{
               fontFamily: "Pretendard, sans-serif",
-              fontSize: 12,
+              fontSize: 13,
               color: "#b8b8b8",
               lineHeight: "20px",
               paddingTop: 6,
@@ -115,7 +115,7 @@ export default function MembersModal() {
                   className="truncate"
                   style={{
                     fontFamily: "Pretendard, sans-serif",
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: 500,
                     color: "#2c2c2c",
                     lineHeight: "20px",
@@ -126,7 +126,7 @@ export default function MembersModal() {
                 <span
                   style={{
                     fontFamily: "Pretendard, sans-serif",
-                    fontSize: 11,
+                    fontSize: 12,
                     color: "#b8b8b8",
                     lineHeight: "16px",
                   }}
@@ -145,7 +145,7 @@ export default function MembersModal() {
                     backgroundColor: "#fee6e7",
                     color: "#6d3537",
                     fontFamily: "Pretendard, sans-serif",
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 400,
                     padding: "4px 8px",
                     opacity: deletingIds.has(member.userId) ? 0.5 : 1,

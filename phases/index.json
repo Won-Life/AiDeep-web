@@ -1,3 +1,39 @@
 {
-  "phases": []
+  "phases": [
+    {
+      "dir": "resource-tree-spine",
+      "status": "completed",
+      "completed_at": "2026-07-06T00:22:39+0900"
+    },
+    {
+      "dir": "issue-32-close-all-editors",
+      "status": "completed",
+      "completed_at": "2026-07-06T01:40:38+0900"
+    },
+    {
+      "dir": "issue-95-font-size-bump",
+      "status": "completed",
+      "completed_at": "2026-07-06T01:50:58+0900"
+    },
+    {
+      "dir": "issue-94-edge-length",
+      "status": "completed",
+      "completed_at": "2026-07-06T02:21:09+0900"
+    },
+    {
+      "dir": "issue-98-personal-workspace",
+      "status": "completed",
+      "completed_at": "2026-07-06T03:50:04+0900"
+    },
+    {
+      "dir": "issue-88-token-storage",
+      "status": "completed",
+      "completed_at": "2026-07-06T12:54:05+0900"
+    },
+    {
+      "dir": "issue-92-single-parent",
+      "status": "completed",
+      "completed_at": "2026-07-06T13:20:00+0900"
+    }
+  ]
 }
