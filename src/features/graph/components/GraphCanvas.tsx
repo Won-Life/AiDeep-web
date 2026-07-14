@@ -25,6 +25,7 @@ import {
   type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import ZoomControl from '@/components/ui/ZoomControl';
 import * as d3 from 'd3';
 import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
@@ -2648,10 +2649,12 @@ function GraphCanvasInner({
         {...(savedViewport
           ? { defaultViewport: savedViewport }
           : { fitView: true })}
+        minZoom={0.25}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
       <CursorOverlay cursors={cursors} />
+      <ZoomControl />
       {myOpenEditorNodeIds.length > 0 && (
         <button
           type="button"
