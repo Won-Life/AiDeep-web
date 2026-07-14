@@ -161,7 +161,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
       })
       .then((results) => {
         if (!results) return;
-        const [nodeData, members] = results;
+        const [nodeData] = results;
         const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
           nodeData.nodes ?? [],
           nodeData.edges ?? [],
