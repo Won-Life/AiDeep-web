@@ -168,7 +168,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 **드래그 중 대칭** — 메인 노드의 직계 자식을 드래그해 메인 노드의 좌우 축을 넘긴 순간:
 
 - [x] 드래그 노드는 마우스를 그대로 따라가고, 서브트리만 드래그 노드 기준 거리를 유지한 채 반대편으로 대칭 이동 — **d3 시뮬레이션 좌표를 직접 변경**하므로 드래그 종료 시 새 위치가 서버에 저장됨
-- [x] 드래그 노드 + 서브트리의 handleSide와 관련 엣지의 핸들·허브 좌표를 새 방향으로 일괄 갱신. 드래그 종료 시 시작 시점 핸들 스냅샷(`dragStartEdgeHandlesRef`)과의 diff로 바뀐 엣지만 `PATCH /edge/:edgeId`로 서버 저장 — 반전만 하고 빈 공간에 놓아도 새로고침 후 일관 (§10-3 해결)
+- [x] 드래그 노드 + 서브트리의 handleSide와 관련 엣지의 핸들·허브 좌표를 새 방향으로 일괄 갱신. 드래그 종료 시 시작 시점 핸들 스냅샷(`dragStartEdgeHandlesRef`)과의 diff로 바뀐 엣지만 `PATCH /workspace/:id/edge/:edgeId`로 서버 저장 — 반전만 하고 빈 공간에 놓아도 새로고침 후 일관 (§10-3 해결). handleSide는 노드 로컬 상태라 서버 저장 대상이 아니며, 마운트 시 엣지 `sourceHandle`에서 재유도된다(§4)
 - ⚠️ 메인 노드가 없는 그래프(일반 노드가 루트)에서는 축 판정이 메인 노드 기준이라 **드래그 중 대칭이 아예 동작하지 않음** — #99와 같은 뿌리
 
 **드래그 종료 시 대칭** — 편입 스냅(§3-5) 후 서브트리 평균 중심이 연결 방향 반대에 있으면:
@@ -176,7 +176,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 - [x] 서브트리를 새 부모 기준 축으로 대칭 이동 (`mirrorSubtree`)
 - [x] 뒤집힌 위치를 d3 좌표(`d3NodesRef`)에도 동기화 → 자손 저장이 보정된 위치로 나감 (§10-7 위치 저장 해결). 중심점 대칭이라 `2*axis - center`로 반영
 - [x] 대칭된 자손의 `handleSide`를 새 방향(부모 기준 side)으로 갱신 → 렌더 엣지는 `buildEdgePresentation`이 타깃 노드 handleSide에서 핸들·hub를 재계산하므로(§4) **세션 중 로컬 교차 렌더링은 사라진다**
-- [x] 뒤집힌 자손 handleSide·내부 엣지 핸들은 재부모화 경로의 `persistSubtreeEdgeHandles`가 `PATCH /edge/:edgeId`(백엔드 PR #59)로 서버 저장 — 새로고침 후에도 일관 (§10-3 해결)
+- [x] 뒤집힌 서브트리 내부 엣지 핸들은 재부모화 경로의 `persistSubtreeEdgeHandles`가 `PATCH /workspace/:id/edge/:edgeId`(백엔드 PR #59)로 서버 저장 — 새로고침 후에도 일관 (§10-3 해결). 자손 handleSide는 로컬 갱신뿐이며 마운트 시 저장된 엣지 핸들에서 재유도(§4)
 
 **공통**:
 
