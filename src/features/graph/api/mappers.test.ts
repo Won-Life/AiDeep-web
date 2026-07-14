@@ -8,6 +8,7 @@ const baseNode: NodeDto = {
   title: '테스트 노드',
   node_type: 'DATA',
   content: {},
+  depth: 0,
   version: 1,
   position_x: 100,
   position_y: 200,
@@ -50,6 +51,14 @@ describe('toFlowNode', () => {
   it('node_type이 PROJECT가 아니면 isMain이 false다', () => {
     expect(toFlowNode({ ...baseNode, node_type: 'DATA' }).data.isMain).toBe(false)
     expect(toFlowNode({ ...baseNode, node_type: 'RESOURCE' }).data.isMain).toBe(false)
+  })
+
+  it('depth를 data.depth로 매핑한다', () => {
+    expect(toFlowNode({ ...baseNode, depth: 3 }).data.depth).toBe(3)
+  })
+
+  it('depth가 null(구버전 행)이면 0으로 매핑한다', () => {
+    expect(toFlowNode({ ...baseNode, depth: null }).data.depth).toBe(0)
   })
 
   it('content에 color가 없으면 DEFAULT_NODE_COLOR를 사용한다', () => {

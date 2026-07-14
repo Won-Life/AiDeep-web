@@ -45,6 +45,9 @@ import { getRandomColorPair, DEFAULT_NODE_COLOR, MAIN_NODE_COLOR } from '../cons
 import {
   getDescendantIds,
   getSameColorDescendantIds,
+  applyDepthOnEdgeCreate,
+  applyDepthOnEdgeDelete,
+  isRootNode,
 } from '../utils/graphUtils';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
@@ -653,6 +656,9 @@ function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
   return nodes.map((node) => {
     if (node.data?.isMain) return node;
 
+    // root 판별은 depth === 0 (issue #99) — 핸들 방향만 incoming edge에서 유도
+    const hasParent = !isRootNode(node);
+
     // Case 1: target 노드 (부모가 있음) → incoming edge의 sourceHandle로 방향 결정
     const incomingEdge = edges.find((e) => e.target === node.id);
     if (incomingEdge) {
@@ -664,12 +670,12 @@ function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
             : undefined;
       return {
         ...node,
-        data: { ...node.data, handleSide: side, hasParent: true },
+        data: { ...node.data, handleSide: side, hasParent },
       };
     }
 
-    // Case 2: 부모 없는 non-main 노드 → hasParent: false만 표시
-    return { ...node, data: { ...node.data, hasParent: false } };
+    // Case 2: 부모 없는 non-main 노드
+    return { ...node, data: { ...node.data, hasParent } };
   });
 }
 
@@ -711,6 +717,7 @@ export function convertToReactFlow(
       textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
       isMain: n.node_type === 'PROJECT',
       nodeType: n.node_type,
+      depth: n.depth ?? 0,
     },
   }));
 
@@ -1078,10 +1085,8 @@ function GraphCanvasInner({
   };
 
   const nodesWithCallbacks = nodes.map((node) => {
-    const parentId = getParentId(node.id, edges);
-
-    // 부모가 없는 서브 노드는 양쪽에 핸들 표시
-    const hasParent = parentId !== null;
+    // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
+    const hasParent = !isRootNode(node);
 
     const isContextMenuOpen = contextMenuNodeId === node.id;
     const isEditorOpen = aggregateOpenNodeIds.includes(node.id);
@@ -1259,6 +1264,12 @@ function GraphCanvasInner({
                   let updatedNodes = currentNodes;
 
                   removedEdges.forEach((edge) => {
+                    // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+                    updatedNodes = applyDepthOnEdgeDelete(
+                      updatedNodes,
+                      updatedEdges,
+                      edge.target,
+                    );
                     const remainingParentId = getParentId(
                       edge.target,
                       updatedEdges,
@@ -1508,6 +1519,8 @@ function GraphCanvasInner({
               targetHandle: resolvedTargetHandle,
             },
           ]);
+          // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+          setNodes((prev) => applyDepthOnEdgeCreate(prev, edges, sourceId, targetId));
           if (colorToPropagate) {
             getRecolorTargetIds(targetId, nodes, edges).forEach((id) =>
               updateNodeContent(workspaceId, id, {
@@ -1635,6 +1648,7 @@ function GraphCanvasInner({
               data: {
                 title: '',
                 isMain: false,
+                depth: 0, // 서버 생성 초기값과 동일 — 엣지 생성 성공 시 전파로 갱신
                 color: colorPair.bg,
                 textColor: colorPair.text,
                 handleSide: side,
@@ -1663,6 +1677,10 @@ function GraphCanvasInner({
                   targetHandle: targetHandleId,
                 },
               ]);
+              // 방금 만든 노드는 자손이 없으므로 엣지 목록 없이 depth만 전파
+              setNodes((prev) =>
+                applyDepthOnEdgeCreate(prev, [], fromNode.id, nodeId),
+              );
             })
             .catch((err) =>
               console.error('[onConnectEnd] createEdge failed', err),
@@ -1762,6 +1780,7 @@ function GraphCanvasInner({
             data: {
               title: '',
               isMain: false,
+              depth: 0, // 서버 생성 초기값과 동일
               color: colorPair.bg,
               textColor: colorPair.text,
             },
@@ -1927,6 +1946,7 @@ function GraphCanvasInner({
             data: {
               title: payload.name,
               isMain: false,
+              depth: 0, // 서버 생성 초기값과 동일 — 연결 시 전파로 갱신
               color: colorPair.bg,
               textColor: colorPair.text,
               ...(dropSide && { handleSide: dropSide }),
@@ -1956,6 +1976,10 @@ function GraphCanvasInner({
                   targetHandle,
                 },
               ]);
+              // 방금 만든 노드는 자손이 없으므로 엣지 목록 없이 depth만 전파
+              setNodes((prev) =>
+                applyDepthOnEdgeCreate(prev, [], targetParent.id, nodeId),
+              );
             })
             .catch((err) => console.error('[onDrop] createEdge failed', err));
         }
@@ -2188,7 +2212,17 @@ function GraphCanvasInner({
             );
             if (crossEdges.length > 0) {
               const crossEdgeIds = new Set(crossEdges.map((e) => e.id));
+              const remainingEdges = edges.filter(
+                (e) => !crossEdgeIds.has(e.id),
+              );
               setEdges((prev) => prev.filter((e) => !crossEdgeIds.has(e.id)));
+              // 서버가 각 엣지 삭제 시 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+              setNodes((prev) =>
+                crossEdges.reduce(
+                  (acc, e) => applyDepthOnEdgeDelete(acc, remainingEdges, e.target),
+                  prev,
+                ),
+              );
               crossEdges.forEach((e) =>
                 deleteEdge(workspaceId, e.id).catch((err) =>
                   console.error(`[deleteEdge mirror ${e.id}] failed`, err),
@@ -2311,7 +2345,7 @@ function GraphCanvasInner({
           // 2. 연결 방향 결정
           // 부모 노드가 root인 경우: 자식 노드의 위치 기준 (부모 좌우 어디에 있나)
           // 부모 노드가 depth>0 인 경우: 자식 노드는 부모 노드의 handleSide 계승 (같은 방향으로 뻗어나감)
-          const parentHasParent = getParentId(parentNode.id, edges) !== null;
+          const parentHasParent = !isRootNode(parentNode);
           const sideRelativeToParent: 'left' | 'right' = parentHasParent
             ? ((parentNode.data?.handleSide as 'left' | 'right' | undefined) ??
               getTargetSideRelativeToParent(
@@ -2448,7 +2482,18 @@ function GraphCanvasInner({
               );
               if (crossEdges.length > 0) {
                 const crossEdgeIds = new Set(crossEdges.map((e) => e.id));
+                const remainingEdges = edges.filter(
+                  (e) => !crossEdgeIds.has(e.id),
+                );
                 setEdges((prev) => prev.filter((e) => !crossEdgeIds.has(e.id)));
+                // 서버가 각 엣지 삭제 시 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+                setNodes((prev) =>
+                  crossEdges.reduce(
+                    (acc, e) =>
+                      applyDepthOnEdgeDelete(acc, remainingEdges, e.target),
+                    prev,
+                  ),
+                );
                 crossEdges.forEach((e) =>
                   deleteEdge(workspaceId, e.id).catch((err) =>
                     console.error(`[deleteEdge mirror ${e.id}] failed`, err),
@@ -2466,6 +2511,10 @@ function GraphCanvasInner({
               : prev,
           );
           if (existingParentEdge) {
+            // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+            setNodes((prev) =>
+              applyDepthOnEdgeDelete(prev, edges, existingParentEdge.target),
+            );
             deleteEdge(workspaceId, existingParentEdge.id).catch((err) =>
               console.error('[deleteEdge re-parent] failed', err),
             );
@@ -2495,6 +2544,10 @@ function GraphCanvasInner({
                   targetHandle: dragStopTargetHandle,
                 },
               ]);
+              // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+              setNodes((prev) =>
+                applyDepthOnEdgeCreate(prev, edges, parentNode.id, childNode.id),
+              );
               getRecolorTargetIds(childNode.id, nodes, edges).forEach((id) =>
                 updateNodeContent(workspaceId, id, {
                   color: dragStopColor.bg,

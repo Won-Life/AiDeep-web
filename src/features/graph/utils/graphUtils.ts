@@ -1,4 +1,4 @@
-import type { Edge } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 
 export function getDescendantIds(
   nodeId: string,
@@ -39,6 +39,72 @@ export function getDescendantIds(
  *                  D는 C를 거쳐야만 도달 가능하므로 결과는 {B} — D는 제외된다.
  *                  C 아래는 다른 그래프의 구조이므로 이것은 의도된 동작이다.
  */
+/*
+ * CONTEXT
+ * - Problem      : 서버는 엣지 생성·삭제 시 노드 depth를 DB에서 갱신하지만(propagateDepth)
+ *                  갱신된 값을 REST 응답·WS 이벤트 어디에도 싣지 않는다. depth를 로컬
+ *                  상태로 쓰려면 클라이언트가 같은 규칙으로 직접 계산해야 한다.
+ * - Why          : depth 변경 규칙이 결정적이고 계산 재료(source depth, target 자손 목록)를
+ *                  클라이언트가 전부 로컬에 갖고 있으므로, 같은 입력에 같은 규칙을 적용하면
+ *                  서버 DB와 항상 일치한다(상태 기계 복제). 색 경계 BFS가 아닌 전체 BFS를
+ *                  쓰는 이유: 서버 selectAllDescendantIds가 색을 모르고 전체를 순회하므로.
+ * - Alternatives : 서버가 변경된 depth 목록을 응답·이벤트에 포함 — Aideep_backend#63으로
+ *                  요청함. 머지되면 이 계산을 수신값 적용으로 교체한다 (blocking 아님).
+ * - Trade-offs   : 규칙이 서버(propagateDepth)와 이 파일 두 곳에 존재 — 서버 규칙이 바뀌면
+ *                  함께 바꿔야 한다. 아래 테스트가 현재 서버 규칙을 고정한다.
+ * - Edge Case    : depth가 없는 노드(구버전 데이터·매핑 누락)는 0으로 취급. 노드 삭제로
+ *                  엣지가 지워지는 경우 서버도 depth를 전파하지 않으므로(deleteEdgesByNodeId
+ *                  직접 호출) 클라이언트도 호출하지 않는다 — 서버 DB와의 동률이 우선.
+ */
+const depthOf = (node: Node | undefined): number =>
+  typeof node?.data?.depth === "number" ? node.data.depth : 0;
+
+function shiftSubtreeDepth(
+  nodes: Node[],
+  edges: Edge[],
+  rootId: string,
+  delta: number,
+): Node[] {
+  if (delta === 0) return nodes;
+  const targetIds = new Set([rootId, ...getDescendantIds(rootId, edges)]);
+  return nodes.map((node) =>
+    targetIds.has(node.id)
+      ? { ...node, data: { ...node.data, depth: depthOf(node) + delta } }
+      : node,
+  );
+}
+
+/** root(부모 없는 노드) 판별 — 서버가 유지하는 depth 0이 단일 기준 (issue #99).
+ *  주의: isMain(PROJECT 노드)과는 다른 개념 — 연결 안 된 일반 노드도 root다. */
+export function isRootNode(node: Node): boolean {
+  return depthOf(node) === 0;
+}
+
+/** 서버 규칙 미러링(node.service.ts propagateDepth, increase=true):
+ *  엣지 생성 시 target과 그 자손 전체 depth += source.depth + 1 */
+export function applyDepthOnEdgeCreate(
+  nodes: Node[],
+  edges: Edge[],
+  sourceId: string,
+  targetId: string,
+): Node[] {
+  const source = nodes.find((n) => n.id === sourceId);
+  if (!source) return nodes;
+  return shiftSubtreeDepth(nodes, edges, targetId, depthOf(source) + 1);
+}
+
+/** 서버 규칙 미러링(node.service.ts propagateDepth, increase=false):
+ *  엣지 삭제 시 target과 그 자손 전체 depth -= 삭제 직전 target.depth (target은 다시 0) */
+export function applyDepthOnEdgeDelete(
+  nodes: Node[],
+  edges: Edge[],
+  targetId: string,
+): Node[] {
+  const target = nodes.find((n) => n.id === targetId);
+  if (!target) return nodes;
+  return shiftSubtreeDepth(nodes, edges, targetId, -depthOf(target));
+}
+
 export function getSameColorDescendantIds(
   rootId: string,
   edges: Edge[],
