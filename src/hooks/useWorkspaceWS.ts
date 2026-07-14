@@ -87,6 +87,11 @@ export function useWorkspaceWS({
     };
 
     const handleNodeMove = (e: WsNodeMoveEvent) => {
+      console.log(
+        '[pos:recv] WS NODE_MOVE — 서버 저장 위치 수신',
+        e.nodeId,
+        { x: e.x, y: e.y },
+      );
       // 로컬 드래그 중이면 transition 생략 (충돌 방지)
       const useTransition = !isDraggingRef?.current;
       const transitionStyle = useTransition
@@ -210,6 +215,11 @@ export function useWorkspaceWS({
           let updated = node;
 
           if (e.patch.position) {
+            console.log(
+              '[pos:recv] WS NODE_UPDATE — 서버 저장 위치 수신',
+              e.nodeId,
+              e.patch.position,
+            );
             updated = {
               ...updated,
               position: {
@@ -287,6 +297,12 @@ export function useWorkspaceWS({
         const deltaX = payload.x - target.position.x;
         const deltaY = payload.y - target.position.y;
         if (deltaX === 0 && deltaY === 0) return prev;
+
+        console.log(
+          '[pos:recv] WS live position — 협업자 실시간 위치 수신(저장값 아님)',
+          payload.nodeId,
+          { x: payload.x, y: payload.y },
+        );
 
         const childIds = getDescendantIds(payload.nodeId, edgesRef.current);
 
