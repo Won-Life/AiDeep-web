@@ -79,21 +79,38 @@ function getAncestorIds(nodeId: string, edges: Edge[]): Set<string> {
   return ancestors;
 }
 
-function getMainNodeForSubtree(
+/*
+ * CONTEXT
+ * - Problem      : 그래프 기준 노드(대칭 축·같은 그래프 판정·방향 기준점)를 isMain 조상
+ *                  탐색으로 찾아서, 메인 노드 없는 그래프(일반 노드 루트)에서는 undefined가
+ *                  되어 해당 로직이 전부 무력화됐다 (#146).
+ * - Why          : root 판별 단일 기준인 depth === 0(isRootNode, #99)으로 조상 체인을
+ *                  탐색한다. 메인 노드는 항상 depth 0이므로 기존 메인 그래프 동작은 불변.
+ * - Alternatives : 엣지 스캔으로 "부모 없는 조상" 탐색 — #99에서 root 판별을 depth 단일
+ *                  기준으로 통일했으므로 기각 (두 기준 공존 시 WS 수신 타이밍에 분기).
+ * - Trade-offs   : depth가 서버와 어긋난 노드는 오판 가능 — 아래 Edge Case fallback으로 방어.
+ * - Edge Case    : 서버 deleteNode가 depth를 전파하지 않아(Aideep_backend#64) depth≠0인
+ *                  채 루트가 된 노드가 존재할 수 있다 → 조상 체인에 depth 0이 없으면
+ *                  체인 끝(부모 없는 노드)을 루트로 간주한다.
+ */
+function getRootNodeForSubtree(
   nodeId: string,
   nodes: Node[],
   edges: Edge[],
 ): Node | undefined {
   const currentNode = nodes.find((n) => n.id === nodeId);
-  if (currentNode?.data?.isMain) return currentNode;
+  if (!currentNode) return undefined;
+  if (isRootNode(currentNode)) return currentNode;
 
-  const ancestors = getAncestorIds(nodeId, edges);
-  for (const ancestorId of ancestors) {
+  // getAncestorIds는 가까운 부모 → 최상위 순으로 삽입된 Set — 순회 후 last = 체인 끝
+  let last: Node = currentNode;
+  for (const ancestorId of getAncestorIds(nodeId, edges)) {
     const ancestor = nodes.find((n) => n.id === ancestorId);
-    if (ancestor?.data?.isMain) return ancestor;
+    if (!ancestor) continue;
+    if (isRootNode(ancestor)) return ancestor;
+    last = ancestor;
   }
-
-  return undefined;
+  return last;
 }
 
 function getGraphColor(
@@ -469,21 +486,21 @@ function findNonOverlappingPosition(
   return base;
 }
 
-function getForcedOutboundSideForSubNodeInMainGraph(
+function getForcedOutboundSideForSubNode(
   node: Node,
   nodes: Node[],
   edges: Edge[],
 ): 'left' | 'right' | null {
-  if (node.data?.isMain) return null;
+  if (isRootNode(node)) return null;
 
-  const mainNode = getMainNodeForSubtree(node.id, nodes, edges);
-  if (!mainNode) return null;
+  const rootNode = getRootNodeForSubtree(node.id, nodes, edges);
+  if (!rootNode) return null;
 
   const parentId = getParentId(node.id, edges);
   const parentNode = parentId
     ? nodes.find((n) => n.id === parentId)
     : undefined;
-  const referenceX = parentNode?.position.x ?? mainNode.position.x;
+  const referenceX = parentNode?.position.x ?? rootNode.position.x;
 
   // root 노드의 반대 방향(바깥쪽)으로만 새 연결을 허용
   return getTargetSideRelativeToParent(node.position.x, referenceX);
@@ -759,7 +776,7 @@ function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
   const target = nodes.find((node) => node.id === edge.target);
   if (!source || !target) return edge;
 
-  const forcedSourceSide = getForcedOutboundSideForSubNodeInMainGraph(
+  const forcedSourceSide = getForcedOutboundSideForSubNode(
     source,
     nodes,
     edges,
@@ -1566,10 +1583,11 @@ function GraphCanvasInner({
         return false;
       }
 
-      // 같은 그래프 내 노드끼리는 연결 불가 (main ↔ 서브 재연결 방지)
-      const sourceMain = getMainNodeForSubtree(connection.source, nodes, edges);
-      const targetMain = getMainNodeForSubtree(connection.target, nodes, edges);
-      if (sourceMain && targetMain && sourceMain.id === targetMain.id) {
+      // 같은 그래프(같은 depth 0 루트 공유) 내 노드끼리는 연결 불가 (#146 —
+      // 메인 노드 없는 그래프에서도 동작. 루트 ↔ 서브 재연결·조상·형제 연결 차단)
+      const sourceRoot = getRootNodeForSubtree(connection.source, nodes, edges);
+      const targetRoot = getRootNodeForSubtree(connection.target, nodes, edges);
+      if (sourceRoot && targetRoot && sourceRoot.id === targetRoot.id) {
         return false;
       }
 
@@ -1912,7 +1930,7 @@ function GraphCanvasInner({
         const fromHandle = connectionState.fromHandle?.id || '';
         let side: 'left' | 'right';
 
-        const forcedSourceSide = getForcedOutboundSideForSubNodeInMainGraph(
+        const forcedSourceSide = getForcedOutboundSideForSubNode(
           sourceNode,
           nodes,
           edges,
@@ -1929,9 +1947,9 @@ function GraphCanvasInner({
           const parentNode = parentId
             ? nodes.find((n) => n.id === parentId)
             : undefined;
-          const mainNode = getMainNodeForSubtree(sourceNode.id, nodes, edges);
+          const rootNode = getRootNodeForSubtree(sourceNode.id, nodes, edges);
           const referenceX =
-            parentNode?.position.x ?? mainNode?.position.x ?? 0;
+            parentNode?.position.x ?? rootNode?.position.x ?? 0;
           side = getTargetSideRelativeToParent(
             sourceNode.position.x,
             referenceX,
@@ -2436,20 +2454,20 @@ function GraphCanvasInner({
       // dragged node 자체는 사용자가 드래그하는 위치를 따라가므로 위치 변경 없음
       let didMirrorSubtree = false;
       const previousPosition = previousDragPositionRef.current;
-      if (previousPosition && !draggedNode.data?.isMain && !isMultiDragRef.current) {
-        const mainNode = getMainNodeForSubtree(draggedNode.id, nodes, edges);
-        const isDirectChildOfMain =
-          mainNode && getParentId(draggedNode.id, edges) === mainNode.id;
-        if (mainNode && isDirectChildOfMain) {
-          const mainAxisX =
-            mainNode.position.x + (mainNode.width ?? NODE_WIDTH) / 2;
+      if (previousPosition && !isRootNode(draggedNode) && !isMultiDragRef.current) {
+        const rootNode = getRootNodeForSubtree(draggedNode.id, nodes, edges);
+        const isDirectChildOfRoot =
+          rootNode && getParentId(draggedNode.id, edges) === rootNode.id;
+        if (rootNode && isDirectChildOfRoot) {
+          const rootAxisX =
+            rootNode.position.x + (rootNode.width ?? NODE_WIDTH) / 2;
           const nodeWidth = draggedNode.width ?? NODE_WIDTH;
           const nodeHeight = draggedNode.height ?? NODE_HEIGHT;
           const beforeCenterX = previousPosition.x + nodeWidth / 2;
           const afterCenterX = draggedNode.position.x + nodeWidth / 2;
           const afterCenterY = draggedNode.position.y + nodeHeight / 2;
-          const beforeSide = beforeCenterX < mainAxisX ? 'left' : 'right';
-          const afterSide = afterCenterX < mainAxisX ? 'left' : 'right';
+          const beforeSide = beforeCenterX < rootAxisX ? 'left' : 'right';
+          const afterSide = afterCenterX < rootAxisX ? 'left' : 'right';
 
           if (beforeSide !== afterSide) {
             const newSide: 'left' | 'right' = afterSide;
@@ -2517,21 +2535,21 @@ function GraphCanvasInner({
 
             console.log(
               '[handle:move] onNodeDrag — 좌우 전환 엣지 핸들 변경(로컬만, 서버 미저장)',
-              '대상: main→dragged 엣지 + 서브트리 내부 엣지',
+              '대상: root→dragged 엣지 + 서브트리 내부 엣지',
               '→',
               { sourceHandle: newSourceHandle, targetHandle: newTargetHandle },
             );
             setEdges((currentEdges) =>
               currentEdges.map((edge) => {
-                // mainNode와 draggedNode 사이 엣지 정보 업데이트: source 노드는 mainNode (위치 불변), 사용하는 source handle side만 바뀜
+                // rootNode와 draggedNode 사이 엣지 정보 업데이트: source 노드는 rootNode (위치 불변), 사용하는 source handle side만 바뀜
                 if (
-                  edge.source === mainNode.id &&
+                  edge.source === rootNode.id &&
                   edge.target === draggedNode.id
                 ) {
-                  const srcWidth = mainNode.width ?? NODE_WIDTH;
+                  const srcWidth = rootNode.width ?? NODE_WIDTH;
                   // position.x 기준: right → position.x + width, left → position.x
                   const srcHandleX =
-                    mainNode.position.x + (newSide === 'right' ? srcWidth : 0);
+                    rootNode.position.x + (newSide === 'right' ? srcWidth : 0);
                   return {
                     ...edge,
                     sourceHandle: newSourceHandle,
@@ -2541,7 +2559,7 @@ function GraphCanvasInner({
                       hubX:
                         srcHandleX +
                         (newSide === 'right' ? HUB_OFFSET : -HUB_OFFSET),
-                      hubY: mainNode.position.y + NODE_HEIGHT / 2,
+                      hubY: rootNode.position.y + NODE_HEIGHT / 2,
                     },
                   };
                 }
