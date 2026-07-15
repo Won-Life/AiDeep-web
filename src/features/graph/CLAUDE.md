@@ -7,6 +7,7 @@
 
 - 모든 노드는 `data.depth`(트리 root로부터의 거리)를 가진다. 초기값은 sync 응답의 서버값, 신규 노드는 0.
 - **root(부모 없는 노드) 판별은 `isRootNode(node)`(= depth === 0) 단일 기준.** 엣지 스캔으로 재유도하지 않는다. `isMain`(PROJECT 노드)은 별개 개념 — 연결 안 된 일반 노드도 root다.
+- **그래프 기준 노드(대칭 축·같은 그래프 판정·방향 기준점)도 depth 0 루트 기준** (#146, `getRootNodeForSubtree`): isMain 조상 탐색이 아니라 조상 체인에서 depth 0 노드를 찾는다. 조상 체인에 depth 0이 없으면(Aideep_backend#64 잔재) 체인 끝(부모 없는 노드)을 루트로 간주. `isMain`은 PROJECT 고유 규칙(main↔main 연결 금지, 연결 시 항상 부모, 색 저장·흰색 표시)에만 남긴다.
 - 서버는 depth를 엣지 생성·삭제 시에만 갱신하고(`propagateDepth`), 갱신값을 WS·REST 응답에 싣지 않는다. 따라서 클라이언트는 엣지 상태가 바뀌는 모든 지점(본인 REST 성공·WS EDGE_CREATE/EDGE_DELETED)에서 `applyDepthOnEdgeCreate/Delete`(graphUtils)로 서버와 동일 규칙을 로컬 적용한다. 규칙은 graphUtils 테스트가 고정 — 서버 `propagateDepth`가 바뀌면 함께 바꾼다. 서버가 갱신값을 보내주면(Aideep_backend#63) 수신값 적용으로 교체.
 - 알려진 공백: 서버 `deleteNode`가 depth를 전파하지 않아(Aideep_backend#64), 노드 삭제로 부모를 잃은 크로스 그래프 root는 depth≠0으로 남는다. 클라이언트도 동률 유지(미전파)한다 — 새로고침 시 sync가 서버값으로 되돌리므로.
 
