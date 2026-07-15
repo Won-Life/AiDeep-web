@@ -140,8 +140,11 @@ export default function LoginPage() {
       const loginResult = await login({ email: signupEmail, password: signupPassword });
       if (loginResult) {
         await createWorkspace({ title: '내 워크스페이스', role: 'OWNER' });
+        router.push('/workspace');
+        return;
       }
 
+      // 자동 로그인 실패 시에만 로그인 폼으로 폴백 (이메일 프리필)
       setMode('login');
       resetSignupForm();
       setEmail(signupEmail);
