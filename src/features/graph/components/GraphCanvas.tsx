@@ -3240,6 +3240,7 @@ function GraphCanvasInner({
           ? { defaultViewport: savedViewport }
           : { fitView: true })}
         minZoom={0.25}
+        zoomOnDoubleClick={false}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
