@@ -20,7 +20,7 @@ run() {
     exit 2
   fi
 }
-run yarn tsc --noEmit
-run yarn lint
-run yarn test
+run npx tsc --noEmit
+run npm run lint
+run npm run test
 exit 0
