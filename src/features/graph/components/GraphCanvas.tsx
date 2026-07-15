@@ -956,7 +956,10 @@ function GraphCanvasInner({
   // ─── Workspace Awareness ─────────────────────────────────────────
   const cursorColor = getCursorColor(currentUserId);
 
-  const { nodeViewers, aggregateOpenNodeIds, setOpenEditorNodeId, setAwarenessOpenNodeIds } = useWorkspaceAwareness({
+  // aggregateOpenNodeIds(협업자 열린 에디터 합집합)는 당분간 소비하지 않는다 —
+  // 같은 계정 다중 탭에서 다른 탭이 연 에디터가 내 탭에 떠서 닫을 수 없는 문제.
+  // 에디터 패널 렌더링은 내 탭의 myOpenEditorNodeIds만 사용 (협업자 에디터 표시 기능 비활성화).
+  const { nodeViewers, setOpenEditorNodeId, setAwarenessOpenNodeIds } = useWorkspaceAwareness({
     workspaceId,
     userName: currentUserName,
     userColor: cursorColor,
@@ -1299,7 +1302,7 @@ function GraphCanvasInner({
     const hasParent = !isRootNode(node);
 
     const isContextMenuOpen = contextMenuNodeId === node.id;
-    const isEditorOpen = aggregateOpenNodeIds.includes(node.id);
+    const isEditorOpen = myOpenEditorNodeIds.includes(node.id);
 
     return {
       ...node,
@@ -1308,7 +1311,7 @@ function GraphCanvasInner({
         ...node.data,
         handleSide: node.data?.isMain ? undefined : node.data?.handleSide,
         hasParent, // 부모 노드 존재 여부 전달
-        showInputBox: aggregateOpenNodeIds.includes(node.id), // 열린 노드에 입력박스 표시
+        showInputBox: myOpenEditorNodeIds.includes(node.id), // 열린 노드에 입력박스 표시 (내 탭 기준)
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
