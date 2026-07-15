@@ -121,8 +121,8 @@ function ImageCaptionEditor({ nodeKey, caption }: { nodeKey: NodeKey; caption: s
         display: 'block',
         width: '100%',
         textAlign: 'center',
-        fontSize: 12,
-        color: '#999',
+        fontSize: 13,
+        color: 'rgb(var(--muted))',
         background: 'transparent',
         border: 'none',
         outline: 'none',
@@ -239,8 +239,8 @@ class FileNode extends DecoratorNode<ReactNode> {
           gap: 10,
           padding: '10px 14px',
           borderRadius: 8,
-          border: '1px solid #EBEBEB',
-          background: '#FAFAFA',
+          border: '1px solid rgb(var(--border))',
+          background: 'rgb(var(--surface))',
           margin: '6px 0',
           cursor: 'pointer',
           userSelect: 'none',
@@ -256,18 +256,18 @@ class FileNode extends DecoratorNode<ReactNode> {
         <svg width="15" height="18" viewBox="0 0 15 18" fill="none">
           <path
             d="M9 1H2C1.46957 1 0.960859 1.21071 0.585786 1.58579C0.210714 1.96086 0 2.46957 0 3V15C0 15.5304 0.210714 16.0391 0.585786 16.4142C0.960859 16.7893 1.46957 17 2 17H13C13.5304 17 14.0391 16.7893 14.4142 16.4142C14.7893 16.0391 15 15.5304 15 15V7L9 1Z"
-            fill="#F0F0F0"
-            stroke="#CCCCCC"
+            fill="rgb(var(--surface))"
+            stroke="rgb(var(--ds-gray-700))"
             strokeWidth="1"
             strokeLinejoin="round"
           />
-          <path d="M9 1V7H15" stroke="#CCCCCC" strokeWidth="1" strokeLinejoin="round" />
+          <path d="M9 1V7H15" stroke="rgb(var(--ds-gray-700))" strokeWidth="1" strokeLinejoin="round" />
         </svg>
         <span
           style={{
             flex: 1,
-            fontSize: 13,
-            color: '#333',
+            fontSize: 14,
+            color: 'rgb(var(--foreground))',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -275,7 +275,7 @@ class FileNode extends DecoratorNode<ReactNode> {
         >
           {__name}
         </span>
-        <span style={{ fontSize: 12, color: '#AAA', flexShrink: 0 }}>{sizeLabel}</span>
+        <span style={{ fontSize: 13, color: 'rgb(var(--muted))', flexShrink: 0 }}>{sizeLabel}</span>
       </div>
     );
   }
@@ -552,7 +552,7 @@ export function ToolbarPlugin() {
   return (
     <div
       className="nodrag nowheel flex items-center gap-0.5 px-2 py-1.5 shrink-0 select-none"
-      style={{ borderBottom: '1px solid #EBEBEB' }}
+      style={{ borderBottom: '1px solid rgb(var(--border))' }}
       onMouseDown={(e) => e.preventDefault()}
     >
       {/* Hidden file inputs */}
@@ -564,8 +564,8 @@ export function ToolbarPlugin() {
         <button
           type="button"
           onClick={() => setShowBlockMenu((v) => !v)}
-          className="flex items-center gap-1 px-2 h-6 rounded cursor-pointer transition-colors hover:bg-[#F3F3F3]"
-          style={{ fontSize: 11, color: '#555', fontWeight: 500 }}
+          className="flex items-center gap-1 px-2 h-6 rounded cursor-pointer transition-colors hover:bg-surface"
+          style={{ fontSize: 12, color: 'rgb(var(--muted))', fontWeight: 500 }}
         >
           {currentLabel}
           <svg
@@ -583,9 +583,9 @@ export function ToolbarPlugin() {
 
         {showBlockMenu && (
           <div
-            className="absolute top-full left-0 mt-0.5 bg-white rounded-lg py-1 z-[9999]"
+            className="absolute top-full left-0 mt-0.5 bg-background rounded-lg py-1 z-[9999]"
             style={{
-              border: '1px solid #E8E8E8',
+              border: '1px solid rgb(var(--border))',
               width: 160,
               boxShadow: '0 4px 16px rgba(0,0,0,0.09)',
             }}
@@ -595,18 +595,18 @@ export function ToolbarPlugin() {
                 key={value}
                 type="button"
                 onClick={() => applyBlockType(value)}
-                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left cursor-pointer hover:bg-[#F5F5F5] transition-colors"
-                style={{ color: blockType === value ? '#111' : '#555' }}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left cursor-pointer hover:bg-surface transition-colors"
+                style={{ color: blockType === value ? 'rgb(var(--foreground))' : 'rgb(var(--muted))' }}
               >
                 <span
                   className="shrink-0 flex items-center justify-center font-mono"
-                  style={{ width: 18, fontSize: 10, color: '#AAA' }}
+                  style={{ width: 18, fontSize: 11, color: 'rgb(var(--muted))' }}
                 >
                   {icon}
                 </span>
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: blockType === value ? 600 : 400,
                   }}
                 >
@@ -619,7 +619,7 @@ export function ToolbarPlugin() {
       </div>
 
       {/* ── Divider ── */}
-      <div style={{ width: 1, height: 14, background: '#E0E0E0', margin: '0 4px' }} />
+      <div style={{ width: 1, height: 14, background: 'rgb(var(--border))', margin: '0 4px' }} />
 
       {/* ── Text format buttons ── */}
       {(
@@ -628,7 +628,7 @@ export function ToolbarPlugin() {
           { format: 'italic' as const, label: 'I', active: isItalic, title: '기울임 ⌘I', extraStyle: { fontStyle: 'italic' } },
           { format: 'underline' as const, label: 'U', active: isUnderline, title: '밑줄 ⌘U', extraStyle: { textDecoration: 'underline' } },
           { format: 'strikethrough' as const, label: 'S', active: isStrikethrough, title: '취소선', extraStyle: { textDecoration: 'line-through' } },
-          { format: 'code' as const, label: '<>', active: isCode, title: '인라인 코드', extraStyle: { fontFamily: 'monospace', fontSize: 10 } },
+          { format: 'code' as const, label: '<>', active: isCode, title: '인라인 코드', extraStyle: { fontFamily: 'monospace', fontSize: 11 } },
         ] as const
       ).map(({ format, label, active, title, extraStyle }) => (
         <button
@@ -640,13 +640,13 @@ export function ToolbarPlugin() {
           style={{
             width: 26,
             height: 26,
-            fontSize: 11,
-            background: active ? '#E8E8E8' : 'transparent',
-            color: active ? '#1A1A1A' : '#AAAAAA',
+            fontSize: 12,
+            background: active ? 'rgb(var(--surface-hover))' : 'transparent',
+            color: active ? 'rgb(var(--foreground))' : 'rgb(var(--muted))',
             ...extraStyle,
           }}
           onMouseEnter={(e) => {
-            if (!active) (e.currentTarget as HTMLElement).style.background = '#F3F3F3';
+            if (!active) (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))';
           }}
           onMouseLeave={(e) => {
             if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -657,7 +657,7 @@ export function ToolbarPlugin() {
       ))}
 
       {/* ── Divider ── */}
-      <div style={{ width: 1, height: 14, background: '#E0E0E0', margin: '0 4px' }} />
+      <div style={{ width: 1, height: 14, background: 'rgb(var(--border))', margin: '0 4px' }} />
 
       {/* ── Media buttons ── */}
       <button
@@ -665,8 +665,8 @@ export function ToolbarPlugin() {
         title="이미지 삽입"
         onClick={() => imageInputRef.current?.click()}
         className="flex items-center justify-center rounded cursor-pointer transition-colors"
-        style={{ width: 26, height: 26, color: '#AAAAAA' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#F3F3F3'; }}
+        style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
         <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
@@ -681,8 +681,8 @@ export function ToolbarPlugin() {
         title="파일 첨부"
         onClick={() => fileInputRef.current?.click()}
         className="flex items-center justify-center rounded cursor-pointer transition-colors"
-        style={{ width: 26, height: 26, color: '#AAAAAA' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#F3F3F3'; }}
+        style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
         <svg width="11" height="13" viewBox="0 0 11 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
@@ -725,7 +725,7 @@ function TitleTrackerPlugin({
   onChange: (text: string) => void;
 }) {
   const [editor] = useLexicalComposerContext();
-  const prevTitleRef = useRef<string | null>(null);
+  const prevTitleRef = useRef<string | null>('');
 
   useEffect(() => {
     return editor.registerUpdateListener(({ editorState }) => {
@@ -757,6 +757,18 @@ export function NotionEditor({
   autoGrow = false,
   minHeight,
 }: NotionEditorProps) {
+  // provider의 'sync' 이벤트에서 동기화 여부를 직접 구독 — on()이 등록 즉시
+  // 현재 상태를 replay하므로 늦게 마운트돼도 값이 맞는다 (prop 중계 불필요)
+  // provider null이면 렌더 시 파생값으로 false 처리 — effect 본문 동기 setState 금지(lint error)
+  const [providerSynced, setProviderSynced] = useState(false);
+  useEffect(() => {
+    if (!collabProvider) return;
+    const onSync = (synced: unknown) => setProviderSynced(synced as boolean);
+    collabProvider.on('sync', onSync);
+    return () => collabProvider.off('sync', onSync);
+  }, [collabProvider]);
+  const isSynced = collabProvider ? providerSynced : false;
+
   const initialConfig = {
     namespace: `ne-${nodeId}`,
     theme: EDITOR_THEME,
@@ -776,7 +788,7 @@ export function NotionEditor({
   );
 
   return (
-    <div className={autoGrow ? 'flex flex-col bg-white rounded-b-lg' : 'flex flex-col flex-1 min-h-0 bg-white rounded-b-lg'}>
+    <div className={autoGrow ? 'flex flex-col bg-background rounded-b-lg' : 'flex flex-col flex-1 min-h-0 bg-background rounded-b-lg'}>
       <LexicalCollaboration>
         <LexicalComposer initialConfig={initialConfig}>
           {toolbarSlot}
@@ -795,10 +807,10 @@ export function NotionEditor({
               placeholder={
                 <div
                   className="absolute top-3 left-4 pointer-events-none select-none"
-                  style={{ color: '#C4C4C4', fontSize: 13 }}
+                  style={{ color: 'rgb(var(--muted))', fontSize: 14 }}
                 >
-                  노트를 작성하세요…&nbsp;
-                  <span style={{ color: '#D5D5D5' }}>
+                  {isSynced ? '노트를 작성하세요…' : '로딩 중…'}
+                  <span className="ml-1" style={{ color: 'rgb(var(--muted))' }}>
                     (마크다운 단축키 지원)
                   </span>
                 </div>

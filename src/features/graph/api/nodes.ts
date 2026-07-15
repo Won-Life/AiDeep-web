@@ -36,8 +36,8 @@ export async function createProjectNode(
   workspaceId: string,
   title: string,
   position: Position,
-): Promise<void> {
-  await api(`/workspace/${workspaceId}/node/project`, {
+): Promise<{ nodeId: string }> {
+  return api<{ nodeId: string }>(`/workspace/${workspaceId}/node/project`, {
     method: "POST",
     body: JSON.stringify({ title, position }),
   });
@@ -64,10 +64,16 @@ export async function moveNode(
   nodeId: string,
   position: Position,
 ): Promise<string> {
-  return api<string>(`/workspace/${workspaceId}/node/${nodeId}/move`, {
-    method: "PATCH",
-    body: JSON.stringify({ position }),
-  });
+  console.log("[pos:save] moveNode PATCH 요청", nodeId, position);
+  const res = await api<string>(
+    `/workspace/${workspaceId}/node/${nodeId}/move`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ position }),
+    },
+  );
+  console.log("[pos:save] moveNode PATCH 응답(서버 저장 완료)", nodeId, res);
+  return res;
 }
 
 export async function deleteNode(
@@ -82,7 +88,7 @@ export async function deleteNode(
 export async function updateNodeContent(
   workspaceId: string,
   nodeId: string,
-  data: { title?: string; color?: string; textColor?: string; propagateToChildren?: boolean },
+  data: { title?: string; color?: string; textColor?: string },
 ): Promise<string> {
   return api<string>(`/workspace/${workspaceId}/node/${nodeId}`, {
     method: "PATCH",

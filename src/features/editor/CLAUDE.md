@@ -1,0 +1,35 @@
+# 에디터 도메인 규칙
+
+## NodeEditorPanel 3가지 모드
+
+| 모드 | props | 특이사항 |
+|------|-------|---------|
+| 기본 (캔버스 패널) | 기본값 | `absolute top:100%`, `mouseDown stopPropagation` |
+| 인라인 (사이드바) | `inline=true` | `noMediaDrop`, 최종 수정일(클라이언트 시각) 표시 |
+| 전체화면 | `fullscreen=true` | `w-[62.5%] min-w-[300px]`, ToolbarPlugin 포함 |
+
+## collabProvider null 처리 (필수)
+
+provider가 null인 상태(소켓 연결 전)를 반드시 처리한다.
+
+| 모드 | provider null 시 |
+|------|----------------|
+| 기본 | "워크스페이스를 불러오는 중..." (panel 높이 내 중앙) |
+| 전체화면 | `w-full h-full` "워크스페이스를 불러오는 중..." |
+| 인라인 | null 그대로 NotionEditor에 전달 (에디터 내부 처리) |
+
+## Yjs Provider 생명주기 (`useYjsProvider`)
+
+- `SocketIoYjsProvider` 는 `src/lib/SocketIoYjsProvider.ts`를 사용한다. 외부 패키지로 교체 금지.
+- 소켓 미연결 시 200ms 재시도 루프. `cancelled` 플래그로 unmount 후 zombie provider 생성 방지.
+- `doc:update` origin === this → 서버발 업데이트 재전송 방지 (무한 루프 차단). 이 가드 제거 금지.
+- unmount 순서: `yjs:leave` emit → `_unregisterSocketListeners` → `awareness.destroy` → `doc.destroy`.
+- **hover 프리커넥트**: TextUpdateNode는 노드 hover 시점부터 provider를 생성해 클릭 전에 동기화를 선시작한다 (`isNodeHovered || showInputBox`). hover 이탈 시 provider는 파괴된다.
+- **동기화 전 로딩 표시**: NotionEditor가 provider `sync` 이벤트를 자체 구독해 `isSynced`를 관리하고, 동기화 전에는 placeholder를 "로딩 중…"으로 표시한다 (prop으로 내려받지 않음 — `on()`이 등록 즉시 현재 상태를 replay).
+- TitleTrackerPlugin의 `prevTitleRef` 초기값은 `''` — 동기화 전 빈 문서의 첫 업데이트가 `onChange('')`로 노드 title을 덮어쓰는 것(라벨 깜빡임)을 중복 비교로 흡수한다. `null`로 되돌리지 말 것.
+
+## 협업 Awareness (워크스페이스 레벨)
+
+- `openNodeIds` awareness field: 내가 열고 있는 에디터 패널 목록. **전파는 유지하지만 소비(협업자 에디터 표시)는 비활성화** — 에디터 패널 렌더링은 각 탭의 로컬 `myOpenEditorNodeIds`만 사용한다. 이유: 합집합(`aggregateOpenNodeIds`) 기반 표시는 같은 계정을 다중 탭으로 열면 다른 탭이 연 에디터가 내 탭에 떠서 X·"모든 에디터 닫기"로 닫을 수 없었다(awareness는 자기 client 상태만 수정 가능). 협업자 에디터 표시를 되살리려면 합집합에서 같은 userId의 다른 client를 제외하는 방식으로 복원할 것.
+- `openEditorNodeId` awareness field: 현재 포커스된 패널 → 아바타 뷰어 뱃지 표시.
+- cleanup 시 `removeAwarenessStates([clientID])` + 15초 heartbeat `clearInterval` 필수.

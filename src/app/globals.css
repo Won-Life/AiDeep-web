@@ -11,6 +11,8 @@
    ========================= */
 @layer base {
   :root {
+    color-scheme: light;
+
     /* ---------- Gray Scale ---------- */
     --ds-gray-100: 64 64 64;     /* #404040 */
     --ds-gray-200: 83 83 83;     /* #535353 */
@@ -70,31 +72,31 @@
     --font-mono: var(--font-geist-mono);
 
     /* sizes / line-heights */
-    --typo-h1-size: 16px;
+    --typo-h1-size: 17px;
     --typo-h1-leading: 26px;
     --typo-h1-weight: 700;
 
-    --typo-sub1-size: 12px;
+    --typo-sub1-size: 13px;
     --typo-sub1-leading: 20px;
     --typo-sub1-weight: 600;
 
-    --typo-body1-size: 14px;
+    --typo-body1-size: 15px;
     --typo-body1-leading: 24px;
     --typo-body1-weight: 400;
 
-    --typo-body2-size: 14px;
+    --typo-body2-size: 15px;
     --typo-body2-leading: 24px;
     --typo-body2-weight: 400;
 
-    --typo-cap1-size: 12px;
+    --typo-cap1-size: 13px;
     --typo-cap1-leading: 20px;
     --typo-cap1-weight: 700;
 
-    --typo-cap2-size: 12px;
+    --typo-cap2-size: 13px;
     --typo-cap2-leading: 20px;
     --typo-cap2-weight: 400;
 
-    --typo-cap3-size: 10px;
+    --typo-cap3-size: 11px;
     --typo-cap3-leading: 18px;
     --typo-cap3-weight: 400;
   }
@@ -104,6 +106,8 @@
      ========================= */
   @media (prefers-color-scheme: dark) {
     :root {
+      color-scheme: dark;
+
       --background: var(--ds-black);
       --foreground: var(--ds-white);
       --surface: var(--ds-gray-100);
@@ -121,6 +125,14 @@
      bg-background, text-foreground, border-border, bg-ds-gray-100, etc.
    ========================= */
 @theme inline {
+  /* =========================
+     Text size overrides (issue #95 — 전체 +1px)
+     line-height는 크기 대비 비율이라 자동 비례 조정됨
+     ========================= */
+  --text-xs: 13px;
+  --text-sm: 15px;
+  --text-base: 17px;
+
   /* =========================
      Semantic (components use these)
      ========================= */
@@ -230,21 +242,21 @@
 @layer components {
   /* ── Headings ── */
   .ne-h1 {
-    font-size: 20px;
+    font-size: 21px;
     font-weight: 700;
     line-height: 1.35;
     margin: 12px 0 3px;
     color: inherit;
   }
   .ne-h2 {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 600;
     line-height: 1.35;
     margin: 10px 0 2px;
     color: inherit;
   }
   .ne-h3 {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     line-height: 1.35;
     margin: 8px 0 2px;
@@ -263,7 +275,7 @@
     margin: 4px 0;
   }
   .ne-li {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.7;
     margin: 2px 0;
   }
@@ -287,9 +299,9 @@
     transform: translateY(-50%);
     width: 14px;
     height: 14px;
-    border: 1.5px solid #CFCFCF;
+    border: 1.5px solid rgb(var(--ds-gray-700));
     border-radius: 3px;
-    background: white;
+    background: rgb(var(--background));
   }
   .ne-li-checked::before {
     content: '';
@@ -299,16 +311,16 @@
     transform: translateY(-50%);
     width: 14px;
     height: 14px;
-    border: 1.5px solid #7FD51A;
+    border: 1.5px solid rgb(var(--ds-main));
     border-radius: 3px;
-    background: #7FD51A;
+    background: rgb(var(--ds-main));
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 8' fill='none'%3E%3Cpath d='M1 4L3.5 6.5L9 1' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: center;
     background-size: 10px 8px;
   }
   .ne-li-checked > span {
-    color: #A0A0A0;
+    color: rgb(var(--ds-gray-500));
     text-decoration: line-through;
   }
 
@@ -319,7 +331,7 @@
     color: rgb(var(--ds-gray-400));
     font-style: italic;
     margin: 6px 0;
-    font-size: 13px;
+    font-size: 14px;
   }
 
   /* ── Code block ── */
@@ -329,7 +341,7 @@
     padding: 10px 14px;
     margin: 6px 0;
     font-family: var(--font-mono), ui-monospace, monospace;
-    font-size: 12px;
+    font-size: 13px;
     display: block;
     white-space: pre-wrap;
     overflow-x: auto;
@@ -349,7 +361,7 @@
     border-radius: 3px;
     padding: 1px 5px;
     font-family: var(--font-mono), ui-monospace, monospace;
-    font-size: 12px;
+    font-size: 13px;
     color: #D44;
   }
 
@@ -378,7 +390,7 @@
   .ne-root {
     outline: none;
     min-height: 80px;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.75;
     color: rgb(var(--foreground));
   }
@@ -394,7 +406,7 @@
     position: relative;
   }
   .collaboration-cursor-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     padding: 1px 6px;
     border-radius: 4px;

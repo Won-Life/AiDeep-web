@@ -19,6 +19,8 @@ export interface NodeDto {
   title: string;
   node_type: NodeType;
   content: NodeContent;
+  /** 트리 root로부터의 거리. 서버 유지(생성 0, 엣지 생성·삭제 시 전파). 구버전 행은 null 가능 */
+  depth: number | null;
   version: number;
   position_x: number;
   position_y: number;

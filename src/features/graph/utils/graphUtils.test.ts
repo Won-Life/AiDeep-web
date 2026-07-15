@@ -1,10 +1,27 @@
 import { describe, it, expect } from 'vitest'
-import type { Edge } from '@xyflow/react'
-import { getDescendantIds } from './graphUtils'
+import type { Edge, Node } from '@xyflow/react'
+import {
+  getDescendantIds,
+  getSameColorDescendantIds,
+  applyDepthOnEdgeCreate,
+  applyDepthOnEdgeDelete,
+  isRootNode,
+} from './graphUtils'
 
 function e(source: string, target: string): Edge {
   return { id: `${source}->${target}`, source, target } as Edge
 }
+
+function n(id: string, depth?: number): Node {
+  return {
+    id,
+    position: { x: 0, y: 0 },
+    data: depth === undefined ? {} : { depth },
+  } as Node
+}
+
+const depths = (nodes: Node[]) =>
+  Object.fromEntries(nodes.map((node) => [node.id, node.data.depth]))
 
 describe('getDescendantIds', () => {
   it('빈 엣지 목록이면 빈 Set을 반환한다', () => {
@@ -41,5 +58,115 @@ describe('getDescendantIds', () => {
     const edges = [e('root', 'c1'), e('root', 'c2'), e('c2', 'c1')]
     const result = getDescendantIds('root', edges)
     expect([...result].filter(id => id === 'c1').length).toBe(1)
+  })
+})
+
+describe('getSameColorDescendantIds', () => {
+  const colors: Record<string, string | undefined> = {
+    A: 'red',
+    B: 'red',
+    C: 'blue',
+    D: 'red',
+  }
+  const colorOf = (id: string) => colors[id]
+
+  it('같은 색 자손만 포함한다', () => {
+    const edges = [e('A', 'B'), e('B', 'C')]
+    expect(getSameColorDescendantIds('A', edges, 'red', colorOf)).toEqual(
+      new Set(['B']),
+    )
+  })
+
+  it('색이 다른 노드에서 순회를 멈춘다 — 그 하위가 같은 색(D=red)이어도 제외', () => {
+    // A(red) → B(red) → C(blue) → D(red)
+    const edges = [e('A', 'B'), e('B', 'C'), e('C', 'D')]
+    expect(getSameColorDescendantIds('A', edges, 'red', colorOf)).toEqual(
+      new Set(['B']),
+    )
+  })
+
+  it('색이 다른 가지만 제외하고 같은 색 가지는 계속 순회한다', () => {
+    // A → B(red) → D(red), A → C(blue)
+    const edges = [e('A', 'B'), e('A', 'C'), e('B', 'D')]
+    expect(getSameColorDescendantIds('A', edges, 'red', colorOf)).toEqual(
+      new Set(['B', 'D']),
+    )
+  })
+
+  it('색 조회가 안 되는(undefined) 노드는 경계로 보고 순회를 멈춘다', () => {
+    const edges = [e('A', 'X'), e('X', 'D')]
+    expect(getSameColorDescendantIds('A', edges, 'red', colorOf).size).toBe(0)
+  })
+})
+
+// 서버 규칙 고정 테스트 — ../server/src/node/node.service.ts propagateDepth와 동일해야 한다.
+// 서버 규칙이 바뀌면 이 테스트와 graphUtils의 구현을 함께 바꾼다 (Aideep_backend#63 참고).
+describe('applyDepthOnEdgeCreate', () => {
+  it('target과 그 자손 전체에 source.depth + 1을 더한다', () => {
+    // A(0)-B(1), C(0)-D(1) 상태에서 B → C 연결
+    const nodes = [n('A', 0), n('B', 1), n('C', 0), n('D', 1)]
+    const edges = [e('A', 'B'), e('C', 'D'), e('B', 'C')]
+    const result = applyDepthOnEdgeCreate(nodes, edges, 'B', 'C')
+    expect(depths(result)).toEqual({ A: 0, B: 1, C: 2, D: 3 })
+  })
+
+  it('root(depth 0)에 연결하면 target 서브트리가 +1 된다', () => {
+    const nodes = [n('A', 0), n('C', 0)]
+    const edges = [e('A', 'C')]
+    expect(depths(applyDepthOnEdgeCreate(nodes, edges, 'A', 'C'))).toEqual({
+      A: 0,
+      C: 1,
+    })
+  })
+
+  it('depth가 없는 노드는 0으로 취급한다', () => {
+    const nodes = [n('A'), n('C')]
+    const edges = [e('A', 'C')]
+    expect(depths(applyDepthOnEdgeCreate(nodes, edges, 'A', 'C'))).toEqual({
+      A: undefined,
+      C: 1,
+    })
+  })
+
+  it('source 노드가 없으면 아무것도 바꾸지 않는다', () => {
+    const nodes = [n('C', 0)]
+    const result = applyDepthOnEdgeCreate(nodes, [e('X', 'C')], 'X', 'C')
+    expect(result).toBe(nodes)
+  })
+})
+
+describe('applyDepthOnEdgeDelete', () => {
+  it('target과 그 자손 전체에서 삭제 직전 target.depth를 빼서 target을 0으로 만든다', () => {
+    // A(0)-B(1)-C(2)-D(3) 에서 B→C 엣지 삭제
+    const nodes = [n('A', 0), n('B', 1), n('C', 2), n('D', 3)]
+    const edges = [e('A', 'B'), e('C', 'D')] // B→C는 이미 제거된 엣지 목록
+    const result = applyDepthOnEdgeDelete(nodes, edges, 'C')
+    expect(depths(result)).toEqual({ A: 0, B: 1, C: 0, D: 1 })
+  })
+
+  it('target.depth가 이미 0이면 원본 배열을 그대로 반환한다', () => {
+    const nodes = [n('C', 0)]
+    const result = applyDepthOnEdgeDelete(nodes, [], 'C')
+    expect(result).toBe(nodes)
+  })
+
+  it('target 노드가 없으면 아무것도 바꾸지 않는다', () => {
+    const nodes = [n('A', 0)]
+    expect(applyDepthOnEdgeDelete(nodes, [], 'X')).toBe(nodes)
+  })
+})
+
+describe('isRootNode', () => {
+  it('depth 0이면 root다', () => {
+    expect(isRootNode(n('A', 0))).toBe(true)
+  })
+
+  it('depth > 0이면 root가 아니다', () => {
+    expect(isRootNode(n('A', 1))).toBe(false)
+    expect(isRootNode(n('A', 3))).toBe(false)
+  })
+
+  it('depth가 없으면 0으로 취급해 root다', () => {
+    expect(isRootNode(n('A'))).toBe(true)
   })
 })

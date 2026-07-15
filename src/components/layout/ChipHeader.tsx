@@ -16,6 +16,7 @@ import { type UserMeResponse } from "@/api/types";
 import UserMenu from "./UserMenu";
 import CollaboratorsList from "./CollaboratorsList";
 import ShareButton from "./ShareButton";
+import { SHOW_TEMP_HIDDEN_UI } from "@/lib/uiFlags";
 
 interface ChipHeaderProps {
   sidebarWidth: number;
@@ -79,16 +80,18 @@ export default function ChipHeader({
       {/* 오른쪽: 협업자 목록 → 유저 정보 → 공유하기 */}
       {user && (
         <div className="flex items-center gap-3">
-          <CollaboratorsList
-            currentUserId={user.userId}
-            currentUsername={user.username}
-          />
+          {SHOW_TEMP_HIDDEN_UI && (
+            <CollaboratorsList
+              currentUserId={user.userId}
+              currentUsername={user.username}
+            />
+          )}
           <UserMenu
             username={user.username}
             email={user.email}
             onLogout={onLogout}
           />
-          <ShareButton workspaceId={workspaceId} />
+          {SHOW_TEMP_HIDDEN_UI && <ShareButton workspaceId={workspaceId} />}
         </div>
       )}
     </header>

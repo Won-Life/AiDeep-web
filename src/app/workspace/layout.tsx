@@ -11,15 +11,17 @@ import Sidebar, {
 } from '@/components/layout/Sidebar';
 import ChipHeader from '@/components/layout/ChipHeader';
 import DropDown from '@/components/ui/DropDown';
+import AiChatPanel from '@/features/chat/AiChatPanel';
 import UserMenu from '@/components/layout/UserMenu';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
-import { getWorkspaces /*, getWorkspaceMembers */ } from '@/api/workspace'; // getWorkspaceMembers — GET /workspace/:id/members 백엔드 미구현
+import { getWorkspaces, getWorkspaceMembers } from '@/api/workspace';
 import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/components/GraphCanvas';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
 import { onPresenceState } from '@/api/ws';
 import { getCursorColor } from '@/utils/cursorColor';
+import { SHOW_TEMP_HIDDEN_UI } from '@/lib/uiFlags';
 import { type NodeView } from '@/features/nodes/TextUpdateNode';
 import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
 
@@ -86,7 +88,12 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     setSynced,
   } = useWorkspaceLayout();
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = sessionStorage.getItem('sidebar_open');
+    return stored !== null ? stored === 'true' : true;
+  });
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -95,14 +102,11 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     ),
   );
 
-  const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH;
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('sidebar_open');
-      if (stored !== null) setIsSidebarOpen(stored === 'true');
-    }
-  }, []);
+  const sidebarWidth = !SHOW_TEMP_HIDDEN_UI
+    ? 0
+    : isSidebarOpen
+      ? SIDEBAR_WIDTH
+      : VISIBLE_BUTTON_WIDTH;
 
   useEffect(() => {
     setSidebarWidth(sidebarWidth);
@@ -132,6 +136,29 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         const ws = list[0];
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
+
+        // 사이드바 Workspaces 목록: 서버 워크스페이스 전체를 매핑
+        setProjects(list.map((w) => ({ id: w.workspaceId, name: w.title })));
+        // 자물쇠(개인 워크스페이스) 판정 — 멤버 수 1명 이하 == 개인.
+        // 부가 정보이므로 조회 실패 시 팀 취급(자물쇠 없음), 메인 로딩을 막지 않음.
+        Promise.all(
+          list.map((w) =>
+            getWorkspaceMembers(w.workspaceId)
+              .then((members) => members.length <= 1)
+              .catch(() => false),
+          ),
+        ).then((personalFlags) => {
+          // 함수형 업데이트 + id 매칭: 조회 동안 사용자가 추가/수정한 로컬 항목을 덮어쓰지 않는다
+          const flagById = new Map(
+            list.map((w, i) => [w.workspaceId, personalFlags[i]]),
+          );
+          setProjects((prev) =>
+            prev.map((p) =>
+              flagById.has(p.id) ? { ...p, isPersonal: flagById.get(p.id) } : p,
+            ),
+          );
+        });
+
         return Promise.all([
           getNodes(ws.workspaceId),
           // getWorkspaceMembers(ws.workspaceId),
@@ -139,10 +166,14 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
       })
       .then((results) => {
         if (!results) return;
-        const [nodeData, members] = results;
+        const [nodeData] = results;
         const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
           nodeData.nodes ?? [],
           nodeData.edges ?? [],
+        );
+        console.log(
+          '[pos:recv] 초기 sync — 서버 저장 위치 전체 수신',
+          flowNodes.map((n) => ({ id: n.id, ...n.position })),
         );
         setNodes(flowNodes);
         setEdges(flowEdges);
@@ -273,6 +304,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     <div className="relative w-full h-screen overflow-hidden">
       <div className="absolute inset-0 z-0">{children}</div>
 
+      {SHOW_TEMP_HIDDEN_UI && (
       <Sidebar
         isOpen={isSidebarOpen}
         onToggle={handleToggleSidebar}
@@ -290,6 +322,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         onStartEditSubItem={startEditSubItem}
         onToggleExpand={toggleExpand}
       />
+      )}
 
       <ChipHeader
         sidebarWidth={sidebarWidth}
@@ -301,7 +334,11 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         workspaceId={workspaceId}
       />
 
-      <DropDown sidebarWidth={sidebarWidth} />
+      <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setIsChatOpen(true)} />
+
+      {isChatOpen && (
+        <AiChatPanel onClose={() => setIsChatOpen(false)} sidebarWidth={sidebarWidth} />
+      )}
 
       <UserMenu
         username={userMe?.username ?? ''}
