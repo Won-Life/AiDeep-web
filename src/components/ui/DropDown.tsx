@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 interface DropDownProps {
   sidebarWidth: number;
@@ -167,16 +167,20 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
   const [comingSoonFeature, setComingSoonFeature] =
     useState<ComingSoonFeature | null>(null);
   const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>('ask');
+  // 모달을 닫았다 다시 열면 이전 fetch가 뒤늦게 resolve되며 새 화면 상태를 덮는 것을 막는 토큰
+  const notifyRequestRef = useRef(0);
 
   // onChatOpen: 챗봇 준비중 처리 이후 미사용. 패널 재활성화 시 openComingSoon 대신 연결.
   void onChatOpen;
 
   const openComingSoon = (feature: ComingSoonFeature) => {
+    notifyRequestRef.current += 1;
     setNotifyStatus('ask');
     setComingSoonFeature(feature);
   };
 
   const handleNotifySubmit = async (email: string) => {
+    const requestId = ++notifyRequestRef.current;
     setNotifyStatus('saving');
     try {
       // ponytail: Google Form은 CORS 응답을 안 주므로 no-cors(opaque) — 상태코드는 못 읽고
@@ -187,9 +191,9 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ [NOTIFY_EMAIL_ENTRY]: email }).toString(),
       });
-      setNotifyStatus('done');
+      if (notifyRequestRef.current === requestId) setNotifyStatus('done');
     } catch {
-      setNotifyStatus('error');
+      if (notifyRequestRef.current === requestId) setNotifyStatus('error');
     }
   };
 
