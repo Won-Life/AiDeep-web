@@ -288,7 +288,7 @@ export default function LoginPage() {
                       type="button"
                       onClick={handleSendCode}
                       disabled={loading || !signupEmail || emailVerified}
-                      className="h-[56px] shrink-0 rounded-[8px] bg-gray-600 px-[16px] text-[16px] font-semibold text-white transition-colors enabled:hover:opacity-80 disabled:cursor-not-allowed"
+                      className="h-[56px] shrink-0 rounded-[8px] bg-gray-600 px-[16px] text-[16px] font-semibold text-white transition-colors enabled:bg-main enabled:hover:opacity-80 disabled:cursor-not-allowed"
                     >
                       인증하기
                     </button>
@@ -383,7 +383,14 @@ export default function LoginPage() {
               <div className="flex flex-col gap-[24px]">
                 <button
                   type="submit"
-                  disabled={loading || !emailVerified}
+                  disabled={
+                    loading ||
+                    !emailVerified ||
+                    !signupName ||
+                    !signupPhone ||
+                    !signupPassword ||
+                    !signupConfirm
+                  }
                   className="h-[56px] w-full rounded-[8px] bg-gray-600 text-[18px] font-semibold text-white transition-colors enabled:bg-main enabled:hover:opacity-90 disabled:cursor-not-allowed"
                 >
                   {loading ? '처리 중...' : '회원가입'}

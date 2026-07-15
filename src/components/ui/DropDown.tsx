@@ -1,9 +1,88 @@
 'use client';
 import { useState } from 'react';
+import { requestFeatureNotify, type NotifyFeature } from '@/api/featureNotify';
 
 interface DropDownProps {
   sidebarWidth: number;
   onChatOpen: () => void;
+}
+
+const FEATURE_LABELS: Record<NotifyFeature, string> = {
+  AI_SUMMARY: 'AI 내용 요약',
+  AI_CHATBOT: 'AI 챗봇',
+  AI_AUTO_STRUCTURE: 'AI 자동 구조화',
+  WORD_DICTIONARY: '단어 정의 사전',
+};
+
+type NotifyStatus = 'ask' | 'saving' | 'done' | 'error';
+
+/** 준비중 안내 + 메일 알림 신청 모달 */
+function ComingSoonModal({
+  feature,
+  status,
+  onYes,
+  onClose,
+}: {
+  feature: NotifyFeature;
+  status: NotifyStatus;
+  onYes: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      onClick={onClose}
+    >
+      <div
+        className="w-[300px] rounded-[16px] bg-background border border-gray-700 p-5 flex flex-col gap-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="text-[16px] font-bold text-foreground">
+          {FEATURE_LABELS[feature]}
+        </span>
+
+        {status === 'done' ? (
+          <>
+            <p className="text-[14px] text-foreground leading-relaxed">
+              신청 완료! 기능이 완성되면 계정 이메일로 알려드릴게요.
+            </p>
+            <button
+              onClick={onClose}
+              className="h-[32px] rounded-[8px] bg-main text-white text-[13px]"
+            >
+              확인
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-[14px] text-foreground leading-relaxed">
+              준비중입니다. 기능이 완성되면 메일로 알림을 보내드릴까요?
+            </p>
+            {status === 'error' && (
+              <p className="text-[12px] text-muted">
+                저장에 실패했어요. 다시 시도해주세요.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={onYes}
+                disabled={status === 'saving'}
+                className="flex-1 h-[32px] rounded-[8px] bg-main text-white text-[13px] disabled:opacity-50"
+              >
+                {status === 'saving' ? '저장 중...' : '예'}
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 h-[32px] rounded-[8px] bg-surface text-foreground text-[13px] border border-border"
+              >
+                아니오
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /** 3단화살표_하단: 12×8, 3개 수평선 겹침 */
@@ -45,6 +124,24 @@ function Icon({ bg, opacity = 1, children }: { bg: string; opacity?: number; chi
 
 export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const [notifyFeature, setNotifyFeature] = useState<NotifyFeature | null>(null);
+  const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>('ask');
+
+  const openComingSoon = (feature: NotifyFeature) => {
+    setNotifyStatus('ask');
+    setNotifyFeature(feature);
+  };
+
+  const handleNotifyYes = async () => {
+    if (!notifyFeature) return;
+    setNotifyStatus('saving'); // 예 버튼 disabled → 이중 클릭 방지
+    try {
+      await requestFeatureNotify(notifyFeature);
+      setNotifyStatus('done');
+    } catch {
+      setNotifyStatus('error'); // 같은 모달에서 "예" 재시도 가능
+    }
+  };
 
   return (
     <div
@@ -107,8 +204,11 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
             {/* 항목 목록: column, gap 12px */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-              {/* AI 내용 요약 — 활성 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              {/* AI 내용 요약 — 준비중 */}
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                onClick={() => openComingSoon('AI_SUMMARY')}
+              >
                 <Icon bg="#FED7D9">
                   {/* 요약 아이콘: 텍스트 줄 3개 (8×8) */}
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
@@ -122,10 +222,10 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                 </span>
               </div>
 
-              {/* AI 챗봇 사용하기 — 활성 */}
+              {/* AI 챗봇 사용하기 — 준비중 (패널 열기는 onChatOpen으로 복원 가능) */}
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                onClick={() => { setIsOpen(false); onChatOpen(); }}
+                onClick={() => openComingSoon('AI_CHATBOT')}
               >
                 <Icon bg="#D0EEFB">
                   {/* 챗봇 아이콘: 원형 (7×8) */}
@@ -139,8 +239,11 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                 </span>
               </div>
 
-              {/* AI 자동 구조화 — 비활성 (icon opacity 0.6, text #A0A0A0) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* AI 자동 구조화 — 준비중 (icon opacity 0.6, text #A0A0A0) */}
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                onClick={() => openComingSoon('AI_AUTO_STRUCTURE')}
+              >
                 <Icon bg="#FBF0BC" opacity={0.6}>
                   {/* 구조화 아이콘: git pull-request 스타일 (10×10) */}
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -156,8 +259,11 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                 </span>
               </div>
 
-              {/* 단어 정의 사전 — 비활성 (icon opacity 0.6, text #A0A0A0) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* 단어 정의 사전 — 준비중 (icon opacity 0.6, text #A0A0A0) */}
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                onClick={() => openComingSoon('WORD_DICTIONARY')}
+              >
                 <Icon bg="#DFF8BF" opacity={0.6}>
                   {/* 단어사전 아이콘: W 형태 (10×7) */}
                   <svg width="10" height="7" viewBox="0 0 10 7" fill="none">
@@ -178,6 +284,15 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {notifyFeature && (
+        <ComingSoonModal
+          feature={notifyFeature}
+          status={notifyStatus}
+          onYes={handleNotifyYes}
+          onClose={() => setNotifyFeature(null)}
+        />
       )}
     </div>
   );

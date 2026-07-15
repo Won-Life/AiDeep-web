@@ -759,16 +759,15 @@ export function NotionEditor({
 }: NotionEditorProps) {
   // provider의 'sync' 이벤트에서 동기화 여부를 직접 구독 — on()이 등록 즉시
   // 현재 상태를 replay하므로 늦게 마운트돼도 값이 맞는다 (prop 중계 불필요)
-  const [isSynced, setIsSynced] = useState(false);
+  // provider null이면 렌더 시 파생값으로 false 처리 — effect 본문 동기 setState 금지(lint error)
+  const [providerSynced, setProviderSynced] = useState(false);
   useEffect(() => {
-    if (!collabProvider) {
-      setIsSynced(false);
-      return;
-    }
-    const onSync = (synced: unknown) => setIsSynced(synced as boolean);
+    if (!collabProvider) return;
+    const onSync = (synced: unknown) => setProviderSynced(synced as boolean);
     collabProvider.on('sync', onSync);
     return () => collabProvider.off('sync', onSync);
   }, [collabProvider]);
+  const isSynced = collabProvider ? providerSynced : false;
 
   const initialConfig = {
     namespace: `ne-${nodeId}`,
