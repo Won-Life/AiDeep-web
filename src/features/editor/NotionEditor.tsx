@@ -725,7 +725,7 @@ function TitleTrackerPlugin({
   onChange: (text: string) => void;
 }) {
   const [editor] = useLexicalComposerContext();
-  const prevTitleRef = useRef<string | null>(null);
+  const prevTitleRef = useRef<string | null>('');
 
   useEffect(() => {
     return editor.registerUpdateListener(({ editorState }) => {
@@ -757,6 +757,19 @@ export function NotionEditor({
   autoGrow = false,
   minHeight,
 }: NotionEditorProps) {
+  // provider의 'sync' 이벤트에서 동기화 여부를 직접 구독 — on()이 등록 즉시
+  // 현재 상태를 replay하므로 늦게 마운트돼도 값이 맞는다 (prop 중계 불필요)
+  const [isSynced, setIsSynced] = useState(false);
+  useEffect(() => {
+    if (!collabProvider) {
+      setIsSynced(false);
+      return;
+    }
+    const onSync = (synced: unknown) => setIsSynced(synced as boolean);
+    collabProvider.on('sync', onSync);
+    return () => collabProvider.off('sync', onSync);
+  }, [collabProvider]);
+
   const initialConfig = {
     namespace: `ne-${nodeId}`,
     theme: EDITOR_THEME,
@@ -797,8 +810,8 @@ export function NotionEditor({
                   className="absolute top-3 left-4 pointer-events-none select-none"
                   style={{ color: '#C4C4C4', fontSize: 14 }}
                 >
-                  노트를 작성하세요…&nbsp;
-                  <span style={{ color: '#D5D5D5' }}>
+                  {isSynced ? '노트를 작성하세요…' : '로딩 중…'}
+                  <span className="ml-1" style={{ color: '#D5D5D5' }}>
                     (마크다운 단축키 지원)
                   </span>
                 </div>
