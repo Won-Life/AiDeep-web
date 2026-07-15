@@ -30,6 +30,6 @@ provider가 null인 상태(소켓 연결 전)를 반드시 처리한다.
 
 ## 협업 Awareness (워크스페이스 레벨)
 
-- `openNodeIds` awareness field: 내가 열고 있는 에디터 패널 목록 → 다른 유저 화면에서 `showInputBox=true`.
+- `openNodeIds` awareness field: 내가 열고 있는 에디터 패널 목록. **전파는 유지하지만 소비(협업자 에디터 표시)는 비활성화** — 에디터 패널 렌더링은 각 탭의 로컬 `myOpenEditorNodeIds`만 사용한다. 이유: 합집합(`aggregateOpenNodeIds`) 기반 표시는 같은 계정을 다중 탭으로 열면 다른 탭이 연 에디터가 내 탭에 떠서 X·"모든 에디터 닫기"로 닫을 수 없었다(awareness는 자기 client 상태만 수정 가능). 협업자 에디터 표시를 되살리려면 합집합에서 같은 userId의 다른 client를 제외하는 방식으로 복원할 것.
 - `openEditorNodeId` awareness field: 현재 포커스된 패널 → 아바타 뷰어 뱃지 표시.
 - cleanup 시 `removeAwarenessStates([clientID])` + 15초 heartbeat `clearInterval` 필수.

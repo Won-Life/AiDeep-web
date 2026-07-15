@@ -1,31 +1,30 @@
 'use client';
 import { useState } from 'react';
-import { requestFeatureNotify, type NotifyFeature } from '@/api/featureNotify';
 
 interface DropDownProps {
   sidebarWidth: number;
   onChatOpen: () => void;
 }
 
-const FEATURE_LABELS: Record<NotifyFeature, string> = {
+type ComingSoonFeature =
+  | 'AI_SUMMARY'
+  | 'AI_CHATBOT'
+  | 'AI_AUTO_STRUCTURE'
+  | 'WORD_DICTIONARY';
+
+const FEATURE_LABELS: Record<ComingSoonFeature, string> = {
   AI_SUMMARY: 'AI 내용 요약',
   AI_CHATBOT: 'AI 챗봇',
   AI_AUTO_STRUCTURE: 'AI 자동 구조화',
   WORD_DICTIONARY: '단어 정의 사전',
 };
 
-type NotifyStatus = 'ask' | 'saving' | 'done' | 'error';
-
-/** 준비중 안내 + 메일 알림 신청 모달 */
+/** 준비중 안내 모달 */
 function ComingSoonModal({
   feature,
-  status,
-  onYes,
   onClose,
 }: {
-  feature: NotifyFeature;
-  status: NotifyStatus;
-  onYes: () => void;
+  feature: ComingSoonFeature;
   onClose: () => void;
 }) {
   return (
@@ -40,46 +39,15 @@ function ComingSoonModal({
         <span className="text-[16px] font-bold text-foreground">
           {FEATURE_LABELS[feature]}
         </span>
-
-        {status === 'done' ? (
-          <>
-            <p className="text-[14px] text-foreground leading-relaxed">
-              신청 완료! 기능이 완성되면 계정 이메일로 알려드릴게요.
-            </p>
-            <button
-              onClick={onClose}
-              className="h-[32px] rounded-[8px] bg-main text-white text-[13px]"
-            >
-              확인
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="text-[14px] text-foreground leading-relaxed">
-              준비중입니다. 기능이 완성되면 메일로 알림을 보내드릴까요?
-            </p>
-            {status === 'error' && (
-              <p className="text-[12px] text-muted">
-                저장에 실패했어요. 다시 시도해주세요.
-              </p>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={onYes}
-                disabled={status === 'saving'}
-                className="flex-1 h-[32px] rounded-[8px] bg-main text-white text-[13px] disabled:opacity-50"
-              >
-                {status === 'saving' ? '저장 중...' : '예'}
-              </button>
-              <button
-                onClick={onClose}
-                className="flex-1 h-[32px] rounded-[8px] bg-surface text-foreground text-[13px] border border-border"
-              >
-                아니오
-              </button>
-            </div>
-          </>
-        )}
+        <p className="text-[14px] text-foreground leading-relaxed">
+          준비중입니다.
+        </p>
+        <button
+          onClick={onClose}
+          className="h-[32px] rounded-[8px] bg-main text-white text-[13px]"
+        >
+          확인
+        </button>
       </div>
     </div>
   );
@@ -124,23 +92,11 @@ function Icon({ bg, opacity = 1, children }: { bg: string; opacity?: number; chi
 
 export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
   const [isOpen, setIsOpen] = useState(true);
-  const [notifyFeature, setNotifyFeature] = useState<NotifyFeature | null>(null);
-  const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>('ask');
+  const [comingSoonFeature, setComingSoonFeature] =
+    useState<ComingSoonFeature | null>(null);
 
-  const openComingSoon = (feature: NotifyFeature) => {
-    setNotifyStatus('ask');
-    setNotifyFeature(feature);
-  };
-
-  const handleNotifyYes = async () => {
-    if (!notifyFeature) return;
-    setNotifyStatus('saving'); // 예 버튼 disabled → 이중 클릭 방지
-    try {
-      await requestFeatureNotify(notifyFeature);
-      setNotifyStatus('done');
-    } catch {
-      setNotifyStatus('error'); // 같은 모달에서 "예" 재시도 가능
-    }
+  const openComingSoon = (feature: ComingSoonFeature) => {
+    setComingSoonFeature(feature);
   };
 
   return (
@@ -286,12 +242,10 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
         </div>
       )}
 
-      {notifyFeature && (
+      {comingSoonFeature && (
         <ComingSoonModal
-          feature={notifyFeature}
-          status={notifyStatus}
-          onYes={handleNotifyYes}
-          onClose={() => setNotifyFeature(null)}
+          feature={comingSoonFeature}
+          onClose={() => setComingSoonFeature(null)}
         />
       )}
     </div>
