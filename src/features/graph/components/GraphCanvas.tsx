@@ -3277,7 +3277,7 @@ function GraphCanvasInner({
       )}
       {isArchiveModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[360px] rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
+          <div className="w-[360px] rounded-xl border border-border bg-background p-5 shadow-xl">
             <p className="text-base font-semibold">보관하시겠습니까?</p>
             <p className="mt-2 text-sm text-muted">
               선택한 노드와 하위 서브 노드가 함께 보관 처리됩니다. (총{' '}

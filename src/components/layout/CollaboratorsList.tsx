@@ -32,7 +32,7 @@ function AvatarCircle({
         backgroundColor: color,
         fontFamily: 'Pretendard, sans-serif',
         fontSize: 12,
-        border: '2px solid white',
+        border: '2px solid rgb(var(--background))',
       }}
     >
       {initial}
@@ -51,7 +51,7 @@ function ChevronDownIcon() {
     >
       <path
         d="M2.5 4.5L6 8L9.5 4.5"
-        stroke="#2c2c2c"
+        stroke="rgb(var(--foreground))"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -111,13 +111,13 @@ export default function CollaboratorsList({
             {hidden > 0 && (
               <div className="relative" style={{ marginLeft: -8, zIndex: 0 }}>
                 <div
-                  className="flex items-center justify-center rounded-full shrink-0 bg-[#e6e6e6] text-[#2c2c2c] font-semibold select-none"
+                  className="flex items-center justify-center rounded-full shrink-0 bg-surface-hover text-foreground font-semibold select-none"
                   style={{
                     width: 28,
                     height: 28,
                     fontFamily: 'Pretendard, sans-serif',
                     fontSize: 11,
-                    border: '2px solid white',
+                    border: '2px solid rgb(var(--background))',
                   }}
                 >
                   +{hidden}

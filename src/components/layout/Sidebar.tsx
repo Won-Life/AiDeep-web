@@ -242,8 +242,8 @@ function ResourceTree({
                   draggable
                   style={{
                     fontSize: 14,
-                    background: isSelected ? '#000' : 'rgb(var(--ds-gray-800))',
-                    color: isSelected ? '#fff' : 'rgb(var(--foreground))',
+                    background: isSelected ? 'rgb(var(--foreground))' : 'rgb(var(--ds-gray-800))',
+                    color: isSelected ? 'rgb(var(--background))' : 'rgb(var(--foreground))',
                     cursor: 'pointer',
                     maxWidth: '90%',
                     overflow: 'hidden',

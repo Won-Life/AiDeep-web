@@ -24,7 +24,7 @@ function AiIcon() {
         height: 20,
         borderRadius: '50%',
         border: '1.5px solid #A8C8E8',
-        background: '#fff',
+        background: 'rgb(var(--background))',
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
@@ -104,17 +104,17 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
             alignItems: 'center',
             height: 31,
             padding: '0 12px',
-            border: '1px solid #D9D9D9',
+            border: '1px solid rgb(var(--border))',
             borderRadius: 500,
             boxShadow: '0px 0px 4px rgba(0,0,0,0.25)',
-            background: '#fff',
+            background: 'rgb(var(--background))',
           }}
         >
           <span
             style={{
               fontFamily: 'Pretendard, -apple-system, sans-serif',
               fontSize: 17,
-              color: '#2C2C2B',
+              color: 'rgb(var(--foreground))',
               whiteSpace: 'pre',
               lineHeight: '31px',
             }}
@@ -134,7 +134,7 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
               background: 'transparent',
               fontFamily: 'Pretendard, -apple-system, sans-serif',
               fontSize: 17,
-              color: '#2C2C2B',
+              color: 'rgb(var(--foreground))',
               lineHeight: '31px',
               width: Math.max(72, question.length * 9.5),
               minWidth: 72,
@@ -152,8 +152,8 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
               height: 32,
               padding: '0 14px',
               gap: 10,
-              background: '#fff',
-              border: '1px solid #EBEBEB',
+              background: 'rgb(var(--background))',
+              border: '1px solid rgb(var(--border))',
               borderRadius: 16,
               boxShadow: '0px 0px 4px rgba(0,0,0,0.25)',
             }}
@@ -168,7 +168,7 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
                     width: 4,
                     height: 4,
                     borderRadius: '50%',
-                    background: '#AAAAAA',
+                    background: 'rgb(var(--muted))',
                     animation: 'aiDot 1.2s infinite',
                     animationDelay: `${i * 0.3}s`,
                   }}
@@ -183,8 +183,8 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
           <div
             style={{
               width: 537,
-              background: '#fff',
-              border: '1px solid #EBEBEB',
+              background: 'rgb(var(--background))',
+              border: '1px solid rgb(var(--border))',
               borderRadius: 16,
               boxShadow: '0px 0px 4px rgba(0,0,0,0.25)',
               position: 'relative',
@@ -205,7 +205,7 @@ export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps)
                 paddingLeft: 48,
                 fontFamily: 'Pretendard, -apple-system, sans-serif',
                 fontSize: 17,
-                color: '#2C2C2B',
+                color: 'rgb(var(--foreground))',
                 lineHeight: 1.75,
                 wordBreak: 'break-word',
               }}

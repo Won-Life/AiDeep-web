@@ -59,7 +59,7 @@ export default function ShareButton({ workspaceId }: ShareButtonProps) {
           fontFamily: 'Pretendard, sans-serif',
           fontSize: 13,
           fontWeight: 700,
-          color: '#ffffff',
+          color: 'rgb(var(--ds-white))',
           whiteSpace: 'nowrap',
         }}
       >
