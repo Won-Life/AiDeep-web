@@ -139,9 +139,18 @@ export default function LoginPage() {
       // TODO: 임시 처리 - 백엔드에서 회원가입 시 기본 워크스페이스 자동 생성으로 교체 예정
       const loginResult = await login({ email: signupEmail, password: signupPassword });
       if (loginResult) {
-        await createWorkspace({ title: '내 워크스페이스', role: 'OWNER' });
+        // 이미 로그인 완료 — 워크스페이스 생성이 실패해도 회원가입 실패로 되돌리지 않고
+        // 인증된 사용자를 워크스페이스로 보낸다 (partial-success 방치 방지)
+        try {
+          await createWorkspace({ title: '내 워크스페이스', role: 'OWNER' });
+        } catch {
+          // ponytail: 서버가 회원가입 시 기본 워크스페이스 자동 생성으로 교체되면 이 블록째 삭제
+        }
+        router.push('/workspace');
+        return;
       }
 
+      // 자동 로그인 실패 시에만 로그인 폼으로 폴백 (이메일 프리필)
       setMode('login');
       resetSignupForm();
       setEmail(signupEmail);
