@@ -24,6 +24,9 @@ provider가 null인 상태(소켓 연결 전)를 반드시 처리한다.
 - 소켓 미연결 시 200ms 재시도 루프. `cancelled` 플래그로 unmount 후 zombie provider 생성 방지.
 - `doc:update` origin === this → 서버발 업데이트 재전송 방지 (무한 루프 차단). 이 가드 제거 금지.
 - unmount 순서: `yjs:leave` emit → `_unregisterSocketListeners` → `awareness.destroy` → `doc.destroy`.
+- **hover 프리커넥트**: TextUpdateNode는 노드 hover 시점부터 provider를 생성해 클릭 전에 동기화를 선시작한다 (`isNodeHovered || showInputBox`). hover 이탈 시 provider는 파괴된다.
+- **동기화 전 로딩 표시**: NotionEditor가 provider `sync` 이벤트를 자체 구독해 `isSynced`를 관리하고, 동기화 전에는 placeholder를 "로딩 중…"으로 표시한다 (prop으로 내려받지 않음 — `on()`이 등록 즉시 현재 상태를 replay).
+- TitleTrackerPlugin의 `prevTitleRef` 초기값은 `''` — 동기화 전 빈 문서의 첫 업데이트가 `onChange('')`로 노드 title을 덮어쓰는 것(라벨 깜빡임)을 중복 비교로 흡수한다. `null`로 되돌리지 말 것.
 
 ## 협업 Awareness (워크스페이스 레벨)
 

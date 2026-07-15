@@ -66,8 +66,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const userName = userMe?.username ?? 'Anonymous';
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
 
+  const [isNodeHovered, setIsNodeHovered] = useState(false);
   const { provider: collabProvider } = useYjsProvider({
-    nodeId: showInputBox ? id : null,
+    nodeId: isNodeHovered || showInputBox ? id : null,
     userName,
     userColor: cursorColor,
   });
@@ -78,7 +79,6 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
     sideRelativeToParent === 'left' ? Position.Left : Position.Right;
   const viewers = (nodeData.viewers ?? []) as NodeViewer[];
   const isHovered = nodeData.isHovered ?? false;
-  const [isNodeHovered, setIsNodeHovered] = useState(false);
 
   // 부모가 없는 서브 노드는 양쪽에 핸들 표시
   const PLACEHOLDER = isMain ? '중심 노드' : '서브 노드';
