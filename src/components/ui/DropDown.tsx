@@ -213,8 +213,8 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
         style={{
           width: '100%',
           height: 22,
-          background: '#F5F5F5',
-          border: '1px solid #CFCFCF',
+          background: 'rgb(var(--surface))',
+          border: '1px solid rgb(var(--border))',
           borderRadius: isOpen ? '16px 16px 0 0' : 16,
           display: 'flex',
           alignItems: 'center',
@@ -231,10 +231,10 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
       {isOpen && (
         <div
           style={{
-            background: '#FFFFFF',
-            borderLeft: '1px solid #CFCFCF',
-            borderRight: '1px solid #CFCFCF',
-            borderBottom: '1px solid #CFCFCF',
+            background: 'rgb(var(--background))',
+            borderLeft: '1px solid rgb(var(--border))',
+            borderRight: '1px solid rgb(var(--border))',
+            borderBottom: '1px solid rgb(var(--border))',
             borderRadius: '0 0 16px 16px',
             padding: '17px 16px 16px 16px',
             boxSizing: 'border-box',
@@ -248,7 +248,7 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                 fontFamily: 'Pretendard, -apple-system, sans-serif',
                 fontWeight: 700,
                 fontSize: 17,
-                color: '#2C2C2C',
+                color: 'rgb(var(--foreground))',
                 lineHeight: 1,
               }}
             >
@@ -271,7 +271,7 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                     <rect x="0.5" y="5.5" width="5" height="1" rx="0.5" fill="#2C2C2C" />
                   </svg>
                 </Icon>
-                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: '#2C2C2C' }}>
+                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--foreground))' }}>
                   AI 내용 요약
                 </span>
               </div>
@@ -288,7 +288,7 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                     <circle cx="3.5" cy="4" r="1" fill="#2C2C2C" />
                   </svg>
                 </Icon>
-                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: '#2C2C2C' }}>
+                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--foreground))' }}>
                   AI 챗봇 사용하기
                 </span>
               </div>
@@ -308,7 +308,7 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                     <path d="M8 3.5 C8 5.5 2 5.5 2 6.5" stroke="#2C2C2C" strokeWidth="1" fill="none" />
                   </svg>
                 </Icon>
-                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: '#A0A0A0' }}>
+                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--muted))' }}>
                   AI 자동 구조화
                 </span>
               </div>
@@ -330,7 +330,7 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                     />
                   </svg>
                 </Icon>
-                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: '#A0A0A0' }}>
+                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--muted))' }}>
                   단어 정의 사전
                 </span>
               </div>

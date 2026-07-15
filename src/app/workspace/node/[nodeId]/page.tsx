@@ -76,7 +76,7 @@ export default function NodeFullscreenPage() {
         <button
           type="button"
           onClick={() => router.back()}
-          className="flex items-center justify-center rounded cursor-pointer hover:bg-[#F3F3F3] transition-colors"
+          className="flex items-center justify-center rounded cursor-pointer hover:bg-surface transition-colors"
           style={{ width: 28, height: 28 }}
           title="돌아가기"
         >
@@ -85,7 +85,7 @@ export default function NodeFullscreenPage() {
             height="14"
             viewBox="0 0 14 14"
             fill="none"
-            stroke="#666666"
+            stroke="rgb(var(--foreground))"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"

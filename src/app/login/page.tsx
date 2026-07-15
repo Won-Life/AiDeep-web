@@ -11,13 +11,13 @@ type AuthMode = 'login' | 'signup';
 const EyeIcon = ({ open }: { open: boolean }) =>
   open ? (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <path d="M10 4C5.5 4 2 10 2 10s3.5 6 8 6 8-6 8-6-3.5-6-8-6Z" stroke="#858585" strokeWidth="1.5" />
-      <circle cx="10" cy="10" r="2.5" stroke="#858585" strokeWidth="1.5" />
+      <path d="M10 4C5.5 4 2 10 2 10s3.5 6 8 6 8-6 8-6-3.5-6-8-6Z" stroke="rgb(var(--muted))" strokeWidth="1.5" />
+      <circle cx="10" cy="10" r="2.5" stroke="rgb(var(--muted))" strokeWidth="1.5" />
     </svg>
   ) : (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <path d="M3 3l14 14M10 4C5.5 4 2 10 2 10s1.2 2.1 3.3 3.7M10 16c4.5 0 8-6 8-6s-1.2-2.1-3.3-3.7" stroke="#858585" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M7.6 7.6a2.5 2.5 0 0 0 3.5 3.5" stroke="#858585" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M3 3l14 14M10 4C5.5 4 2 10 2 10s1.2 2.1 3.3 3.7M10 16c4.5 0 8-6 8-6s-1.2-2.1-3.3-3.7" stroke="rgb(var(--muted))" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M7.6 7.6a2.5 2.5 0 0 0 3.5 3.5" stroke="rgb(var(--muted))" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 
@@ -168,7 +168,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="w-full max-w-[700px] rounded-[16px] bg-white px-[24px] py-[88px] shadow-[0px_0px_4px_0px_rgba(44,44,44,0.25)]">
+      <div className="w-full max-w-[700px] rounded-[16px] bg-background px-[24px] py-[88px] shadow-[0px_0px_4px_0px_rgba(44,44,44,0.25)]">
 
         {/* 로그인 */}
         {mode === 'login' && (
@@ -232,7 +232,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => { setMode('signup'); setError(''); }}
-                  className="h-[56px] w-full rounded-[8px] border border-main bg-white text-[18px] font-semibold text-main hover:bg-main-5 transition-colors"
+                  className="h-[56px] w-full rounded-[8px] border border-main bg-background text-[18px] font-semibold text-main hover:bg-main-5 transition-colors"
                 >
                   회원가입
                 </button>
@@ -410,7 +410,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => { setMode('login'); setError(''); resetSignupForm(); }}
-                  className="h-[56px] w-full rounded-[8px] border border-main bg-white text-[18px] font-semibold text-main hover:bg-main-5 transition-colors"
+                  className="h-[56px] w-full rounded-[8px] border border-main bg-background text-[18px] font-semibold text-main hover:bg-main-5 transition-colors"
                 >
                   로그인
                 </button>

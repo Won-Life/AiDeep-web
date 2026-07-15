@@ -21,7 +21,7 @@ function UserIcon() {
     >
       <path
         d="M12 12c2.486 0 4.5-2.014 4.5-4.5S14.486 3 12 3 7.5 5.014 7.5 7.5 9.514 12 12 12zm0 2.25c-3.004 0-9 1.508-9 4.5V21h18v-2.25c0-2.992-5.996-4.5-9-4.5z"
-        fill="#2c2c2c"
+        fill="rgb(var(--foreground))"
         fillOpacity="0.5"
       />
     </svg>
@@ -39,7 +39,7 @@ function ChevronDownIcon() {
     >
       <path
         d="M2.5 4.5L6 8L9.5 4.5"
-        stroke="#2c2c2c"
+        stroke="rgb(var(--foreground))"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -59,7 +59,7 @@ function EditIcon({ size = 10 }: { size?: number }) {
     >
       <path
         d="M2 11.5V14h2.5l7.373-7.373-2.5-2.5L2 11.5zm11.807-6.807a.664.664 0 000-.94L12.247 2.193a.664.664 0 00-.94 0l-1.22 1.22 2.5 2.5 1.22-1.22z"
-        fill="#2c2c2c"
+        fill="rgb(var(--foreground))"
       />
     </svg>
   );
@@ -165,12 +165,12 @@ export default function UserMenu({
       >
         {/* 아이콘 — 협업자 아바타와 동일한 28px */}
         <div
-          className="flex items-center justify-center rounded-full shrink-0 bg-[#f5f5f5] overflow-hidden"
+          className="flex items-center justify-center rounded-full shrink-0 bg-surface overflow-hidden"
           style={{
             width: 28,
             height: 28,
             padding: profileImageUrl ? 0 : 5,
-            border: "2px solid white",
+            border: "2px solid rgb(var(--background))",
           }}
         >
           {profileImageUrl ? (
@@ -188,7 +188,7 @@ export default function UserMenu({
 
         {/* 이름 */}
         <span
-          className="text-[#2c2c2c] whitespace-nowrap"
+          className="text-foreground whitespace-nowrap"
           style={{
             fontFamily: "Pretendard, sans-serif",
             fontSize: 13,
@@ -211,7 +211,7 @@ export default function UserMenu({
       {/* 드롭다운 카드 */}
       {isOpen && (
         <div
-          className="absolute right-0 mt-2 bg-white rounded-[8px] overflow-hidden"
+          className="absolute right-0 mt-2 bg-background rounded-[8px] overflow-hidden"
           style={{
             width: 160,
             boxShadow: "0px 0px 4px 0px rgba(44,44,44,0.25)",
@@ -226,7 +226,7 @@ export default function UserMenu({
             >
               {/* 아바타 */}
               <div
-                className="flex items-center justify-center rounded-full bg-[#f5f5f5] shrink-0 overflow-hidden"
+                className="flex items-center justify-center rounded-full bg-surface shrink-0 overflow-hidden"
                 style={{
                   width: 32,
                   height: 32,
@@ -250,7 +250,7 @@ export default function UserMenu({
               {/* 프로필 이미지 편집 버튼 */}
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center rounded-full bg-white shrink-0 hover:bg-[#f5f5f5] transition-colors"
+                className="flex items-center justify-center rounded-full bg-background shrink-0 hover:bg-surface transition-colors"
                 style={{
                   padding: 4,
                   marginRight: -8,
@@ -284,7 +284,7 @@ export default function UserMenu({
                     onChange={(e) => setNameInput(e.target.value)}
                     onBlur={handleNameSubmit}
                     onKeyDown={handleNameKeyDown}
-                    className="text-[#2c2c2c] bg-transparent border-b border-[#2c2c2c] outline-none text-center w-full"
+                    className="text-foreground bg-transparent border-b border-foreground outline-none text-center w-full"
                     style={{
                       fontFamily: "Pretendard, sans-serif",
                       fontSize: 13,
@@ -296,7 +296,7 @@ export default function UserMenu({
                 ) : (
                   <>
                     <span
-                      className="text-[#2c2c2c] whitespace-nowrap"
+                      className="text-foreground whitespace-nowrap"
                       style={{
                         fontFamily: "Pretendard, sans-serif",
                         fontSize: 13,
@@ -319,7 +319,7 @@ export default function UserMenu({
 
               {/* 이메일 */}
               <span
-                className="text-[#b8b8b8] w-full text-center truncate"
+                className="text-muted w-full text-center truncate"
                 style={{
                   fontFamily: "Pretendard, sans-serif",
                   fontSize: 11,
@@ -341,11 +341,11 @@ export default function UserMenu({
                 setIsOpen(false);
                 onSettings?.();
               }}
-              className="flex items-center justify-center w-full rounded-[4px] bg-[#e6e6e6] hover:bg-[#d9d9d9] transition-colors"
+              className="flex items-center justify-center w-full rounded-[4px] bg-surface-hover hover:bg-surface-active transition-colors"
               style={{ height: 26 }}
             >
               <span
-                className="text-[#2c2c2c] whitespace-nowrap"
+                className="text-foreground whitespace-nowrap"
                 style={{
                   fontFamily: "Pretendard, sans-serif",
                   fontSize: 11,

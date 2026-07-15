@@ -29,6 +29,14 @@
 | `border` | `#E5E5E5` | `#535353` |
 | `muted` | `#858585` | `#B8B8B8` |
 
+> **다크 모드는 기기(OS) 설정을 자동으로 따라간다.** `globals.css`의 `@media (prefers-color-scheme: dark)`가 위 시맨틱 토큰 값을 스왑하고, `:root`에 `color-scheme`을 선언해 네이티브 스크롤바·폼 컨트롤도 함께 전환된다. 별도 토글 UI는 없다.
+>
+> 이 자동 전환이 실제로 먹으려면 **컴포넌트가 반드시 시맨틱 토큰을 써야 한다.** `bg-white`·`text-black`·인라인 `#2c2c2c` 같은 하드코딩 색상은 라이트/다크에 관계없이 값이 고정돼 다크에서 화면이 깨진다. 배경은 `bg-background`, 본문 텍스트는 `text-foreground`, 면은 `bg-surface`, 테두리는 `border-border`, 보조 텍스트는 `text-muted`. 인라인 style이 불가피하면 `rgb(var(--foreground))` 형태로 참조한다.
+>
+> **의도적으로 고정(양쪽 모드 동일)하는 색:** 노드 위에 얹히는 것들 — 노드 파스텔 팔레트(`sub-*`/`text-*`), PROJECT 노드 흰 배경, 엣지·스냅 하이라이트(`#93C5FD` 등), 브랜드 라임(`main`) 및 그 위의 흰 글자. 캔버스 **배경**은 `bg-background`라 다크에서 어두워지고(#2C2C2C), 그 위의 노드 fill·파스텔만 고정이라 "어두운 작업대 위 밝은 노드" 구성이 된다. 즉 고정되는 건 배경이 아니라 노드 표면 색이다.
+>
+> 아래 컴포넌트 스펙의 `bg-white`는 위 규칙의 예외가 아니라 **작성 시점 표기**다. 실제 코드는 시맨틱 토큰(`bg-background` 등)을 쓰며, PROJECT 노드 흰 배경만 위 고정 목록에 해당한다.
+
 ### 포인트 컬러
 | 토큰 | 값 |
 |------|-----|
@@ -78,13 +86,13 @@ border: 2px solid {viewer color}  (다른 유저가 보고 있음)
 
 ### 에디터 패널
 ```
-bg-white rounded-xl border border-border shadow-md
+bg-background rounded-xl border border-border shadow-md
 min-width: 280px
 ```
 
 ### 모달 (보관 확인 등)
 ```
-w-[360px] rounded-xl border border-gray-200 bg-white p-5 shadow-xl
+w-[360px] rounded-xl border border-border bg-background p-5 shadow-xl
 배경 오버레이: bg-black/40
 ```
 
@@ -96,8 +104,8 @@ Secondary (취소): rounded-md border border-border px-3 py-1.5 text-sm
 
 ### 체크박스 (에디터 내)
 ```
-체크 해제: border-1.5 border-[#CFCFCF] rounded-[3px] bg-white
-체크 완료: bg-[#7FD51A] border-[#7FD51A] + SVG 체크마크, 텍스트는 line-through text-[#A0A0A0]
+체크 해제: border-1.5 border-[rgb(var(--ds-gray-700))] rounded-[3px] bg-[rgb(var(--background))]
+체크 완료: bg-[rgb(var(--ds-main))] border-[rgb(var(--ds-main))] + SVG 체크마크, 텍스트는 line-through text-[rgb(var(--ds-gray-500))]
 ```
 
 ## 레이아웃
