@@ -188,6 +188,46 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
       });
   }, [synced, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced]);
 
+  // 주기적 재sync: 같은 계정의 다른 세션(예: Meet Scribe 익스텐션)이 만든 노드는
+  // WS로 안 온다 — 서버가 발신자 유저룸을 broadcast에서 제외하고(ws.gateway .except),
+  // 클라도 같은 userId 이벤트를 거르기 때문(useWorkspaceWS). 그래서 2분마다 서버 sync를
+  // 다시 받아 로컬에 없는 노드/엣지만 append한다. 기존 노드는 건드리지 않아(위치·편집·WS
+  // 반영분 보존) 드래그·낙관적 업데이트를 덮어쓰지 않는다.
+  useEffect(() => {
+    if (!synced || !workspaceId) return;
+    const REFETCH_MS = 120_000;
+    const id = setInterval(() => {
+      getNodes(workspaceId)
+        .then((data) => {
+          const { nodes: fresh, edges: freshEdges } = convertToReactFlow(
+            data.nodes ?? [],
+            data.edges ?? [],
+          );
+          setNodes((prev) => {
+            const have = new Set(prev.map((n) => n.id));
+            const add = fresh.filter((n) => !have.has(n.id));
+            return add.length ? [...prev, ...add] : prev;
+          });
+          setEdges((prev) => {
+            const have = new Set(prev.map((e) => e.id));
+            const add = freshEdges.filter((e) => !have.has(e.id));
+            return add.length ? [...prev, ...add] : prev;
+          });
+        })
+        .catch((err) => console.error('[graph] 주기 재sync 실패', err));
+    }, REFETCH_MS);
+    return () => clearInterval(id);
+  }, [synced, workspaceId, setNodes, setEdges]);
+
+  // 익스텐션(Meet Scribe) "완료된 회의록 확인하기"가 /workspace?focus=<nodeId>로 열면
+  // 그 노드로 캔버스를 이동한다. synced 이후여야 노드가 state에 있어 GraphCanvas의 focus
+  // effect(setCenter)가 실제로 중앙 이동한다.
+  useEffect(() => {
+    if (!synced) return;
+    const focus = new URLSearchParams(window.location.search).get('focus');
+    if (focus) setFocusedNodeId(focus);
+  }, [synced, setFocusedNodeId]);
+
   useWorkspaceWS({
     workspaceId: workspaceId ?? '',
     currentUserId: userMe?.userId,
