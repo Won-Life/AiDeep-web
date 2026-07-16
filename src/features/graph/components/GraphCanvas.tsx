@@ -1203,10 +1203,11 @@ function GraphCanvasInner({
    * - Problem      : 그래프 단위 동작(서브트리 이동·색 전파·삭제 캐스케이드)은
    *                  "같은 색 = 같은 그래프"로 경계를 판별하므로, main 노드도
    *                  data.color에 자기 그래프 색을 갖고 있어야 한다(표시만 흰색).
-   *                  그런데 color 없는 PROJECT 노드가 DB에 존재한다:
-   *                  ① 클라 createProjectNode가 { title, position }만 전송하고
-   *                  ② 서버 CreateProjectNodeBody.body에 @IsDefined()가 없어
-   *                     body 누락 요청이 검증을 통과해 content가 색 없이 저장됨.
+   *                  그런데 color 없는 PROJECT 노드가 DB에 legacy로 존재한다:
+   *                  과거 서버 CreateProjectNodeBody.body에 @IsDefined()가 없어
+   *                  body 누락 요청이 검증을 통과해 content가 색 없이 저장됐다.
+   *                  현재는 서버가 body + color 필수화(Aideep_backend#52, PR #60)해
+   *                  신규 색 없는 main은 더 생기지 않고, 남은 것은 백필 대상 legacy 데이터다.
    * - Why          : PROJECT 노드는 생성 시점엔 연결된 그래프가 없어 색을 정할 수
    *                  없고, 그래프 색은 첫 엣지 연결 시점에야 확정된다. 그래서 색이
    *                  확정되는 각 지점(onConnect, 핸들 드래그로 새 노드 생성, 노드
@@ -1218,8 +1219,9 @@ function GraphCanvasInner({
    *                  서버 백필 마이그레이션 — 근본 해결이지만 서버 작업이라 이슈로 분리.
    * - Trade-offs   : 백필 전까지는 색 없는 main이 남아 있어 추정 폴백(ponytail: 주석
    *                  블록)이 필요하고, 크로스 그래프 자식이 먼저 잡히면 오판 가능.
-   * - 제거 조건    : 서버가 ① 기존 PROJECT 노드 color 백필 ② 생성 시 body 필수화
-   *                  (Aideep_backend#52)를 완료하면, 이 함수와 getGraphColor·
+   * - 제거 조건    : 서버측은 완료됨 — 생성 시 body 필수화(Aideep_backend#52, PR #60) +
+   *                  기존 노드 백필 SQL(server docs/migrations/2026-07-13-backfill-project-node-color.sql).
+   *                  백필 SQL이 운영 DB에 적용되면, 이 함수와 getGraphColor·
    *                  getSameGraphDescendantIds의 추정 폴백 블록을 함께 삭제한다.
    * - Edge Case    : 색이 이미 있는 main·main이 아닌 노드는 no-op (멱등).
    */
@@ -1289,23 +1291,50 @@ function GraphCanvasInner({
     },
     [workspaceId, handleNodeViewChange],
   );
-  // ponytail: 로컬 상태만 토글 — 백엔드에 node_type 변경 API가 없음. 서버 영속·협업자 동기화는 백엔드 엔드포인트 추가 시 연동
   const handleToggleNodeType = (nodeId: string) => {
+    const target = nodes.find((n) => n.id === nodeId);
+    if (!target) return;
+    const toProject = !target.data?.isMain;
+    const nextType = toProject ? 'PROJECT' : 'DATA';
+
+    // 낙관적 로컬 반영
     setNodes((prev) =>
-      prev.map((node) => {
-        if (node.id !== nodeId) return node;
-        const toProject = !node.data?.isMain;
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            isMain: toProject,
-            nodeType: toProject ? 'PROJECT' : 'DATA',
-          },
-        };
-      }),
+      prev.map((node) =>
+        node.id !== nodeId
+          ? node
+          : {
+              ...node,
+              data: { ...node.data, isMain: toProject, nodeType: nextType },
+            },
+      ),
     );
     setContextMenuNodeId(null);
+
+    // 서버 영속화 — PATCH /workspace/:id/node/:nodeId(updateNodeMeta)가 nodeType을 저장하고
+    // 협업자에게 WS NODE_UPDATE(patch.nodeType)로 전파한다(수신은 useWorkspaceWS handleNodeUpdate).
+    // 실패 시 낙관적 토글을 되돌린다(rollback): isMain은 색 저장·연결 방향·main↔main 금지 등
+    // 그래프 규칙의 입력이라, 저장 실패 상태로 두면 그 위에서 규칙이 오염된다 — 무롤백인
+    // 색/제목 PATCH(§6, :1283)와 다른 선택.
+    updateNodeContent(workspaceId, nodeId, { nodeType: nextType }).catch(
+      (err) => {
+        console.error('[updateNodeContent nodeType toggle] failed', err);
+        // target은 토글 전 스냅샷 — 그때의 isMain/nodeType으로 복원
+        setNodes((prev) =>
+          prev.map((node) =>
+            node.id !== nodeId
+              ? node
+              : {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    isMain: target.data?.isMain,
+                    nodeType: target.data?.nodeType,
+                  },
+                },
+          ),
+        );
+      },
+    );
   };
 
   // 키보드 Backspace 삭제(onBeforeDelete)와 동일 플로우: 확인 모달 → 서브트리 삭제 + WS 동기화
@@ -2172,7 +2201,10 @@ function GraphCanvasInner({
       });
 
       try {
-        const { nodeId } = await createProjectNode(workspaceId, '', position);
+        const { nodeId } = await createProjectNode(workspaceId, '', position, {
+          color: MAIN_NODE_COLOR.bg,
+          textColor: MAIN_NODE_COLOR.text,
+        });
 
         setNodes((prev) => [
           ...prev,
