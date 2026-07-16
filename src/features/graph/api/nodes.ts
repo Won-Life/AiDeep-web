@@ -36,10 +36,13 @@ export async function createProjectNode(
   workspaceId: string,
   title: string,
   position: Position,
+  body: { color: string; textColor: string },
 ): Promise<{ nodeId: string }> {
+  // 서버 CreateProjectNodeBody가 body(color·textColor)를 @IsDefined()로 필수화(Aideep_backend#52) —
+  // 생성 시 그래프 미확정이라 표시색(흰색)을 보내고, 실제 그래프 색은 첫 연결 시 backfillMainColor가 채운다.
   return api<{ nodeId: string }>(`/workspace/${workspaceId}/node/project`, {
     method: "POST",
-    body: JSON.stringify({ title, position }),
+    body: JSON.stringify({ title, position, body }),
   });
 }
 
@@ -88,7 +91,12 @@ export async function deleteNode(
 export async function updateNodeContent(
   workspaceId: string,
   nodeId: string,
-  data: { title?: string; color?: string; textColor?: string },
+  data: {
+    title?: string;
+    color?: string;
+    textColor?: string;
+    nodeType?: "PROJECT" | "DATA" | "RESOURCE" | "ARCHIVE";
+  },
 ): Promise<string> {
   return api<string>(`/workspace/${workspaceId}/node/${nodeId}`, {
     method: "PATCH",
