@@ -10,6 +10,7 @@ import type {
   WsNodeUpdateEvent,
   WsEdgeCreateEvent,
   WsEdgeDeletedEvent,
+  WsEdgeUpdateEvent,
 } from '@/api/types';
 import type { Node, Edge } from '@xyflow/react';
 import type { Dispatch, SetStateAction, RefObject } from 'react';
@@ -83,6 +84,9 @@ export function useWorkspaceWS({
         case 'EDGE_DELETED':
           handleEdgeDelete(event);
           break;
+        case 'EDGE_UPDATE':
+          handleEdgeUpdate(event);
+          break;
       }
     };
 
@@ -148,9 +152,9 @@ export function useWorkspaceWS({
 
     /*
      * CONTEXT
-     * - Problem      : 노드 생성 시 REST 응답(nodeId만 포함)과 WS NODE_CREATE 이벤트(DB 저장값 전체 포함)가
-     *                  모두 도착해, "누가 먼저 왔냐"를 GraphCanvas 곳곳에서 판단하는
-     *                  race condition guard가 3벌 중복됐었음.
+     * - Problem      : 노드 생성 시 본인 REST 응답(클라는 nodeId만 사용)과 협업자 WS NODE_CREATE
+     *                  이벤트(DB 저장값 전체 포함)가 도착해, "누가 먼저 왔냐"를 GraphCanvas
+     *                  곳곳에서 판단하는 race condition guard가 3벌 중복됐었음.
      * - Why          : 본인 변경은 REST 응답으로 반영하고, 서버가 발신자 제외 broadcast
      *                  (Aideep_backend#47, per-user 룸 .except())를 하므로 본인 WS 이벤트는
      *                  원래 오지 않음. 아래 currentUserId 필터는 서버 회귀·재연결 시
@@ -245,6 +249,19 @@ export function useWorkspaceWS({
             };
           }
 
+          // 노드 타입 토글(§9) — 서버가 nodeType만 patch에 실어 broadcast.
+          // isMain은 nodeType === 'PROJECT'에서 파생(로컬 토글 handleToggleNodeType과 동일 규칙).
+          if (e.patch.nodeType !== undefined) {
+            updated = {
+              ...updated,
+              data: {
+                ...updated.data,
+                isMain: e.patch.nodeType === 'PROJECT',
+                nodeType: e.patch.nodeType,
+              },
+            };
+          }
+
           return updated;
         }),
       );
@@ -273,6 +290,46 @@ export function useWorkspaceWS({
           e.edge.targetId,
         ),
       );
+    };
+
+    // 협업자의 엣지 핸들 방향 변경(대칭 이동·재부모화) 반영 — 서버 updateEdge PATCH가
+    // EDGE_UPDATE를 broadcast(§10-3 잔여 해결). 렌더링은 target 노드의 handleSide를 최우선
+    // 참조하므로(§4), 엣지 sourceHandle/targetHandle과 함께 target 노드 handleSide도 새
+    // sourceHandle에서 재유도해야 화면이 새 방향으로 그려진다.
+    const handleEdgeUpdate = (e: WsEdgeUpdateEvent) => {
+      const edge = edgesRef.current.find((ed) => ed.id === e.edgeId);
+
+      setEdgesRef.current((prev) =>
+        prev.map((ed) =>
+          ed.id !== e.edgeId
+            ? ed
+            : {
+                ...ed,
+                ...(e.patch.sourceHandle !== undefined && {
+                  sourceHandle: e.patch.sourceHandle,
+                }),
+                ...(e.patch.targetHandle !== undefined && {
+                  targetHandle: e.patch.targetHandle,
+                }),
+              },
+        ),
+      );
+
+      // sourceHandle 방향이 곧 target 노드의 handleSide (initializeHandleSides와 동일 유도)
+      if (edge && e.patch.sourceHandle !== undefined) {
+        const side = e.patch.sourceHandle.includes('right')
+          ? 'right'
+          : e.patch.sourceHandle.includes('left')
+            ? 'left'
+            : undefined;
+        setNodesRef.current((prev) =>
+          prev.map((node) =>
+            node.id !== edge.target
+              ? node
+              : { ...node, data: { ...node.data, handleSide: side } },
+          ),
+        );
+      }
     };
 
     const handleError = (err: unknown) => {

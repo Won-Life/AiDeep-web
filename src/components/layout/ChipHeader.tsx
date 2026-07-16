@@ -3,7 +3,8 @@
  * - Problem      : ChipHeader가 내부에서 getMe()를 직접 호출해 user 상태를 중복 관리.
  *                  layout.tsx에 이미 userMe가 있어 동일 API를 두 번 호출하는 낭비 발생.
  * - Why          : user·onLogout을 props로 주입받는 방식으로 전환.
- *                  collaborators·workspaceRole은 context에서 직접 읽어 prop drilling 제거.
+ *                  collaborators는 하위 CollaboratorsList가 context에서 직접 읽는다
+ *                  (ChipHeader는 currentUserId·currentUsername만 넘겨줌).
  * - Alternatives : context 직접 구독 — ChipHeader가 GraphLayout context에 결합됨, 재사용성 저하.
  * - Trade-offs   : props drilling이 한 단계 추가되지만, 관심사 분리가 명확해짐.
  * - Edge Case    : user가 null이면 우측 영역 전체를 렌더하지 않음.

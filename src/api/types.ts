@@ -141,6 +141,7 @@ export interface NodeResponse {
 export interface CreateProjectNodeRequest {
   title: string;
   position: Position;
+  body: { color: string; textColor: string };
 }
 
 export interface MdBody {
@@ -254,6 +255,7 @@ export interface WsNodeUpdateEvent {
     title?: string;
     position?: Position;
     data?: NodeContent;
+    nodeType?: "PROJECT" | "DATA" | "RESOURCE" | "ARCHIVE";
   };
 }
 
@@ -276,10 +278,22 @@ export interface WsEdgeDeletedEvent {
   edgeId: string;
 }
 
+export interface WsEdgeUpdateEvent {
+  type: 'EDGE_UPDATE';
+  workspaceId: string;
+  userId: string;
+  edgeId: string;
+  patch: {
+    sourceHandle?: string;
+    targetHandle?: string;
+  };
+}
+
 export type WsEvent =
   | WsNodeMoveEvent
   | WsNodeCreateEvent
   | WsNodeDeleteEvent
   | WsNodeUpdateEvent
   | WsEdgeCreateEvent
-  | WsEdgeDeletedEvent;
+  | WsEdgeDeletedEvent
+  | WsEdgeUpdateEvent;
