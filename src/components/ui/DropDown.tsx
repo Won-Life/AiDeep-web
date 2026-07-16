@@ -79,7 +79,7 @@ function ComingSoonModal({
         ) : (
           <>
             <p className="text-[14px] text-foreground leading-relaxed">
-              준비중입니다. 배포 현황을 이메일로 받아보시겠어요?
+              준비 중인 기능입니다. 기능이 완성되면 사용하실 수 있게 이메일로 소식을 받아보시겠어요?
             </p>
             <input
               type="email"
