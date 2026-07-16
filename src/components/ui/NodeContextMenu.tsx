@@ -14,7 +14,11 @@ export default function NodeContextMenu({
   onDeleteNode,
 }: NodeContextMenuProps) {
   return (
-    <div className="flex flex-col bg-background rounded-xl border border-border shadow-md w-max min-w-40">
+    // 메뉴 클릭이 노드 DOM으로 버블링돼 React Flow onNodeClick(에디터 오픈)을 유발하는 것을 차단
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="flex flex-col bg-background rounded-xl border border-border shadow-md w-max min-w-40"
+    >
       {/* 노드 타입 토글 (프로젝트 ↔ 일반) */}
       <button
         type="button"
