@@ -167,7 +167,12 @@ function getGraphColor(
 function isCustomColorNode(nodeId: string, nodes: Node[]): boolean {
   const node = nodes.find((n) => n.id === nodeId);
   const color = node?.data?.color as string | undefined;
-  return Boolean(color && color !== DEFAULT_NODE_COLOR.bg);
+  // MAIN_NODE_COLOR(흰색)는 PROJECT 노드 생성 시 서버 필수값을 채우기 위한 표시 전용
+  // placeholder일 뿐 실제 그래프 색이 아니다(createProjectNode 호출부·nodes.ts 주석 참고,
+  // COLOR_PALETTE에도 없어 실제 커스텀 색으로는 절대 나오지 않는다) — gray와 동일하게 미확정 취급.
+  return Boolean(
+    color && color !== DEFAULT_NODE_COLOR.bg && color !== MAIN_NODE_COLOR.bg,
+  );
 }
 
 function colorOfNodeIn(nodes: Node[]) {
