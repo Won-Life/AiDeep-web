@@ -43,7 +43,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 | 경로 | 트리거 | 연결 | 색상 |
 |------|--------|------|------|
 | 빈 공간 더블클릭 (`onPaneDoubleClick`) | 캔버스 빈 공간 더블클릭 | 없음 (독립 MD 노드) | 랜덤 색 (`getRandomColorPair`) |
-| 빈 공간 우클릭 (`onPaneContextMenu`) | 캔버스 빈 공간 우클릭 | 없음 (독립 **프로젝트(메인)** 노드) | 메인 노드 색 (`MAIN_NODE_COLOR`) |
+| 빈 공간 우클릭 (`onPaneContextMenu`) | 캔버스 빈 공간 우클릭 | 없음 (독립 **프로젝트(메인)** 노드) | 랜덤 색 (`getRandomColorPair`, `data.color`에 저장) — 화면은 `isMain`이라 항상 흰색(`MAIN_NODE_COLOR`)으로 그려짐 |
 | 핸들 드래그 → 빈 공간 드롭 (`onConnectEnd`) | 핸들에서 뽑은 엣지를 빈 공간에 놓음 | 시작 노드 → 새 노드 (§3-4) | 시작 노드 그래프 색 |
 | 리소스 드롭 — 노드 근처 (`onDrop`) | 사이드바 리소스를 노드 50px 이내에 드롭 | hover 노드 → 새 노드 | hover 노드 그래프 색 |
 | 리소스 드롭 — 빈 공간 (`onDrop`) | 사이드바 리소스를 빈 공간에 드롭 | 없음 (독립 노드) | 기본 회색 (`DEFAULT_NODE_COLOR`) |
@@ -209,7 +209,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 - [x] 연결 생성 시 부모 그래프 색이 자식 서브트리에 전파 — 로컬 페인트(`updateSubtreeColors`)와 서버 저장이 **같은 집합**(`getRecolorTargetIds`: 루트 + 같은 색 자손, 메인 제외)을 사용
 - [x] 색상 저장은 대상 노드별 `updateNodeContent` PATCH. 서버의 `propagateToChildren` 전파는 그래프 색 경계를 모르고 그래프 간 엣지 너머까지 덮어쓰므로(Aideep_backend#51) 사용하지 않음. PATCH 실패해도 로컬 색상은 유지(롤백 없음)
 - [x] 엣지 삭제로 그래프에서 분리되면: 남은 부모가 없으면 자식 서브트리를 기본 회색으로, 다른 부모가 남아 있으면 그 그래프 색으로 재페인트 — target 쪽만 변경, source 쪽 불변
-- [x] 메인 노드도 그래프 색을 `data.color`에 저장 (화면 표시만 흰색). 색 없는 legacy 메인 노드는 색이 확정되는 시점(연결 생성 등)에 로컬+서버로 색을 채움(`backfillMainColor`) — 그 전까지는 첫 커스텀 색 자식의 색으로 추정하는 폴백 동작 (§11-미해결: legacy 데이터 정리)
+- [x] 메인 노드도 그래프 색을 `data.color`에 저장 (화면 표시만 흰색) — 생성 시점(`onPaneContextMenu`)에 랜덤 색을 바로 확정해서 보낸다. 첫 연결 시점에 색을 뒤늦게 결정하던 `backfillMainColor`·추정 폴백은 폐기 (2026-07-17, §11-완료: legacy 데이터 정리)
 - [ ] 노드 depth 별 색상 밝기 처리
 
 ## 7. 삭제·보관
@@ -250,7 +250,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 - **depth**: 서버 `propagateDepth`가 엣지 생성·삭제 시에만 갱신하고, 갱신값을 WS·REST 응답에 싣지 않는다. `deleteNode`는 depth를 전파하지 않는다(Aideep_backend#64). 따라서 클라가 엣지 상태 변경 지점마다 `applyDepthOnEdgeCreate/Delete`로 서버 규칙을 미러링한다(`src/features/graph/CLAUDE.md`).
 - **노드 sync/read DTO 필드**: `node_id, title, node_type, content(색·textColor 포함), version, position_x/y, depth, workspace_id, 타임스탬프`. `handleSide`·`isMain`은 서버에 없음 — handleSide는 엣지 핸들에서 재유도, isMain은 `node_type === 'PROJECT'`로 파생.
 - **`deleteNode`**: 노드는 soft-delete, 그 노드에 연결된 엣지는 hard-delete(`deleteEdgesByNodeId`).
-- **메인 노드 색 필수 (Aideep_backend#52, PR #60)**: PROJECT 노드 생성 시 `color`/`textColor` 필수. 기존 색 미저장 노드는 백필 SQL(`docs/migrations/2026-07-13-backfill-project-node-color.sql`)로 채움 — 적용 후 클라의 색 추정 폴백·`backfillMainColor`는 제거 가능(§11-미해결).
+- **메인 노드 색 필수 (Aideep_backend#52, PR #60)**: PROJECT 노드 생성 시 `color`/`textColor` 필수. 기존 색 미저장 노드용 백필 SQL(`docs/migrations/2026-07-13-backfill-project-node-color.sql`)이 준비돼 있으나, 운영 DB 적용 여부는 클라 레포에서 확인 불가 (§11-설계 결정 참고 — 2026-07-17 클라 안전망 제거는 이 미확인 상태에서 진행됨).
 
 ## 11. 설계 결정 · 미해결 과제
 
@@ -268,10 +268,12 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 
 **형제·조상 연결 차단은 부수 효과.** "형제·부모·조상과 연결 불가"는 전용 검사가 없다. 직접 부모-자식만 명시 차단이고, 나머지는 같은 그래프 검사(depth 0 루트 공유)와 단일 부모 검사의 부수 효과로 성립한다(§3-2).
 
+**메인 노드 색을 생성 시점에 확정 (2026-07-17).** 이전에는 `onPaneContextMenu`가 서버 필수값을 채우려고 표시 전용 흰색(`MAIN_NODE_COLOR`)을 `data.color`에 저장했고, `isCustomColorNode`가 이 흰색을 실제 색과 구분하지 못해 최초 연결 시 대상 서브트리가 흰색으로 덮어써지는 버그가 있었다. 근본 수정으로 생성 시점에 `getRandomColorPair()`로 실제 색을 바로 확정하도록 바꾸고, "색 미확정 메인은 첫 연결 시점에 색을 결정한다"는 전제로 존재하던 `backfillMainColor`·`isCustomColorNode`·`getGraphColor`/`getSameGraphDescendantIds`의 추정 폴백을 모두 제거했다 — 메인 노드는 이제 항상 `data.color`에 실제 색을 갖는다는 불변식을 생성 시점에 보장하므로, 연결 시엔 그 값을 그대로 쓰면 된다. **잔여 리스크**: 이 변경 이전에 흰색 placeholder로 만들어졌거나 그보다 앞서(Aideep_backend#52 이전) 색 없이 생성된 legacy PROJECT 노드가 운영 DB에 남아 있고 백필 SQL이 아직 적용되지 않았다면, 그 노드는 여전히 `data.color`가 없는 채로 남는다 — 더 이상 형제 색을 추정하지 않고 `getRandomColorPair()`로 새 랜덤 색을 받으므로, 기존에 색이 있던 자손과 색이 어긋날 수 있다(§10).
+
 ### 미해결 과제
 
 - **드래그 중 협업자 이동이 내 화면에서 되돌아감**: 드래그 중 d3 tick이 d3 라이브 좌표로 전 노드를 매 프레임 덮어쓰는데, 협업자의 WS 이동은 React state에만 반영되고 d3 좌표엔 안 들어가 다음 tick에 옛 위치로 복귀. 드래그 종료 후에도 다시 그릴 계기가 없어 다음 WS 이벤트·새로고침 전까지 어긋난다 (§5-3).
 - **밀려난 주변 노드 위치 미저장**: 시뮬레이션에 밀려나기만 한(드래그 대상 아닌) 노드는 저장하지 않아 새로고침 시 원위치 복귀 — 그 사이 내 화면·DB·협업자 화면이 서로 다르다 (§5-3).
 - **opt/alt 단독 이동 보정 왕복**: 서버 move 전파가 (안 움직인) 자식들을 delta만큼 밀어버려 종료 시 자식 수만큼 원위치 복원 PATCH가 나간다. 대칭 이동도 왕복이 자손 수에 비례 — 성능 개선 여지 [AiDeep-web#143](https://github.com/Won-Life/AiDeep-web/issues/143).
 - **depth 서버 수신값 적용 대기**: 현재는 클라가 `applyDepthOnEdgeCreate/Delete`로 서버 `propagateDepth`를 미러링한다. 서버가 갱신값을 WS·REST에 실어주면([Aideep_backend#63](https://github.com/Won-Life/Aideep_backend/issues/63)) 수신값 적용으로 교체. 또한 서버 `deleteNode`가 depth를 전파하지 않아(#64) 노드 삭제로 부모를 잃은 root가 depth≠0으로 남는 공백이 있다.
-- **legacy 데이터 정리 후 단순화**: 색 미저장 legacy 메인 노드는 색 비교를 통과할 수 있고(백필 마이그레이션 적용 후 해소), legacy 크로스 엣지가 데이터 차원에서 정리되면 색 경계 순회(`getSameColorDescendantIds`)를 단순 자손 순회(`getDescendantIds`)로 대체할 수 있다. 이때 `backfillMainColor`와 색 추정 폴백도 제거 가능.
+- **legacy 크로스 엣지 정리 후 단순화**: DB에 남은 legacy 크로스 그래프 엣지가 데이터 차원에서 정리되면 색 경계 순회(`getSameColorDescendantIds`)를 단순 자손 순회(`getDescendantIds`)로 대체할 수 있다.
