@@ -11,7 +11,7 @@ export default function BugReportButton() {
 
   return (
     <>
-      <Tooltip label="오류 신고하기">
+      <Tooltip label="오류 신고/피드백" align="end">
         <button
           type="button"
           onClick={() => setIsOpen(true)}

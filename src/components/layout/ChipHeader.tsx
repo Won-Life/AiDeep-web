@@ -173,7 +173,7 @@ export default function ChipHeader({
             email={user.email}
             onLogout={onLogout}
           />
-          <Tooltip label="AIDeep 사용법 보기">
+          <Tooltip label="AIDeep 사용법 보기" align="end">
             <a
               href="https://won-life.github.io/Aideep_graph_onboard/"
               target="_blank"

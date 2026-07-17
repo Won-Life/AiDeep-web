@@ -6,9 +6,11 @@ interface TooltipProps {
   label: string;
   shortcut?: string;
   children: ReactNode;
+  // 트리거가 화면 오른쪽 끝에 붙어있어 가운데 정렬 시 잘리는 경우 'end' 사용
+  align?: 'center' | 'end';
 }
 
-export function Tooltip({ label, shortcut, children }: TooltipProps) {
+export function Tooltip({ label, shortcut, children, align = 'center' }: TooltipProps) {
   const [show, setShow] = useState(false);
   const tooltipId = useId();
 
@@ -29,7 +31,9 @@ export function Tooltip({ label, shortcut, children }: TooltipProps) {
         <div
           id={tooltipId}
           role="tooltip"
-          className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-[9999] pointer-events-none whitespace-nowrap rounded-md px-2 py-1"
+          className={`absolute top-full mt-1.5 z-[9999] pointer-events-none whitespace-nowrap rounded-md px-2 py-1 ${
+            align === 'end' ? 'right-0' : 'left-1/2 -translate-x-1/2'
+          }`}
           style={{
             background: 'rgb(var(--background))',
             border: '1px solid rgb(var(--border))',
