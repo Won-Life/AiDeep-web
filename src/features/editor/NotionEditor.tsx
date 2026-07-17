@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -400,6 +401,28 @@ function applyBlockType(editor: LexicalEditor, type: BlockType, isActive: boolea
   });
 }
 
+// ToolbarPlugin의 updateToolbar와 동일한 판별 로직 — 키보드 단축키·슬래시 메뉴처럼
+// blockType React state가 없는 곳에서도 editor.getEditorState().read() 안에서 호출해
+// applyBlockType에 정확한 isActive를 넘기기 위함
+function getBlockTypeFromSelection(): BlockType | null {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return null;
+
+  const anchorNode = selection.anchor.getNode();
+  const element =
+    anchorNode.getKey() === 'root' ? anchorNode : anchorNode.getTopLevelElementOrThrow();
+
+  if ($isListNode(element)) {
+    const parentList = $getNearestNodeOfType<ListNode>(anchorNode, ListNode);
+    const listType = parentList?.getListType() ?? element.getListType();
+    return listType === 'bullet' ? 'bullet' : listType === 'check' ? 'check' : 'number';
+  }
+  if ($isHeadingNode(element)) return element.getTag() as BlockType;
+  if ($isQuoteNode(element)) return 'quote';
+  if ($isCodeNode(element)) return 'code';
+  return 'paragraph';
+}
+
 const MAX_TABLE_DIMENSION = 20; // ponytail: 큰 표는 동기 삽입 시 에디터가 멈출 수 있어 상한선을 둠
 
 function insertTable(editor: LexicalEditor) {
@@ -516,7 +539,8 @@ function EditorShortcutsPlugin() {
           const type = BLOCK_SHORTCUT_CODES[event.code];
           if (!type) return false;
           event.preventDefault();
-          applyBlockType(editor, type, false);
+          const isActive = editor.getEditorState().read(() => getBlockTypeFromSelection() === type);
+          applyBlockType(editor, type, isActive);
           return true;
         }
 
@@ -891,15 +915,33 @@ function SlashCommandPlugin() {
   // 이미지/파일은 ref.current.click()이 필요한데, react-hooks/refs가 옵션 배열 생성
   // 시점(렌더 중)의 ref 접근을 막는다 — kind만 담아두고 실제 클릭은 onSelectOption
   // 핸들러(렌더 이후 실행)에서 수행한다.
-  const allOptions = [
-    ...BLOCK_OPTIONS.map(
-      ({ label, value, icon, shortcut }) =>
-        new SlashMenuOption(label, icon, 'action', () => applyBlockType(editor, value, false), shortcut),
-    ),
-    new SlashMenuOption('표', '⊞', 'action', () => insertTable(editor)),
-    new SlashMenuOption('이미지', '🖼', 'image', () => {}),
-    new SlashMenuOption('파일', '📎', 'file', () => {}),
-  ];
+  //
+  // useMemo로 인스턴스를 고정하는 이유(성능이 아니라 정확성): SlashMenuOption마다
+  // Lexical이 채워주는 .ref가 실제 DOM 노드를 가리켜야 자동 스크롤(SCROLL_TYPEAHEAD_
+  // OPTION_INTO_VIEW_COMMAND)이 방금 하이라이트된 옵션으로 정확히 스크롤된다. 메모 없이
+  // 매 렌더 새 인스턴스를 만들면 그 사이 옵션의 .ref가 null로 리셋되는 순간이 생겨,
+  // 자동 스크롤이 하이라이트보다 한 박자 늦게(엉뚱한 위치로) 움직이는 것처럼 보였다.
+  const allOptions = useMemo(
+    () => [
+      ...BLOCK_OPTIONS.map(
+        ({ label, value, icon, shortcut }) =>
+          new SlashMenuOption(
+            label,
+            icon,
+            'action',
+            () => {
+              const isActive = editor.getEditorState().read(() => getBlockTypeFromSelection() === value);
+              applyBlockType(editor, value, isActive);
+            },
+            shortcut,
+          ),
+      ),
+      new SlashMenuOption('표', '⊞', 'action', () => insertTable(editor)),
+      new SlashMenuOption('이미지', '🖼', 'image', () => {}),
+      new SlashMenuOption('파일', '📎', 'file', () => {}),
+    ],
+    [editor],
+  );
 
   const options = queryString
     ? allOptions.filter((option) => option.title.toLowerCase().includes(queryString.toLowerCase()))
@@ -1106,6 +1148,7 @@ export function NotionEditor({
                   style={{ color: 'rgb(var(--muted))', fontSize: 14 }}
                 >
                   {isSynced ? '노트를 작성하세요…' : '로딩 중…'}
+                  <br />
                   <span className="ml-1" style={{ color: 'rgb(var(--muted))' }}>
                     (마크다운 단축키 지원, &apos;/&apos;로 메뉴 열기)
                   </span>
