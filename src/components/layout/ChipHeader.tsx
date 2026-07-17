@@ -17,6 +17,7 @@ import { type UserMeResponse } from "@/api/types";
 import UserMenu from "./UserMenu";
 import CollaboratorsList from "./CollaboratorsList";
 import ShareButton from "./ShareButton";
+import BugReportButton from "./BugReportButton";
 import { SHOW_TEMP_HIDDEN_UI } from "@/lib/uiFlags";
 
 interface ChipHeaderProps {
@@ -171,6 +172,7 @@ export default function ChipHeader({
             email={user.email}
             onLogout={onLogout}
           />
+          <BugReportButton />
           {SHOW_TEMP_HIDDEN_UI && <ShareButton workspaceId={workspaceId} />}
         </div>
       )}
