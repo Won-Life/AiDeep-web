@@ -31,14 +31,6 @@ const SHORTCUTS = [
     ),
   },
   {
-    action: '노드 클릭',
-    effect: (
-      <Effect>
-        <Term>텍스트 에디터</Term> 열림
-      </Effect>
-    ),
-  },
-  {
     action: '노드를 다른 노드 위로 드래그',
     effect: <Effect>그 노드의 하위로 이동</Effect>,
   },
@@ -49,10 +41,6 @@ const SHORTCUTS = [
   {
     action: 'Option(Alt) + 드래그',
     effect: <Effect>노드 하나만 이동</Effect>,
-  },
-  {
-    action: '노드 선택 후 Delete',
-    effect: <Effect>노드 삭제</Effect>,
   },
 ];
 
@@ -136,8 +124,8 @@ export default function GraphUsageGuide() {
             key={s.action}
             className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0"
           >
-            <span className="text-muted">{s.action}</span>
-            <span className="text-right">{s.effect}</span>
+            <span className="min-w-0 flex-1 text-muted">{s.action}</span>
+            <span className="shrink-0 whitespace-nowrap text-right">{s.effect}</span>
           </li>
         ))}
       </ul>

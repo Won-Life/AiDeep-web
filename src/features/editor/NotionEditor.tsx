@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -14,6 +15,13 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin';
+import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
+import {
+  LexicalTypeaheadMenuPlugin,
+  useBasicTypeaheadTriggerMatch,
+  MenuOption,
+  SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND,
+} from '@lexical/react/LexicalTypeaheadMenuPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
   $getRoot,
@@ -23,10 +31,15 @@ import {
   $insertNodes,
   FORMAT_TEXT_COMMAND,
   SELECTION_CHANGE_COMMAND,
+  KEY_DOWN_COMMAND,
+  UNDO_COMMAND,
+  REDO_COMMAND,
   $createParagraphNode,
   COMMAND_PRIORITY_LOW,
+  COMMAND_PRIORITY_NORMAL,
   DecoratorNode,
   createCommand,
+  type LexicalEditor,
   type NodeKey,
   type SerializedLexicalNode,
 } from 'lexical';
@@ -44,6 +57,7 @@ import {
   $isListNode,
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
+  INSERT_CHECK_LIST_COMMAND,
   REMOVE_LIST_COMMAND,
 } from '@lexical/list';
 import {
@@ -54,15 +68,17 @@ import {
 } from '@lexical/code';
 import { LinkNode, AutoLinkNode } from '@lexical/link';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
-import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
+import { TableNode, TableRowNode, TableCellNode, INSERT_TABLE_COMMAND } from '@lexical/table';
 import { TRANSFORMERS, $convertToMarkdownString } from '@lexical/markdown';
 import { MarkdownPastePlugin } from './plugins/MarkdownPastePlugin';
 import { $setBlocksType } from '@lexical/selection';
 import { $getNearestNodeOfType, mergeRegister } from '@lexical/utils';
 import { CollaborationPlugin } from '@lexical/react/LexicalCollaborationPlugin';
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { LexicalCollaboration } from '@lexical/react/LexicalCollaborationContext';
 import * as Y from 'yjs';
 import type { SocketIoYjsProvider } from '@/lib/SocketIoYjsProvider';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,7 +90,8 @@ type BlockType =
   | 'quote'
   | 'code'
   | 'bullet'
-  | 'number';
+  | 'number'
+  | 'check';
 
 export interface NotionEditorProps {
   nodeId: string;
@@ -87,6 +104,7 @@ export interface NotionEditorProps {
   noMediaDrop?: boolean;
   autoGrow?: boolean;
   minHeight?: number;
+  extraBottomPadding?: boolean;
 }
 
 // ─── Media Commands ───────────────────────────────────────────────────────────
@@ -306,6 +324,7 @@ const EDITOR_THEME = {
     underlineStrikethrough: 'ne-underline ne-strike',
     code: 'ne-inline-code',
   },
+  link: 'ne-link',
 };
 
 const REGISTERED_NODES = [
@@ -326,16 +345,78 @@ const REGISTERED_NODES = [
 
 // ─── Block type metadata ──────────────────────────────────────────────────────
 
+// shortcut: 노션과 동일한 조합(⌘⌥N) — 노션에 대응 단축키가 없는 항목(텍스트/인용)은 undefined
 const BLOCK_OPTIONS = [
-  { label: '텍스트', value: 'paragraph' as BlockType, icon: 'T' },
-  { label: '제목 1', value: 'h1' as BlockType, icon: 'H1' },
-  { label: '제목 2', value: 'h2' as BlockType, icon: 'H2' },
-  { label: '제목 3', value: 'h3' as BlockType, icon: 'H3' },
-  { label: '인용', value: 'quote' as BlockType, icon: '❝' },
-  { label: '코드', value: 'code' as BlockType, icon: '</>' },
-  { label: '글머리 목록', value: 'bullet' as BlockType, icon: '•' },
-  { label: '번호 목록', value: 'number' as BlockType, icon: '1.' },
+  { label: '텍스트', value: 'paragraph' as BlockType, icon: 'T', shortcut: undefined as string | undefined },
+  { label: '제목 1', value: 'h1' as BlockType, icon: 'H1', shortcut: '⌘⌥1' },
+  { label: '제목 2', value: 'h2' as BlockType, icon: 'H2', shortcut: '⌘⌥2' },
+  { label: '제목 3', value: 'h3' as BlockType, icon: 'H3', shortcut: '⌘⌥3' },
+  { label: '인용', value: 'quote' as BlockType, icon: '❝', shortcut: undefined as string | undefined },
+  { label: '코드', value: 'code' as BlockType, icon: '</>', shortcut: '⌘⌥8' },
+  { label: '글머리 목록', value: 'bullet' as BlockType, icon: '•', shortcut: '⌘⌥5' },
+  { label: '번호 목록', value: 'number' as BlockType, icon: '1.', shortcut: '⌘⌥6' },
+  { label: '체크리스트', value: 'check' as BlockType, icon: '☑', shortcut: '⌘⌥4' },
 ] as const;
+
+// 알파벳/문자 단축키는 event.key, 숫자(Option 조합 시 문자가 바뀌는 키보드 레이아웃 대비)는
+// event.code로 매칭 — 노션과 동일 조합
+const BLOCK_SHORTCUT_CODES: Partial<Record<string, BlockType>> = {
+  Digit1: 'h1',
+  Digit2: 'h2',
+  Digit3: 'h3',
+  Digit4: 'check',
+  Digit5: 'bullet',
+  Digit6: 'number',
+  Digit8: 'code',
+};
+
+// ─── Shared block/insert actions (토글바 + 슬래시 메뉴 공용) ──────────────────
+
+function applyBlockType(editor: LexicalEditor, type: BlockType, isActive: boolean) {
+  if (type === 'bullet' || type === 'number' || type === 'check') {
+    const insertCommand =
+      type === 'bullet'
+        ? INSERT_UNORDERED_LIST_COMMAND
+        : type === 'number'
+          ? INSERT_ORDERED_LIST_COMMAND
+          : INSERT_CHECK_LIST_COMMAND;
+    editor.dispatchCommand(isActive ? REMOVE_LIST_COMMAND : insertCommand, undefined);
+    return;
+  }
+
+  editor.update(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) return;
+
+    if (type === 'paragraph') {
+      $setBlocksType(selection, () => $createParagraphNode());
+    } else if (type === 'h1' || type === 'h2' || type === 'h3') {
+      $setBlocksType(selection, () => $createHeadingNode(type));
+    } else if (type === 'quote') {
+      $setBlocksType(selection, () => $createQuoteNode());
+    } else if (type === 'code') {
+      $setBlocksType(selection, () => $createCodeNode());
+    }
+  });
+}
+
+const MAX_TABLE_DIMENSION = 20; // ponytail: 큰 표는 동기 삽입 시 에디터가 멈출 수 있어 상한선을 둠
+
+function insertTable(editor: LexicalEditor) {
+  const rowsInput = window.prompt('행 개수', '3');
+  if (rowsInput === null) return;
+  const colsInput = window.prompt('열 개수', '3');
+  if (colsInput === null) return;
+
+  const rows = Math.min(MAX_TABLE_DIMENSION, Math.max(1, parseInt(rowsInput, 10) || 3));
+  const columns = Math.min(MAX_TABLE_DIMENSION, Math.max(1, parseInt(colsInput, 10) || 3));
+
+  // window.prompt()가 뜨는 동안 contentEditable이 blur되어 선택 영역이 끊긴다 —
+  // dispatch 전에 focus()로 에디터 선택을 복원해야 삽입이 실제로 반영된다.
+  editor.focus(() => {
+    editor.dispatchCommand(INSERT_TABLE_COMMAND, { rows: String(rows), columns: String(columns) });
+  });
+}
 
 // ─── Media helpers ────────────────────────────────────────────────────────────
 
@@ -419,6 +500,47 @@ function DragDropPlugin() {
   return null;
 }
 
+// ─── Keyboard Shortcuts Plugin (노션과 동일 조합) ──────────────────────────────
+
+function EditorShortcutsPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return editor.registerCommand(
+      KEY_DOWN_COMMAND,
+      (event: KeyboardEvent) => {
+        const mod = event.metaKey || event.ctrlKey;
+        if (!mod) return false;
+
+        if (event.altKey) {
+          const type = BLOCK_SHORTCUT_CODES[event.code];
+          if (!type) return false;
+          event.preventDefault();
+          applyBlockType(editor, type, false);
+          return true;
+        }
+
+        if (!event.shiftKey && event.key.toLowerCase() === 'e') {
+          event.preventDefault();
+          editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code');
+          return true;
+        }
+
+        if (event.shiftKey && event.key.toLowerCase() === 's') {
+          event.preventDefault();
+          editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough');
+          return true;
+        }
+
+        return false;
+      },
+      COMMAND_PRIORITY_NORMAL,
+    );
+  }, [editor]);
+
+  return null;
+}
+
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
 
 export function ToolbarPlugin() {
@@ -453,7 +575,7 @@ export function ToolbarPlugin() {
     if ($isListNode(element)) {
       const parentList = $getNearestNodeOfType<ListNode>(anchorNode, ListNode);
       const listType = parentList?.getListType() ?? element.getListType();
-      setBlockType(listType === 'bullet' ? 'bullet' : 'number');
+      setBlockType(listType === 'bullet' ? 'bullet' : listType === 'check' ? 'check' : 'number');
     } else if ($isHeadingNode(element)) {
       setBlockType(element.getTag() as BlockType);
     } else if ($isQuoteNode(element)) {
@@ -495,39 +617,9 @@ export function ToolbarPlugin() {
     format: 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code',
   ) => editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
 
-  const applyBlockType = (type: BlockType) => {
+  const handleApplyBlockType = (type: BlockType) => {
     setShowBlockMenu(false);
-
-    if (type === 'bullet') {
-      editor.dispatchCommand(
-        blockType === 'bullet' ? REMOVE_LIST_COMMAND : INSERT_UNORDERED_LIST_COMMAND,
-        undefined,
-      );
-      return;
-    }
-
-    if (type === 'number') {
-      editor.dispatchCommand(
-        blockType === 'number' ? REMOVE_LIST_COMMAND : INSERT_ORDERED_LIST_COMMAND,
-        undefined,
-      );
-      return;
-    }
-
-    editor.update(() => {
-      const selection = $getSelection();
-      if (!$isRangeSelection(selection)) return;
-
-      if (type === 'paragraph') {
-        $setBlocksType(selection, () => $createParagraphNode());
-      } else if (type === 'h1' || type === 'h2' || type === 'h3') {
-        $setBlocksType(selection, () => $createHeadingNode(type));
-      } else if (type === 'quote') {
-        $setBlocksType(selection, () => $createQuoteNode());
-      } else if (type === 'code') {
-        $setBlocksType(selection, () => $createCodeNode());
-      }
-    });
+    applyBlockType(editor, type, blockType === type);
   };
 
   const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -559,6 +651,41 @@ export function ToolbarPlugin() {
       <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageInput} />
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileInput} />
 
+      {/* ── Undo/Redo ── */}
+      <Tooltip label="실행 취소" shortcut="⌘Z">
+        <button
+          type="button"
+          onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)}
+          className="flex items-center justify-center rounded cursor-pointer transition-colors"
+          style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3.5H8.5a3.5 3.5 0 010 7H5" />
+            <path d="M3 1.2L1 3.5l2 2.3" />
+          </svg>
+        </button>
+      </Tooltip>
+      <Tooltip label="다시 실행" shortcut="⌘⇧Z">
+        <button
+          type="button"
+          onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}
+          className="flex items-center justify-center rounded cursor-pointer transition-colors"
+          style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'scaleX(-1)' }}>
+            <path d="M3 3.5H8.5a3.5 3.5 0 010 7H5" />
+            <path d="M3 1.2L1 3.5l2 2.3" />
+          </svg>
+        </button>
+      </Tooltip>
+
+      {/* ── Divider ── */}
+      <div style={{ width: 1, height: 14, background: 'rgb(var(--border))', margin: '0 4px' }} />
+
       {/* ── Block type dropdown ── */}
       <div ref={menuRef} className="relative">
         <button
@@ -586,15 +713,15 @@ export function ToolbarPlugin() {
             className="absolute top-full left-0 mt-0.5 bg-background rounded-lg py-1 z-[9999]"
             style={{
               border: '1px solid rgb(var(--border))',
-              width: 160,
+              width: 190,
               boxShadow: '0 4px 16px rgba(0,0,0,0.09)',
             }}
           >
-            {BLOCK_OPTIONS.map(({ label, value, icon }) => (
+            {BLOCK_OPTIONS.map(({ label, value, icon, shortcut }) => (
               <button
                 key={value}
                 type="button"
-                onClick={() => applyBlockType(value)}
+                onClick={() => handleApplyBlockType(value)}
                 className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left cursor-pointer hover:bg-surface transition-colors"
                 style={{ color: blockType === value ? 'rgb(var(--foreground))' : 'rgb(var(--muted))' }}
               >
@@ -605,6 +732,7 @@ export function ToolbarPlugin() {
                   {icon}
                 </span>
                 <span
+                  className="flex-1"
                   style={{
                     fontSize: 13,
                     fontWeight: blockType === value ? 600 : 400,
@@ -612,6 +740,11 @@ export function ToolbarPlugin() {
                 >
                   {label}
                 </span>
+                {shortcut && (
+                  <span className="shrink-0" style={{ fontSize: 11, color: 'rgb(var(--muted))' }}>
+                    {shortcut}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -624,72 +757,234 @@ export function ToolbarPlugin() {
       {/* ── Text format buttons ── */}
       {(
         [
-          { format: 'bold' as const, label: 'B', active: isBold, title: '굵게 ⌘B', extraStyle: { fontWeight: 700 } },
-          { format: 'italic' as const, label: 'I', active: isItalic, title: '기울임 ⌘I', extraStyle: { fontStyle: 'italic' } },
-          { format: 'underline' as const, label: 'U', active: isUnderline, title: '밑줄 ⌘U', extraStyle: { textDecoration: 'underline' } },
-          { format: 'strikethrough' as const, label: 'S', active: isStrikethrough, title: '취소선', extraStyle: { textDecoration: 'line-through' } },
-          { format: 'code' as const, label: '<>', active: isCode, title: '인라인 코드', extraStyle: { fontFamily: 'monospace', fontSize: 11 } },
+          { format: 'bold' as const, label: 'B', active: isBold, name: '굵게', shortcut: '⌘B', extraStyle: { fontWeight: 700 } },
+          { format: 'italic' as const, label: 'I', active: isItalic, name: '기울임', shortcut: '⌘I', extraStyle: { fontStyle: 'italic' } },
+          { format: 'underline' as const, label: 'U', active: isUnderline, name: '밑줄', shortcut: '⌘U', extraStyle: { textDecoration: 'underline' } },
+          { format: 'strikethrough' as const, label: 'S', active: isStrikethrough, name: '취소선', shortcut: '⌘⇧S', extraStyle: { textDecoration: 'line-through' } },
+          { format: 'code' as const, label: '<>', active: isCode, name: '인라인 코드', shortcut: '⌘E', extraStyle: { fontFamily: 'monospace', fontSize: 11 } },
         ] as const
-      ).map(({ format, label, active, title, extraStyle }) => (
-        <button
-          key={format}
-          type="button"
-          title={title}
-          onClick={() => dispatchFormat(format)}
-          className="flex items-center justify-center rounded cursor-pointer transition-colors"
-          style={{
-            width: 26,
-            height: 26,
-            fontSize: 12,
-            background: active ? 'rgb(var(--surface-hover))' : 'transparent',
-            color: active ? 'rgb(var(--foreground))' : 'rgb(var(--muted))',
-            ...extraStyle,
-          }}
-          onMouseEnter={(e) => {
-            if (!active) (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))';
-          }}
-          onMouseLeave={(e) => {
-            if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent';
-          }}
-        >
-          {label}
-        </button>
+      ).map(({ format, label, active, name, shortcut, extraStyle }) => (
+        <Tooltip key={format} label={name} shortcut={shortcut}>
+          <button
+            type="button"
+            onClick={() => dispatchFormat(format)}
+            className="flex items-center justify-center rounded cursor-pointer transition-colors"
+            style={{
+              width: 26,
+              height: 26,
+              fontSize: 12,
+              background: active ? 'rgb(var(--surface-hover))' : 'transparent',
+              color: active ? 'rgb(var(--foreground))' : 'rgb(var(--muted))',
+              ...extraStyle,
+            }}
+            onMouseEnter={(e) => {
+              if (!active) (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))';
+            }}
+            onMouseLeave={(e) => {
+              if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent';
+            }}
+          >
+            {label}
+          </button>
+        </Tooltip>
       ))}
 
       {/* ── Divider ── */}
       <div style={{ width: 1, height: 14, background: 'rgb(var(--border))', margin: '0 4px' }} />
 
       {/* ── Media buttons ── */}
-      <button
-        type="button"
-        title="이미지 삽입"
-        onClick={() => imageInputRef.current?.click()}
-        className="flex items-center justify-center rounded cursor-pointer transition-colors"
-        style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-      >
-        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="0.7" y="0.7" width="11.6" height="11.6" rx="1.5" />
-          <circle cx="4" cy="4" r="1" fill="currentColor" stroke="none" />
-          <path d="M0.7 8.5l2.8-2.8 2 2 2.5-3.2 4.3 5" />
-        </svg>
-      </button>
+      <Tooltip label="이미지 삽입">
+        <button
+          type="button"
+          onClick={() => imageInputRef.current?.click()}
+          className="flex items-center justify-center rounded cursor-pointer transition-colors"
+          style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="0.7" y="0.7" width="11.6" height="11.6" rx="1.5" />
+            <circle cx="4" cy="4" r="1" fill="currentColor" stroke="none" />
+            <path d="M0.7 8.5l2.8-2.8 2 2 2.5-3.2 4.3 5" />
+          </svg>
+        </button>
+      </Tooltip>
 
-      <button
-        type="button"
-        title="파일 첨부"
-        onClick={() => fileInputRef.current?.click()}
-        className="flex items-center justify-center rounded cursor-pointer transition-colors"
-        style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-      >
-        <svg width="11" height="13" viewBox="0 0 11 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9.5 5.5L4.5 10.5a2.5 2.5 0 01-3.535-3.536L5.5 2.43a1.5 1.5 0 012.121 2.121L3.086 9.086a.5.5 0 01-.707-.707L7 3.76" />
-        </svg>
-      </button>
+      <Tooltip label="파일 첨부">
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex items-center justify-center rounded cursor-pointer transition-colors"
+          style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <svg width="11" height="13" viewBox="0 0 11 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9.5 5.5L4.5 10.5a2.5 2.5 0 01-3.535-3.536L5.5 2.43a1.5 1.5 0 012.121 2.121L3.086 9.086a.5.5 0 01-.707-.707L7 3.76" />
+          </svg>
+        </button>
+      </Tooltip>
+
+      <Tooltip label="표 삽입">
+        <button
+          type="button"
+          onClick={() => insertTable(editor)}
+          className="flex items-center justify-center rounded cursor-pointer transition-colors"
+          style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round">
+            <rect x="0.8" y="0.8" width="11.4" height="11.4" rx="1.2" />
+            <path d="M0.8 4.5H12.2M0.8 8.5H12.2M4.5 0.8V12.2M8.5 0.8V12.2" />
+          </svg>
+        </button>
+      </Tooltip>
     </div>
+  );
+}
+
+// ─── Slash Command Plugin ─────────────────────────────────────────────────────
+
+class SlashMenuOption extends MenuOption {
+  title: string;
+  glyph: string;
+  kind: 'action' | 'image' | 'file';
+  shortcut: string | undefined;
+  onSelect: () => void;
+
+  constructor(
+    title: string,
+    glyph: string,
+    kind: 'action' | 'image' | 'file',
+    onSelect: () => void,
+    shortcut?: string,
+  ) {
+    super(title);
+    this.title = title;
+    this.glyph = glyph;
+    this.kind = kind;
+    this.onSelect = onSelect;
+    this.shortcut = shortcut;
+  }
+}
+
+function SlashCommandPlugin() {
+  const [editor] = useLexicalComposerContext();
+  const [queryString, setQueryString] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const checkForTriggerMatch = useBasicTypeaheadTriggerMatch('/', { minLength: 0 });
+
+  useEffect(() => {
+    return editor.registerCommand(
+      SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND,
+      ({ option }) => {
+        option.ref?.current?.scrollIntoView({ block: 'nearest' });
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+  }, [editor]);
+
+  // 이미지/파일은 ref.current.click()이 필요한데, react-hooks/refs가 옵션 배열 생성
+  // 시점(렌더 중)의 ref 접근을 막는다 — kind만 담아두고 실제 클릭은 onSelectOption
+  // 핸들러(렌더 이후 실행)에서 수행한다.
+  const allOptions = [
+    ...BLOCK_OPTIONS.map(
+      ({ label, value, icon, shortcut }) =>
+        new SlashMenuOption(label, icon, 'action', () => applyBlockType(editor, value, false), shortcut),
+    ),
+    new SlashMenuOption('표', '⊞', 'action', () => insertTable(editor)),
+    new SlashMenuOption('이미지', '🖼', 'image', () => {}),
+    new SlashMenuOption('파일', '📎', 'file', () => {}),
+  ];
+
+  const options = queryString
+    ? allOptions.filter((option) => option.title.toLowerCase().includes(queryString.toLowerCase()))
+    : allOptions;
+
+  const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const src = await readFileAsDataUrl(file);
+    editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
+    e.target.value = '';
+  };
+
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+    e.target.value = '';
+  };
+
+  return (
+    <>
+      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageInput} />
+      <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileInput} />
+      <LexicalTypeaheadMenuPlugin<SlashMenuOption>
+        onQueryChange={setQueryString}
+        onSelectOption={(option, textNodeContainingQuery, closeMenu) => {
+          editor.update(() => {
+            textNodeContainingQuery?.remove();
+          });
+          if (option.kind === 'image') imageInputRef.current?.click();
+          else if (option.kind === 'file') fileInputRef.current?.click();
+          else option.onSelect();
+          closeMenu();
+        }}
+        triggerFn={checkForTriggerMatch}
+        options={options}
+        menuRenderFn={(anchorElementRef, { selectedIndex, selectOptionAndCleanUp, setHighlightedIndex }) =>
+          anchorElementRef.current && options.length > 0
+            ? createPortal(
+                <div
+                  className="nodrag nowheel"
+                  style={{
+                    background: 'rgb(var(--background))',
+                    border: '1px solid rgb(var(--border))',
+                    borderRadius: 8,
+                    padding: '4px 0',
+                    width: 210,
+                    maxHeight: 280,
+                    overflowY: 'auto',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.09)',
+                    zIndex: 9999,
+                  }}
+                >
+                  {options.map((option, index) => (
+                    <div
+                      key={option.key}
+                      ref={option.setRefElement}
+                      className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer"
+                      style={{ background: selectedIndex === index ? 'rgb(var(--surface))' : 'transparent' }}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      onClick={() => selectOptionAndCleanUp(option)}
+                    >
+                      <span
+                        className="shrink-0 flex items-center justify-center font-mono"
+                        style={{ width: 18, fontSize: 12, color: 'rgb(var(--muted))' }}
+                      >
+                        {option.glyph}
+                      </span>
+                      <span className="flex-1" style={{ fontSize: 13, color: 'rgb(var(--foreground))' }}>{option.title}</span>
+                      {option.shortcut && (
+                        <span className="shrink-0" style={{ fontSize: 11, color: 'rgb(var(--muted))' }}>
+                          {option.shortcut}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>,
+                anchorElementRef.current,
+              )
+            : null
+        }
+      />
+    </>
   );
 }
 
@@ -756,6 +1051,7 @@ export function NotionEditor({
   noMediaDrop = false,
   autoGrow = false,
   minHeight,
+  extraBottomPadding = false,
 }: NotionEditorProps) {
   // provider의 'sync' 이벤트에서 동기화 여부를 직접 구독 — on()이 등록 즉시
   // 현재 상태를 replay하므로 늦게 마운트돼도 값이 맞는다 (prop 중계 불필요)
@@ -800,7 +1096,7 @@ export function NotionEditor({
             <RichTextPlugin
               contentEditable={
                 <ContentEditable
-                  className="ne-root nodrag nowheel px-4 py-3"
+                  className={`ne-root nodrag nowheel px-4 pt-3 ${extraBottomPadding ? 'pb-32' : 'pb-3'}`}
                   spellCheck
                 />
               }
@@ -811,7 +1107,7 @@ export function NotionEditor({
                 >
                   {isSynced ? '노트를 작성하세요…' : '로딩 중…'}
                   <span className="ml-1" style={{ color: 'rgb(var(--muted))' }}>
-                    (마크다운 단축키 지원)
+                    (마크다운 단축키 지원, &apos;/&apos;로 메뉴 열기)
                   </span>
                 </div>
               }
@@ -822,9 +1118,12 @@ export function NotionEditor({
           <TablePlugin />
           <ListPlugin />
           <CheckListPlugin />
+          <LinkPlugin />
           <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
           <MarkdownPastePlugin />
           <MediaPlugin />
+          <SlashCommandPlugin />
+          <EditorShortcutsPlugin />
           {!noMediaDrop && <DragDropPlugin />}
 
           {onFirstLineChange && (
@@ -834,7 +1133,7 @@ export function NotionEditor({
             <ContentExportPlugin onChange={onContentChange} />
           )}
 
-          {collabProvider && (
+          {collabProvider ? (
             <CollaborationPlugin
               id={`yjs-${nodeId}`}
               providerFactory={providerFactory}
@@ -842,6 +1141,9 @@ export function NotionEditor({
               username={username}
               cursorColor={cursorColor}
             />
+          ) : (
+            // collabProvider 없을 땐 undo/redo 핸들러가 CollaborationPlugin 대신 필요하다
+            <HistoryPlugin />
           )}
         </LexicalComposer>
       </LexicalCollaboration>

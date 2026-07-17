@@ -365,6 +365,11 @@
     color: #D44;
   }
 
+  .ne-link {
+    color: rgb(var(--ds-main));
+    text-decoration: underline;
+  }
+
   /* ── Table ── */
   .ne-table {
     border-collapse: collapse;

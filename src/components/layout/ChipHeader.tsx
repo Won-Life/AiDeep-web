@@ -18,6 +18,7 @@ import UserMenu from "./UserMenu";
 import CollaboratorsList from "./CollaboratorsList";
 import ShareButton from "./ShareButton";
 import BugReportButton from "./BugReportButton";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { SHOW_TEMP_HIDDEN_UI } from "@/lib/uiFlags";
 
 interface ChipHeaderProps {
@@ -172,6 +173,31 @@ export default function ChipHeader({
             email={user.email}
             onLogout={onLogout}
           />
+          <Tooltip label="AIDeep 사용법 보기" align="end">
+            <a
+              href="https://won-life.github.io/Aideep_graph_onboard/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="AIDeep 사용법 보기"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background transition-colors hover:bg-surface"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4" />
+                <path d="M12 17h.01" />
+              </svg>
+            </a>
+          </Tooltip>
           <BugReportButton />
           {SHOW_TEMP_HIDDEN_UI && <ShareButton workspaceId={workspaceId} />}
         </div>

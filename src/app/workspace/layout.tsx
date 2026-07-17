@@ -13,6 +13,7 @@ import ChipHeader from '@/components/layout/ChipHeader';
 import DropDown from '@/components/ui/DropDown';
 import AiChatPanel from '@/features/chat/AiChatPanel';
 import UserMenu from '@/components/layout/UserMenu';
+import OnboardingPopup from '@/components/layout/OnboardingPopup';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
 import { getWorkspaces, getWorkspaceMembers } from '@/api/workspace';
@@ -381,6 +382,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         email={userMe?.email ?? ''}
         onLogout={handleLogout}
       />
+
+      <OnboardingPopup />
     </div>
   );
 }
