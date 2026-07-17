@@ -26,8 +26,11 @@ export default function OnboardingPopup() {
   const isOpen = !seen && !dismissed;
 
   const close = () => {
-    localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
-    setDismissed(true);
+    try {
+      localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+    } finally {
+      setDismissed(true);
+    }
   };
 
   if (!isOpen) return null;
