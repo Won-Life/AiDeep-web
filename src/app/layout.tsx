@@ -15,6 +15,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AiDeep",
   description: "AiDeep",
+  openGraph: {
+    title: "AiDeep",
+    description: "AiDeep",
+    images: ["/logo.png"],
+  },
+  twitter: {
+    card: "summary",
+    title: "AiDeep",
+    description: "AiDeep",
+    images: ["/logo.png"],
+  },
 };
 
 export default function RootLayout({
