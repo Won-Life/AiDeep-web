@@ -67,7 +67,6 @@ export async function moveNode(
   nodeId: string,
   position: Position,
 ): Promise<string> {
-  console.log("[pos:save] moveNode PATCH 요청", nodeId, position);
   const res = await api<string>(
     `/workspace/${workspaceId}/node/${nodeId}/move`,
     {
@@ -75,7 +74,6 @@ export async function moveNode(
       body: JSON.stringify({ position }),
     },
   );
-  console.log("[pos:save] moveNode PATCH 응답(서버 저장 완료)", nodeId, res);
   return res;
 }
 
