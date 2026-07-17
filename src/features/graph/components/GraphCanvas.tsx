@@ -26,6 +26,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import ZoomControl from '@/components/ui/ZoomControl';
+import GraphUsageGuide from '@/components/ui/GraphUsageGuide';
 import * as d3 from 'd3';
 import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
@@ -3296,17 +3297,20 @@ function GraphCanvasInner({
       />
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
-      {myOpenEditorNodeIds.length > 0 && (
-        <button
-          type="button"
-          onClick={handleCloseAllPanels}
-          // top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
-          // top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치.
-          className="absolute top-20 right-4 z-40 rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
-        >
-          에디터 모두 닫기
-        </button>
-      )}
+      {/* top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
+          top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치. */}
+      <div className="absolute top-20 right-4 z-40 flex items-start gap-2">
+        <GraphUsageGuide />
+        {myOpenEditorNodeIds.length > 0 && (
+          <button
+            type="button"
+            onClick={handleCloseAllPanels}
+            className="rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
+          >
+            에디터 모두 닫기
+          </button>
+        )}
+      </div>
       {isArchiveModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[360px] rounded-xl border border-border bg-background p-5 shadow-xl">
