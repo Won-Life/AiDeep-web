@@ -19,6 +19,7 @@ import CollaboratorsList from "./CollaboratorsList";
 import ShareButton from "./ShareButton";
 import BugReportButton from "./BugReportButton";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { ONBOARDING_URL } from "./OnboardingPopup";
 import { SHOW_TEMP_HIDDEN_UI } from "@/lib/uiFlags";
 
 interface ChipHeaderProps {
@@ -175,7 +176,7 @@ export default function ChipHeader({
           />
           <Tooltip label="AIDeep 사용법 보기" align="end">
             <a
-              href="https://won-life.github.io/Aideep_graph_onboard/"
+              href={ONBOARDING_URL}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="AIDeep 사용법 보기"

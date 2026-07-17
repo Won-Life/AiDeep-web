@@ -14,8 +14,13 @@ export function Tooltip({ label, shortcut, children, align = 'center' }: Tooltip
   const [show, setShow] = useState(false);
   const tooltipId = useId();
 
+  // aria-describedby는 "설명"일 뿐 접근성 이름이 아니다 — 아이콘 전용 트리거가 title을
+  // 잃고 스크린리더에 이름 없이 노출되지 않도록 aria-label도 함께 주입한다.
   const trigger = isValidElement(children)
-    ? cloneElement(children as ReactElement<{ 'aria-describedby'?: string }>, { 'aria-describedby': tooltipId })
+    ? cloneElement(
+        children as ReactElement<{ 'aria-describedby'?: string; 'aria-label'?: string }>,
+        { 'aria-describedby': tooltipId, 'aria-label': label },
+      )
     : children;
 
   return (
