@@ -58,7 +58,7 @@ WS 핸들러·이벤트 리스너는 마운트 시점의 클로저를 사용한�
 
 **서브트리 방향 전환 시 핸들 정규화 (React Flow 에러 #008 방지)**: 비-root 노드는 `source-{handleSide}` 핸들 하나만 렌더링하므로, 서브트리 방향이 바뀌는 세 경로(D3 대칭이동·드래그 재부모화·onConnect 트리 병합) 모두에서 자손 handleSide와 내부 엣지 핸들을 새 방향으로 함께 갱신한다(`subtreeInternalEdgeFilter`·`persistSubtreeEdgeHandles`). 서버는 노드 handleSide 개념이 없고 엣지 핸들만 저장하므로 PATCH `/edge/:edgeId`로 동반 저장한다 — 누락 시 새로고침 후 부모·자식 엣지 핸들이 모순되어 해당 엣지가 렌더링에서 탈락한다. 저장 경로는 두 갈래: 재부모화·트리 병합은 `persistSubtreeEdgeHandles`가, 반전만 하고 빈 공간에 놓는 경우는 `onNodeDragStop`이 드래그 시작 시 엣지 핸들 스냅샷(`dragStartEdgeHandlesRef`)과의 diff로 변경분만 저장한다(재부모화 시에는 이중 PATCH 방지를 위해 diff 스윕 생략). 협업자 반영: 서버가 PATCH 시 broadcast하는 WS `EDGE_UPDATE`를 클라 `useWorkspaceWS`의 `handleEdgeUpdate`가 수신해, 엣지 `sourceHandle`/`targetHandle`과 target 노드 `handleSide`(새 sourceHandle에서 재유도)를 함께 갱신 — 협업자 화면도 새로고침 없이 새 방향으로 그려진다.
 
-색상 전파: 엣지 생성 성공 후 `updateSubtreeColors`로 로컬 페인트하고, 같은 집합(`getRecolorTargetIds`)에 **노드별** REST PATCH로 저장한다. 서버의 `propagateToChildren` 전파는 그래프 색 경계를 모르고 크로스 그래프 엣지(legacy) 너머까지 덮어쓰므로(Aideep_backend#51) 사용하지 않는다. PATCH 실패해도 로컬 색상은 이미 변경 (롤백 없음).
+색상 전파: `updateSubtreeColors`로 로컬 페인트하고, 같은 집합(`getRecolorTargetIds`)에 **노드별** REST PATCH로 저장한다(PATCH는 항상 엣지 생성 성공 후). 로컬 페인트 시점은 경로별로 다르다 — `onConnect`는 요청 전 선반영 후 엣지 생성 실패 시 연결 전 스냅샷으로 롤백, 재부모화(`onNodeDragStop`)는 엣지 생성 성공 후에만 페인트. 서버의 `propagateToChildren` 전파는 그래프 색 경계를 모르고 크로스 그래프 엣지(legacy) 너머까지 덮어쓰므로(Aideep_backend#51) 사용하지 않는다. 색 PATCH 자체가 실패한 경우는 로컬 색상 유지 (롤백 없음).
 
 source/target 정규화: `resolveConnectionDirection` 헬퍼가 결정 — ① isMain 노드 → source, ② 단독 노드(엣지 0개)가 그래프에 연결되면 그래프 쪽 → source. `onConnect`와 `isValidConnection`이 같은 헬퍼를 공유한다.
 
