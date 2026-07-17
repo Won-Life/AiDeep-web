@@ -145,7 +145,6 @@ export default function UserMenu({
       // 백엔드에서 S3 업로드 후 { key, url, originalName, mimeType, size } 형태로 응답하면
       // 아래 result.url이 S3 URL이 되어 프로필 이미지가 정상적으로 표시됨
       const result = await uploadFile(file);
-      console.log("프로필 이미지 URL:", result.url); // 백엔드 완성 후 제거
       setProfileImageUrl(result.url);
     } catch {
       // 업로드 실패 (서버 미완성으로 인해 현재 항상 실패)
