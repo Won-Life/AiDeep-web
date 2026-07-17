@@ -105,7 +105,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 1. 방향 결정(§3-1) 후 단일 부모·target 핸들 검사(§3-2) 통과 시 진행
 2. 서로 다른 그래프끼리는 `isValidConnection`에서 차단되므로 여기 도달하는 연결은 **단독 노드·같은 색 트리뿐** — **항상** 자식(+그 서브트리)을 부모 기준 자동 배치 위치로 이동시키고, 부모 그래프 색을 자식 서브트리에 전파한다(편입)
 3. 자식의 `handleSide` 저장: swap 반영 후 source 쪽 핸들 이름에서 left/right 추출 → 핸들 이름에 방향이 없으면 위치 기반 fallback
-4. **서버 반영 순서**: 색·위치는 `createEdge` REST **요청 전에** 로컬 선반영(엣지 생성 실패 시 롤백 없음), 엣지 자체는 REST 성공 후에만 로컬 삽입, 색상 저장은 엣지 생성 성공 후 대상 노드별 `updateNodeContent` PATCH
+4. **서버 반영 순서**: 색·위치는 `createEdge` REST **요청 전에** 로컬 선반영(엣지 생성 실패 시 롤백 없음), 엣지 자체는 REST 성공 후에만 로컬 삽입, 색상 저장은 엣지 생성 성공 후 대상 노드별 `updateNodeContent` PATCH, **위치 저장은 엣지 생성 성공 후 `saveDragPositions`** — 자식 root만 `moveNode` PATCH하고 서버 delta 전파와 어긋나는 자손(대칭이동분)만 보정 (§5의 드래그 저장과 동일 패턴)
 
 #### 3-4. 핸들 드래그 — 빈 공간 드롭으로 새 노드 생성 (`onConnectEnd`)
 
