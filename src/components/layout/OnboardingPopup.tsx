@@ -5,6 +5,7 @@ import { EMAIL_RE, submitEarlyAccessEmail } from '@/lib/earlyAccessForm';
 type NotifyStatus = 'ask' | 'saving' | 'done' | 'error';
 
 export const ONBOARDING_URL = 'https://won-life.github.io/Aideep_graph_onboard/';
+export const MEET_ONBOARDING_URL = 'https://won-life.github.io/Aideep_meet_onboard/';
 export const ONBOARDING_SEEN_KEY = 'aideep_onboarding_seen';
 
 const noopSubscribe = () => () => {};
@@ -137,10 +138,23 @@ export default function OnboardingPopup() {
             ) : (
               <>
                 <p className="text-[14px] leading-[22px] text-muted">
-                  구글 미트와 연동해서 회의 중 내용을 실시간으로 구조화하고, 회의가
-                  끝나면 회의록까지 자동으로 만들어주는 기능을 준비하고 있어요. 지금
-                  얼리액세스를 신청하시면 출시 후 무료로 사용하실 수 있어요.
+                  구글 미트와 연동해서{' '}
+                  <strong className="font-bold text-foreground">
+                    회의 내용을 실시간으로 구조화하고, 회의록을 자동으로 만들어주는
+                  </strong>{' '}
+                  기능을 준비하고 있어요.
+                  <br />
+                  지금 얼리액세스를 신청하시면 출시 후 무료로 사용하실 수 있어요.
                 </p>
+
+                <a
+                  href={MEET_ONBOARDING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[14px] text-blue-600 underline hover:text-blue-700"
+                >
+                  서비스 설명 보러 가기
+                </a>
 
                 <input
                   type="email"
