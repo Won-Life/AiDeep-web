@@ -163,10 +163,18 @@ function getGraphColor(
   return getRandomColorPair();
 }
 
+// "그래프 색이 확정된 노드"인지 판별. 두 값은 색 미확정 sentinel로 취급한다:
+// - DEFAULT_NODE_COLOR.bg(gray): 색 미저장 legacy 노드의 폴백
+// - MAIN_NODE_COLOR.bg(white): createProjectNode가 저장하는 placeholder —
+//   서버가 body.color를 필수화(Aideep_backend#52)해 생성 시점에 보내는 표시색.
+//   흰색을 확정색으로 오판하면 backfillMainColor가 영원히 no-op이 되어
+//   신규 메인 노드의 그래프 색이 흰색으로 굳는다.
 function isCustomColorNode(nodeId: string, nodes: Node[]): boolean {
   const node = nodes.find((n) => n.id === nodeId);
   const color = node?.data?.color as string | undefined;
-  return Boolean(color && color !== DEFAULT_NODE_COLOR.bg);
+  return Boolean(
+    color && color !== DEFAULT_NODE_COLOR.bg && color !== MAIN_NODE_COLOR.bg,
+  );
 }
 
 function colorOfNodeIn(nodes: Node[]) {
@@ -1203,11 +1211,13 @@ function GraphCanvasInner({
    * - Problem      : 그래프 단위 동작(서브트리 이동·색 전파·삭제 캐스케이드)은
    *                  "같은 색 = 같은 그래프"로 경계를 판별하므로, main 노드도
    *                  data.color에 자기 그래프 색을 갖고 있어야 한다(표시만 흰색).
-   *                  그런데 color 없는 PROJECT 노드가 DB에 legacy로 존재한다:
-   *                  과거 서버 CreateProjectNodeBody.body에 @IsDefined()가 없어
-   *                  body 누락 요청이 검증을 통과해 content가 색 없이 저장됐다.
-   *                  현재는 서버가 body + color 필수화(Aideep_backend#52, PR #60)해
-   *                  신규 색 없는 main은 더 생기지 않고, 남은 것은 백필 대상 legacy 데이터다.
+   *                  그런데 그래프 색이 미확정인 PROJECT 노드가 두 부류 존재한다:
+   *                  ① legacy — 과거 서버 CreateProjectNodeBody.body에 @IsDefined()가
+   *                  없어 body 누락 요청이 검증을 통과해 content가 색 없이 저장됐다.
+   *                  ② 신규 — 서버가 body + color 필수화(Aideep_backend#52, PR #60)된
+   *                  뒤로는 createProjectNode가 표시색 흰색(MAIN_NODE_COLOR)을
+   *                  placeholder로 저장한다. 둘 다 isCustomColorNode가 "색 미확정"으로
+   *                  판별해(gray·white sentinel) 이 함수의 백필 대상이 된다.
    * - Why          : PROJECT 노드는 생성 시점엔 연결된 그래프가 없어 색을 정할 수
    *                  없고, 그래프 색은 첫 엣지 연결 시점에야 확정된다. 그래서 색이
    *                  확정되는 각 지점(onConnect, 핸들 드래그로 새 노드 생성, 노드
