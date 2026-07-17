@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 const DESCRIPTION =
-  "아이디어를 마인드맵 형태의 그래프로 구조화하고, 팀이 실시간으로 함께 편집하는 협업 캔버스 도구";
+  "기록을 그래프로 구조화하며 회의를 실시간으로 정리해줍니다.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://aideep.ai.kr"),
