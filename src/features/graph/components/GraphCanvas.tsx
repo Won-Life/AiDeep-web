@@ -42,7 +42,7 @@ import { emitLivePosition, emitCursorMove } from '@/api/ws';
 import { createEdge, deleteEdge, updateEdge } from '../api/edges';
 import type { EdgeDto, NodeDto } from '../types';
 import { rectCollide } from '../layout/rectCollide';
-import { getRandomColorPair, DEFAULT_NODE_COLOR, MAIN_NODE_COLOR } from '../constants/colors';
+import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
 import {
   getDescendantIds,
   getSameColorDescendantIds,
@@ -114,45 +114,13 @@ function getRootNodeForSubtree(
   return last;
 }
 
+// main(PROJECT) 노드는 생성 시점(onPaneContextMenu)에 이미 실제 그래프 색을 data.color에
+// 저장하므로(화면은 isMain이라 항상 흰색으로 그려짐), 별도 분기 없이 본인 색을 그대로 쓴다.
 function getGraphColor(
   parentNodeId: string,
   nodes: Node[],
-  edges: Edge[],
 ): { bg: string; text: string } {
   const parentNode = nodes.find((n) => n.id === parentNodeId);
-
-  if (parentNode?.data?.isMain) {
-    // main 노드도 그래프 색을 data.color에 저장한다 (표시만 흰색) — 본인 색 우선
-    if (isCustomColorNode(parentNodeId, nodes)) {
-      return {
-        bg: parentNode.data.color as string,
-        text: (parentNode.data.textColor as string) || DEFAULT_NODE_COLOR.text,
-      };
-    }
-
-    // ponytail: legacy 폴백 — 색 미저장 main은 첫 커스텀 색 자식의 색으로 추정.
-    // 같은 그래프의 자식은 색이 같으므로 대부분 정답이지만, 크로스 그래프 엣지의
-    // 자식이 먼저 잡히면 상대 그래프 색으로 오판할 수 있다. 색 없는 main이 왜
-    // 존재하는지·언제 없어지는지는 backfillMainColor의 CONTEXT 참고.
-    // 서버가 PROJECT 노드 color를 보장하면(Aideep_backend#52) 이 블록 삭제.
-    const children = edges
-      .filter((e) => e.source === parentNodeId)
-      .map((e) => nodes.find((n) => n.id === e.target))
-      .filter((n): n is Node => n !== undefined);
-
-    const coloredChild = children.find((child) =>
-      isCustomColorNode(child.id, nodes),
-    );
-    if (coloredChild) {
-      return {
-        bg: coloredChild.data.color as string,
-        text:
-          (coloredChild.data.textColor as string) || DEFAULT_NODE_COLOR.text,
-      };
-    }
-
-    return getRandomColorPair();
-  }
 
   if (parentNode?.data?.color) {
     return {
@@ -162,12 +130,6 @@ function getGraphColor(
   }
 
   return getRandomColorPair();
-}
-
-function isCustomColorNode(nodeId: string, nodes: Node[]): boolean {
-  const node = nodes.find((n) => n.id === nodeId);
-  const color = node?.data?.color as string | undefined;
-  return Boolean(color && color !== DEFAULT_NODE_COLOR.bg);
 }
 
 function colorOfNodeIn(nodes: Node[]) {
@@ -180,11 +142,9 @@ function colorOfNodeIn(nodes: Node[]) {
  * - Problem      : 크로스 그래프 엣지(색이 다른 노드 간 연결)가 있으면 서브트리 이동·색 전파·
  *                  삭제 캐스케이드가 경계를 넘어 다른 그래프의 노드까지 끌고 간다.
  * - Why          : 이동/전파/삭제 대상을 루트의 그래프 색과 같은 색의 자손으로 제한한다.
- *                  main 노드도 그래프 색을 data.color에 저장하므로(표시만 흰색) 본인 색을
- *                  기준색으로 사용한다. 색이 확정되는 시점에 backfillMainColor가 저장한다.
+ *                  main 노드도 생성 시점에 그래프 색을 data.color에 저장하므로(표시만 흰색)
+ *                  본인 색을 기준색으로 그대로 쓴다.
  * - Alternatives : 서버 그래프 ID·크로스 엣지 플래그 — getSameColorDescendantIds CONTEXT 참고.
- * - Trade-offs   : 색 미저장 legacy main은 첫 커스텀 색 자식의 색으로 추정하는 폴백을 거침
- *                  (크로스 그래프 자식이 먼저면 오판 가능 — Aideep_backend#52 완료 후 제거).
  * - Edge Case    : 그래프 색을 알 수 없으면 전체 자손 순회로 폴백.
  */
 function getSameGraphDescendantIds(
@@ -193,21 +153,7 @@ function getSameGraphDescendantIds(
   edges: Edge[],
 ): Set<string> {
   const colorOf = colorOfNodeIn(nodes);
-
-  // main 노드도 그래프 색을 data.color에 저장하므로 본인 색을 그대로 사용
-  let rootColor = colorOf(rootNode.id);
-  if (rootNode.data?.isMain && !isCustomColorNode(rootNode.id, nodes)) {
-    // ponytail: legacy 폴백 — 색 미저장 main은 첫 커스텀 색 자식의 색으로 추정.
-    // 같은 그래프의 자식은 색이 같으므로 대부분 정답이지만, 크로스 그래프 엣지의
-    // 자식이 먼저 잡히면 상대 그래프 색으로 오판할 수 있다. 색 없는 main이 왜
-    // 존재하는지·언제 없어지는지는 backfillMainColor의 CONTEXT 참고.
-    // 서버가 PROJECT 노드 color를 보장하면(Aideep_backend#52) 이 블록 삭제.
-    rootColor = edges
-      .filter((e) => e.source === rootNode.id)
-      .map((e) => e.target)
-      .filter((id) => isCustomColorNode(id, nodes))
-      .map(colorOf)[0];
-  }
+  const rootColor = colorOf(rootNode.id);
 
   if (!rootColor) return getDescendantIds(rootNode.id, edges);
   return getSameColorDescendantIds(rootNode.id, edges, rootColor, colorOf);
@@ -1152,62 +1098,6 @@ function GraphCanvasInner({
     [setNodes],
   );
 
-  /*
-   * CONTEXT — lazy backfill: 색 없는 main(PROJECT) 노드에 그래프 색을 뒤늦게 저장
-   * - Problem      : 그래프 단위 동작(서브트리 이동·색 전파·삭제 캐스케이드)은
-   *                  "같은 색 = 같은 그래프"로 경계를 판별하므로, main 노드도
-   *                  data.color에 자기 그래프 색을 갖고 있어야 한다(표시만 흰색).
-   *                  그런데 color 없는 PROJECT 노드가 DB에 legacy로 존재한다:
-   *                  과거 서버 CreateProjectNodeBody.body에 @IsDefined()가 없어
-   *                  body 누락 요청이 검증을 통과해 content가 색 없이 저장됐다.
-   *                  현재는 서버가 body + color 필수화(Aideep_backend#52, PR #60)해
-   *                  신규 색 없는 main은 더 생기지 않고, 남은 것은 백필 대상 legacy 데이터다.
-   * - Why          : PROJECT 노드는 생성 시점엔 연결된 그래프가 없어 색을 정할 수
-   *                  없고, 그래프 색은 첫 엣지 연결 시점에야 확정된다. 그래서 색이
-   *                  확정되는 각 지점(onConnect, 핸들 드래그로 새 노드 생성, 노드
-   *                  드래그 연결, 드래그 종료)에서 이 함수를 호출해, 색 없는 main에
-   *                  로컬 state + 서버(updateNodeContent) 양쪽으로 색을 채워 넣는다.
-   *                  한 번 채워지면 getGraphColor·getSameGraphDescendantIds가 edges
-   *                  탐색(추정 폴백) 없이 본인 data.color를 바로 쓴다.
-   * - Alternatives : 생성 시점에 랜덤 색 부여 — 첫 연결 상대의 색과 이중 진실이 됨.
-   *                  서버 백필 마이그레이션 — 근본 해결이지만 서버 작업이라 이슈로 분리.
-   * - Trade-offs   : 백필 전까지는 색 없는 main이 남아 있어 추정 폴백(ponytail: 주석
-   *                  블록)이 필요하고, 크로스 그래프 자식이 먼저 잡히면 오판 가능.
-   * - 제거 조건    : 서버측은 완료됨 — 생성 시 body 필수화(Aideep_backend#52, PR #60) +
-   *                  기존 노드 백필 SQL(server docs/migrations/2026-07-13-backfill-project-node-color.sql).
-   *                  백필 SQL이 운영 DB에 적용되면, 이 함수와 getGraphColor·
-   *                  getSameGraphDescendantIds의 추정 폴백 블록을 함께 삭제한다.
-   * - Edge Case    : 색이 이미 있는 main·main이 아닌 노드는 no-op (멱등).
-   */
-  const backfillMainColor = useCallback(
-    (nodeId: string, colorPair: { bg: string; text: string }) => {
-      const node = nodesRef.current.find((n) => n.id === nodeId);
-      if (!node?.data?.isMain || isCustomColorNode(nodeId, nodesRef.current)) {
-        return;
-      }
-
-      setNodes((prev) =>
-        prev.map((n) =>
-          n.id === nodeId
-            ? {
-                ...n,
-                data: {
-                  ...n.data,
-                  color: colorPair.bg,
-                  textColor: colorPair.text,
-                },
-              }
-            : n,
-        ),
-      );
-      updateNodeContent(workspaceId, nodeId, {
-        color: colorPair.bg,
-        textColor: colorPair.text,
-      }).catch((err) => console.error('[backfillMainColor] failed', err));
-    },
-    [workspaceId, setNodes],
-  );
-
   const titleDebounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
@@ -1510,11 +1400,7 @@ function GraphCanvasInner({
                       ? updatedNodes.find((n) => n.id === remainingParentId)
                       : null;
                     const color = remainingParent
-                      ? getGraphColor(
-                          remainingParentId!,
-                          updatedNodes,
-                          updatedEdges,
-                        )
+                      ? getGraphColor(remainingParentId!, updatedNodes)
                       : DEFAULT_NODE_COLOR;
                     // 페인트가 색을 바꾸기 전에 저장 대상 집합을 확정해 둔다
                     const recolorIds = getRecolorTargetIds(
@@ -1705,9 +1591,7 @@ function GraphCanvasInner({
       const resolvedSourceHandle = `source-${computedSide}`;
       const resolvedTargetHandle = resolveHandleId('target', computedSide);
 
-      // 한 번만 계산해 로컬 반영·API 전파에 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
-      const colorToPropagate = getGraphColor(sourceId, nodes, edges);
-      backfillMainColor(sourceId, colorToPropagate);
+      const colorToPropagate = getGraphColor(sourceId, nodes);
 
       // target이 트리째 병합될 때 서브트리 방향 정규화 대상 (subtreeInternalEdgeFilter CONTEXT 참고)
       const mergedSubtreeIds = tgtNode
@@ -1871,7 +1755,7 @@ function GraphCanvasInner({
         })
         .catch((err) => console.error('[createEdge] failed', err));
     },
-    [nodes, edges, workspaceId, setNodes, setEdges, backfillMainColor],
+    [nodes, edges, workspaceId, setNodes, setEdges],
   );
 
   /* =========================
@@ -1960,8 +1844,7 @@ function GraphCanvasInner({
         }
 
         // source 노드의 색상 가져오기
-        const colorPair = getGraphColor(fromNode.id, nodes, edges);
-        backfillMainColor(fromNode.id, colorPair);
+        const colorPair = getGraphColor(fromNode.id, nodes);
 
         try {
           const { nodeId } = await createMdNode(
@@ -2034,15 +1917,7 @@ function GraphCanvasInner({
         isConnectingRef.current = false;
       }, 0);
     },
-    [
-      screenToFlowPosition,
-      nodes,
-      edges,
-      workspaceId,
-      setNodes,
-      setEdges,
-      backfillMainColor,
-    ],
+    [screenToFlowPosition, nodes, edges, workspaceId, setNodes, setEdges],
   );
 
   /* =========================
@@ -2146,9 +2021,12 @@ function GraphCanvasInner({
       });
 
       try {
+        // 그래프 색을 생성 시점에 확정한다 — 화면은 TextUpdateNode가 isMain이면
+        // 항상 MAIN_NODE_COLOR(흰색)로 그리므로 표시는 그대로 흰색이다.
+        const colorPair = getRandomColorPair();
         const { nodeId } = await createProjectNode(workspaceId, '', position, {
-          color: MAIN_NODE_COLOR.bg,
-          textColor: MAIN_NODE_COLOR.text,
+          color: colorPair.bg,
+          textColor: colorPair.text,
         });
 
         setNodes((prev) => [
@@ -2160,8 +2038,8 @@ function GraphCanvasInner({
             data: {
               title: '',
               isMain: true,
-              color: MAIN_NODE_COLOR.bg,
-              textColor: MAIN_NODE_COLOR.text,
+              color: colorPair.bg,
+              textColor: colorPair.text,
             },
           },
         ]);
@@ -2258,11 +2136,8 @@ function GraphCanvasInner({
           : findNonOverlappingPosition(basePosition, nodes);
 
       const colorPair = shouldConnect
-        ? getGraphColor(targetParent.id, nodes, edges)
+        ? getGraphColor(targetParent.id, nodes)
         : DEFAULT_NODE_COLOR;
-      if (shouldConnect) {
-        backfillMainColor(targetParent.id, colorPair);
-      }
 
       try {
         const { nodeId } = await createMdNode(
@@ -2341,7 +2216,6 @@ function GraphCanvasInner({
       workspaceId,
       setNodes,
       setEdges,
-      backfillMainColor,
     ],
   );
 
@@ -2929,8 +2803,7 @@ function GraphCanvasInner({
           // API: 새 부모 연결 — REST 응답으로 edgeId 취득 후 state 추가
           const dragStopSourceHandle = `source-${sideRelativeToParent}`;
           const dragStopTargetHandle = `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`;
-          const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
-          backfillMainColor(parentNode.id, dragStopColor);
+          const dragStopColor = getGraphColor(parentNode.id, nodes);
           createEdge(
             workspaceId,
             parentNode.id,
@@ -3089,15 +2962,7 @@ function GraphCanvasInner({
         );
       }, 0);
     },
-    [
-      nodes,
-      edges,
-      hoveredNodeId,
-      workspaceId,
-      setNodes,
-      setEdges,
-      backfillMainColor,
-    ],
+    [nodes, edges, hoveredNodeId, workspaceId, setNodes, setEdges],
   );
 
   useEffect(() => {
