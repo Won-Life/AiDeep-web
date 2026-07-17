@@ -1769,6 +1769,16 @@ function GraphCanvasInner({
         ? getSameGraphDescendantIds(tgtNode, nodes, edges)
         : new Set<string>();
 
+      // 연결 직전 위치 스냅샷 — 엣지 생성 성공 후 위치 저장 시 서버 delta 전파
+      // 시뮬레이션의 기준값으로 쓴다 (saveDragPositions CONTEXT 참고)
+      const preConnectPositions = new Map<string, { x: number; y: number }>();
+      [targetId, ...getDescendantIds(targetId, edges)].forEach((id) => {
+        const n = nodes.find((node) => node.id === id);
+        if (n) {
+          preConnectPositions.set(id, { x: n.position.x, y: n.position.y });
+        }
+      });
+
       // 연결된 target 노드 위치(및 subtree)와 색상을 source 기준으로 업데이트
       setNodes((currentNodes) => {
         const sourceNode = currentNodes.find((node) => node.id === sourceId);
@@ -1937,6 +1947,17 @@ function GraphCanvasInner({
               color: colorToPropagate.bg,
               textColor: colorToPropagate.text,
             }).catch((err) => console.error('[updateNodeColor] failed', err)),
+          );
+          // 연결로 이동한 target(및 서브트리) 위치 저장 — 저장을 누락하면
+          // 새로고침 시 연결 전 위치로 되돌아가 엣지가 노드를 가로지른다.
+          // root만 PATCH하고 서버 delta 전파와 어긋나는 자손(대칭이동분)만
+          // 보정한다 (saveDragPositions CONTEXT 참고)
+          void saveDragPositions(
+            workspaceId,
+            [{ id: targetId }],
+            nodesRef.current,
+            edges,
+            preConnectPositions,
           );
         })
         .catch((err) => console.error('[createEdge] failed', err));
