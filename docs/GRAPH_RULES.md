@@ -209,7 +209,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 - [x] 연결 생성 시 부모 그래프 색이 자식 서브트리에 전파 — 로컬 페인트(`updateSubtreeColors`)와 서버 저장이 **같은 집합**(`getRecolorTargetIds`: 루트 + 같은 색 자손, 메인 제외)을 사용
 - [x] 색상 저장은 대상 노드별 `updateNodeContent` PATCH. 서버의 `propagateToChildren` 전파는 그래프 색 경계를 모르고 그래프 간 엣지 너머까지 덮어쓰므로(Aideep_backend#51) 사용하지 않음. PATCH 실패해도 로컬 색상은 유지(롤백 없음)
 - [x] 엣지 삭제로 그래프에서 분리되면: 남은 부모가 없으면 자식 서브트리를 기본 회색으로, 다른 부모가 남아 있으면 그 그래프 색으로 재페인트 — target 쪽만 변경, source 쪽 불변
-- [x] 메인 노드도 그래프 색을 `data.color`에 저장 (화면 표시만 흰색) — 생성 시점(`onPaneContextMenu`)에 랜덤 색을 바로 확정해서 보낸다. 첫 연결 시점에 색을 뒤늦게 결정하던 `backfillMainColor`·추정 폴백은 폐기 (2026-07-17, §11-완료: legacy 데이터 정리)
+- [x] 메인 노드도 그래프 색을 `data.color`에 저장 (화면 표시만 흰색) — 생성 시점(`onPaneContextMenu`)에 랜덤 색을 바로 확정해서 보낸다. 첫 연결 시점에 색을 뒤늦게 결정하던 `backfillMainColor`·추정 폴백은 클라 코드에서 폐기했다 (2026-07-17). 운영 DB의 legacy 색 미저장 데이터 자체가 정리됐는지는 미확인 — §11-설계 결정·§10 참고
 - [ ] 노드 depth 별 색상 밝기 처리
 
 ## 7. 삭제·보관
