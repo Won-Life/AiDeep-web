@@ -52,7 +52,17 @@ export default function GraphUsageGuide() {
   const [manualOverride, setManualOverride] = useState<boolean | null>(null);
   const isOpen = manualOverride ?? !seen;
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setManualOverride(true)}
+        className="rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
+      >
+        사용법
+      </button>
+    );
+  }
 
   return (
     <div className="w-[320px] rounded-xl border border-gray-700 bg-background p-4 shadow-md">
