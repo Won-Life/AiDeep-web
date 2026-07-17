@@ -1754,15 +1754,30 @@ function GraphCanvasInner({
         ? getSameGraphDescendantIds(tgtNode, nodes, edges)
         : new Set<string>();
 
-      // 연결 직전 위치 스냅샷 — 엣지 생성 성공 후 위치 저장 시 서버 delta 전파
-      // 시뮬레이션의 기준값으로 쓴다 (saveDragPositions CONTEXT 참고)
+      // 연결 직전 스냅샷 — 위치는 엣지 생성 성공 후 위치 저장(saveDragPositions)의
+      // 서버 delta 전파 시뮬레이션 기준값이고, data 필드(색·handleSide)는 엣지 생성
+      // 실패 시 선반영 롤백의 복원값이다
       const preConnectPositions = new Map<string, { x: number; y: number }>();
+      const preConnectNodeData = new Map<
+        string,
+        { color: unknown; textColor: unknown; handleSide: unknown }
+      >();
       [targetId, ...getDescendantIds(targetId, edges)].forEach((id) => {
         const n = nodes.find((node) => node.id === id);
         if (n) {
           preConnectPositions.set(id, { x: n.position.x, y: n.position.y });
+          preConnectNodeData.set(id, {
+            color: n.data?.color,
+            textColor: n.data?.textColor,
+            handleSide: n.data?.handleSide,
+          });
         }
       });
+      // 내부 엣지 핸들의 연결 전 값 — 실패 롤백 복원용
+      const preConnectEdgeHandles = new Map<
+        string,
+        { sourceHandle: string | null; targetHandle: string | null }
+      >();
 
       // 연결된 target 노드 위치(및 subtree)와 색상을 source 기준으로 업데이트
       setNodes((currentNodes) => {
@@ -1865,7 +1880,8 @@ function GraphCanvasInner({
         );
       });
 
-      // 서브트리 내부 엣지 핸들도 새 방향으로 — 로컬 상태와 서버 저장분 동시 갱신
+      // 서브트리 내부 엣지 핸들도 새 방향으로 — 로컬은 선반영, 서버 저장은
+      // 엣지 생성 성공 후(then)에만 실행해 실패 시 서버 롤백이 필요 없게 한다
       if (mergedSubtreeIds.size > 0) {
         const isMergedInternal = subtreeInternalEdgeFilter(
           targetId,
@@ -1879,6 +1895,12 @@ function GraphCanvasInner({
           '→',
           { sourceHandle: mergedSourceHandle, targetHandle: mergedTargetHandle },
         );
+        edges.filter(isMergedInternal).forEach((e) => {
+          preConnectEdgeHandles.set(e.id, {
+            sourceHandle: e.sourceHandle ?? null,
+            targetHandle: e.targetHandle ?? null,
+          });
+        });
         setEdges((prev) =>
           prev.map((e) =>
             isMergedInternal(e)
@@ -1889,12 +1911,6 @@ function GraphCanvasInner({
                 }
               : e,
           ),
-        );
-        persistSubtreeEdgeHandles(
-          workspaceId,
-          edges,
-          isMergedInternal,
-          computedSide,
         );
       }
 
@@ -1933,6 +1949,16 @@ function GraphCanvasInner({
               textColor: colorToPropagate.text,
             }).catch((err) => console.error('[updateNodeColor] failed', err)),
           );
+          // 서브트리 내부 엣지 핸들 서버 저장 — 로컬 선반영분의 저장을 엣지 생성
+          // 성공 뒤로 미뤄, 실패 시 서버 쓰기 자체가 없게 한다
+          if (mergedSubtreeIds.size > 0) {
+            persistSubtreeEdgeHandles(
+              workspaceId,
+              edges,
+              subtreeInternalEdgeFilter(targetId, mergedSubtreeIds),
+              computedSide,
+            );
+          }
           // 연결로 이동한 target(및 서브트리) 위치 저장 — 저장을 누락하면
           // 새로고침 시 연결 전 위치로 되돌아가 엣지가 노드를 가로지른다.
           // root만 PATCH하고 서버 delta 전파와 어긋나는 자손(대칭이동분)만
@@ -1945,7 +1971,42 @@ function GraphCanvasInner({
             preConnectPositions,
           );
         })
-        .catch((err) => console.error('[createEdge] failed', err));
+        .catch((err) => {
+          console.error('[createEdge] failed', err);
+          // 선반영 롤백 — 복원하지 않으면 화면은 편입이 끝난 모습인데 서버에는
+          // 엣지가 없어, 새로고침 시 전부 원복되는 거짓 상태가 된다. 연결 전
+          // 스냅샷으로 이동·재색칠·handleSide·내부 엣지 핸들을 되돌린다.
+          // (backfillMainColor로 저장된 main 색은 유지 — 그래프 색 예약일 뿐 무해)
+          setNodes((prev) =>
+            prev.map((node) => {
+              const pos = preConnectPositions.get(node.id);
+              const data = preConnectNodeData.get(node.id);
+              if (!pos && !data) return node;
+              return {
+                ...node,
+                ...(pos ? { position: pos } : {}),
+                ...(data
+                  ? {
+                      data: {
+                        ...node.data,
+                        color: data.color,
+                        textColor: data.textColor,
+                        handleSide: data.handleSide,
+                      },
+                    }
+                  : {}),
+              };
+            }),
+          );
+          if (preConnectEdgeHandles.size > 0) {
+            setEdges((prev) =>
+              prev.map((e) => {
+                const snap = preConnectEdgeHandles.get(e.id);
+                return snap ? { ...e, ...snap } : e;
+              }),
+            );
+          }
+        });
     },
     [nodes, edges, workspaceId, setNodes, setEdges, backfillMainColor],
   );
@@ -3052,44 +3113,52 @@ function GraphCanvasInner({
             );
           }
 
-          // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
-          // 기존 부모 연결 먼저 제거 — 로컬 state와 서버 모두 삭제해야 재접속 시 복원되지 않음
-          setEdges((prev) =>
-            existingParentEdge
-              ? prev.filter((edge) => edge.id !== existingParentEdge.id)
-              : prev,
-          );
-          if (existingParentEdge) {
-            // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
-            setNodes((prev) =>
-              applyDepthOnEdgeDelete(prev, edges, existingParentEdge.target),
-            );
-            deleteEdge(workspaceId, existingParentEdge.id).catch((err) =>
-              console.error('[deleteEdge re-parent] failed', err),
-            );
-          }
-
-          // API: 새 부모 연결 — REST 응답으로 edgeId 취득 후 state 추가
+          // 6·7. 엣지 교체와 색 전파 — 삭제 → 생성 순차 실행, 생성 실패 시 복구
+          // 서버 depth 전파(propagateDepth)는 재계산이 아니라 delta 누적이라
+          // (create: 자식 서브트리 += 부모 depth+1 — 자식이 depth 0 전제,
+          //  delete: 자식 서브트리 -= 자식 현재 depth — 무조건 0으로 리셋)
+          // "생성 먼저 → 삭제"로 반전하면 depth가 이중 가산 후 0으로 밀려 깨진다.
+          // 따라서 삭제 → 생성 순서를 await로 보장하고(기존 코드는 둘을 순서
+          // 보장 없이 병렬 발사해 서버 처리 순서에 따라 같은 오염이 발생했다),
+          // 생성 실패 시 기존 부모 엣지를 재생성해 복구한다 — 재생성은 delta
+          // 산술상 depth도 정확히 원상 복구된다. 로컬 반영은 각 서버 응답 후.
           const dragStopSourceHandle = `source-${sideRelativeToParent}`;
           const dragStopTargetHandle = `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`;
           const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
           backfillMainColor(parentNode.id, dragStopColor);
           console.log(
-            '[handle:save] onNodeDragStop — 새 부모 엣지 생성 요청(핸들 포함 서버 저장)',
+            '[handle:save] onNodeDragStop — 부모 엣지 교체 요청(핸들 포함 서버 저장)',
             { source: parentNode.id, target: childNode.id },
             {
               sourceHandle: dragStopSourceHandle,
               targetHandle: dragStopTargetHandle,
             },
           );
-          createEdge(
-            workspaceId,
-            parentNode.id,
-            childNode.id,
-            dragStopSourceHandle,
-            dragStopTargetHandle,
-          )
-            .then(({ edgeId }) => {
+          void (async () => {
+            if (existingParentEdge) {
+              try {
+                await deleteEdge(workspaceId, existingParentEdge.id);
+              } catch (err) {
+                // 삭제 실패 = 서버·로컬 모두 무변화 — 기존 연결 유지, 재시도 가능
+                console.error('[deleteEdge re-parent] failed', err);
+                return;
+              }
+              setEdges((prev) =>
+                prev.filter((edge) => edge.id !== existingParentEdge.id),
+              );
+              // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+              setNodes((prev) =>
+                applyDepthOnEdgeDelete(prev, edges, existingParentEdge.target),
+              );
+            }
+            try {
+              const { edgeId } = await createEdge(
+                workspaceId,
+                parentNode.id,
+                childNode.id,
+                dragStopSourceHandle,
+                dragStopTargetHandle,
+              );
               setEdges((prev) => [
                 ...prev,
                 {
@@ -3105,6 +3174,16 @@ function GraphCanvasInner({
               setNodes((prev) =>
                 applyDepthOnEdgeCreate(prev, edges, parentNode.id, childNode.id),
               );
+              // childNode 서브트리 색상을 parentNode 색상으로 로컬 페인트 후 저장
+              // dragStopColor 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
+              setNodes((currentNodes) =>
+                updateSubtreeColors(
+                  childNode.id,
+                  currentNodes,
+                  edges,
+                  dragStopColor,
+                ),
+              );
               getRecolorTargetIds(childNode.id, nodes, edges).forEach((id) =>
                 updateNodeContent(workspaceId, id, {
                   color: dragStopColor.bg,
@@ -3113,21 +3192,49 @@ function GraphCanvasInner({
                   console.error('[updateNodeColor drag] failed', err),
                 ),
               );
-            })
-            .catch((err) =>
-              console.error('[createEdge re-parent] failed', err),
-            );
-
-          // 7. childNode 서브트리 색상을 parentNode 색상으로 업데이트
-          // dragStopColor 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
-          setNodes((currentNodes) =>
-            updateSubtreeColors(
-              childNode.id,
-              currentNodes,
-              edges,
-              dragStopColor,
-            ),
-          );
+            } catch (err) {
+              console.error('[createEdge re-parent] failed', err);
+              if (!existingParentEdge) return;
+              // 복구: 기존 부모 엣지 재생성 — 성공하면 서버·로컬·depth 모두 원상
+              try {
+                const { edgeId } = await createEdge(
+                  workspaceId,
+                  existingParentEdge.source,
+                  existingParentEdge.target,
+                  existingParentEdge.sourceHandle ?? 'source-right', // 핸들 미저장 legacy 폴백
+                  existingParentEdge.targetHandle ?? 'target-left',
+                );
+                setEdges((prev) => [
+                  ...prev,
+                  {
+                    ...existingParentEdge,
+                    id: edgeId,
+                    // 서버에 보낸 값과 동일하게 — legacy 폴백 사용 시 로컬·서버 불일치 방지
+                    sourceHandle: existingParentEdge.sourceHandle ?? 'source-right',
+                    targetHandle: existingParentEdge.targetHandle ?? 'target-left',
+                  },
+                ]);
+                setNodes((prev) =>
+                  applyDepthOnEdgeCreate(
+                    prev,
+                    edges,
+                    existingParentEdge.source,
+                    existingParentEdge.target,
+                  ),
+                );
+                console.error(
+                  '[re-parent] 새 연결 실패 — 기존 부모 연결로 복구됨',
+                );
+              } catch (restoreErr) {
+                // 복구까지 실패 — 노드가 부모 없는 상태로 남는다(로컬은 서버와
+                // 일치). 사용자가 다시 드래그해 연결하면 된다.
+                console.error(
+                  '[re-parent] 기존 부모 연결 복구도 실패 — 노드가 부모 없는 상태로 남음',
+                  restoreErr,
+                );
+              }
+            }
+          })();
         }
       }
 
