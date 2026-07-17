@@ -112,7 +112,7 @@ export default function ChipHeader({
             onClick={() =>
               scrollRef.current?.scrollBy({ left: -240, behavior: "smooth" })
             }
-            className="absolute left-0 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/60 text-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-surface group-hover:opacity-100"
+            className="absolute left-0 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/60 text-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-surface group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:border-main"
           >
             <svg
               width="16"
@@ -138,7 +138,7 @@ export default function ChipHeader({
             onClick={() =>
               scrollRef.current?.scrollBy({ left: 240, behavior: "smooth" })
             }
-            className="absolute right-0 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/60 text-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-surface group-hover:opacity-100"
+            className="absolute right-0 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/60 text-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-surface group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:border-main"
           >
             <svg
               width="16"
