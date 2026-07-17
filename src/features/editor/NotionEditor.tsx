@@ -20,6 +20,7 @@ import {
   LexicalTypeaheadMenuPlugin,
   useBasicTypeaheadTriggerMatch,
   MenuOption,
+  SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND,
 } from '@lexical/react/LexicalTypeaheadMenuPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
@@ -28,7 +29,6 @@ import {
   $isRangeSelection,
   $getNodeByKey,
   $insertNodes,
-  $createTextNode,
   FORMAT_TEXT_COMMAND,
   SELECTION_CHANGE_COMMAND,
   KEY_DOWN_COMMAND,
@@ -66,7 +66,7 @@ import {
   $createCodeNode,
   $isCodeNode,
 } from '@lexical/code';
-import { LinkNode, AutoLinkNode, TOGGLE_LINK_COMMAND, $createLinkNode } from '@lexical/link';
+import { LinkNode, AutoLinkNode } from '@lexical/link';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { TableNode, TableRowNode, TableCellNode, INSERT_TABLE_COMMAND } from '@lexical/table';
 import { TRANSFORMERS, $convertToMarkdownString } from '@lexical/markdown';
@@ -74,6 +74,7 @@ import { MarkdownPastePlugin } from './plugins/MarkdownPastePlugin';
 import { $setBlocksType } from '@lexical/selection';
 import { $getNearestNodeOfType, mergeRegister } from '@lexical/utils';
 import { CollaborationPlugin } from '@lexical/react/LexicalCollaborationPlugin';
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { LexicalCollaboration } from '@lexical/react/LexicalCollaborationContext';
 import * as Y from 'yjs';
 import type { SocketIoYjsProvider } from '@/lib/SocketIoYjsProvider';
@@ -103,6 +104,7 @@ export interface NotionEditorProps {
   noMediaDrop?: boolean;
   autoGrow?: boolean;
   minHeight?: number;
+  extraBottomPadding?: boolean;
 }
 
 // ─── Media Commands ───────────────────────────────────────────────────────────
@@ -398,41 +400,21 @@ function applyBlockType(editor: LexicalEditor, type: BlockType, isActive: boolea
   });
 }
 
+const MAX_TABLE_DIMENSION = 20; // ponytail: 큰 표는 동기 삽입 시 에디터가 멈출 수 있어 상한선을 둠
+
 function insertTable(editor: LexicalEditor) {
   const rowsInput = window.prompt('행 개수', '3');
   if (rowsInput === null) return;
   const colsInput = window.prompt('열 개수', '3');
   if (colsInput === null) return;
 
-  const rows = Math.max(1, parseInt(rowsInput, 10) || 3);
-  const columns = Math.max(1, parseInt(colsInput, 10) || 3);
+  const rows = Math.min(MAX_TABLE_DIMENSION, Math.max(1, parseInt(rowsInput, 10) || 3));
+  const columns = Math.min(MAX_TABLE_DIMENSION, Math.max(1, parseInt(colsInput, 10) || 3));
 
   // window.prompt()가 뜨는 동안 contentEditable이 blur되어 선택 영역이 끊긴다 —
   // dispatch 전에 focus()로 에디터 선택을 복원해야 삽입이 실제로 반영된다.
   editor.focus(() => {
     editor.dispatchCommand(INSERT_TABLE_COMMAND, { rows: String(rows), columns: String(columns) });
-  });
-}
-
-function insertOrToggleLink(editor: LexicalEditor) {
-  const url = window.prompt('링크 URL을 입력하세요');
-  if (!url) return;
-
-  let hasSelection = false;
-  editor.getEditorState().read(() => {
-    const selection = $getSelection();
-    hasSelection = $isRangeSelection(selection) && !selection.isCollapsed();
-  });
-
-  // window.prompt()로 인한 blur 이후 선택이 끊기므로 focus()로 복원한 뒤 커맨드를 실행한다.
-  editor.focus(() => {
-    if (hasSelection) {
-      editor.dispatchCommand(TOGGLE_LINK_COMMAND, url);
-    } else {
-      editor.update(() => {
-        $insertNodes([$createLinkNode(url).append($createTextNode(url))]);
-      });
-    }
   });
 }
 
@@ -547,12 +529,6 @@ function EditorShortcutsPlugin() {
         if (event.shiftKey && event.key.toLowerCase() === 's') {
           event.preventDefault();
           editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough');
-          return true;
-        }
-
-        if (!event.shiftKey && event.key.toLowerCase() === 'k') {
-          event.preventDefault();
-          insertOrToggleLink(editor);
           return true;
         }
 
@@ -864,22 +840,6 @@ export function ToolbarPlugin() {
           </svg>
         </button>
       </Tooltip>
-
-      <Tooltip label="링크 삽입" shortcut="⌘K">
-        <button
-          type="button"
-          onClick={() => insertOrToggleLink(editor)}
-          className="flex items-center justify-center rounded cursor-pointer transition-colors"
-          style={{ width: 26, height: 26, color: 'rgb(var(--muted))' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--surface))'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5.2 7.8a2.6 2.6 0 000 3.7 2.6 2.6 0 003.7 0l1.5-1.5a2.6 2.6 0 000-3.7" />
-            <path d="M7.8 5.2a2.6 2.6 0 000-3.7 2.6 2.6 0 00-3.7 0L2.6 3a2.6 2.6 0 000 3.7" />
-          </svg>
-        </button>
-      </Tooltip>
     </div>
   );
 }
@@ -917,6 +877,17 @@ function SlashCommandPlugin() {
 
   const checkForTriggerMatch = useBasicTypeaheadTriggerMatch('/', { minLength: 0 });
 
+  useEffect(() => {
+    return editor.registerCommand(
+      SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND,
+      ({ option }) => {
+        option.ref?.current?.scrollIntoView({ block: 'nearest' });
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+  }, [editor]);
+
   // 이미지/파일은 ref.current.click()이 필요한데, react-hooks/refs가 옵션 배열 생성
   // 시점(렌더 중)의 ref 접근을 막는다 — kind만 담아두고 실제 클릭은 onSelectOption
   // 핸들러(렌더 이후 실행)에서 수행한다.
@@ -926,7 +897,6 @@ function SlashCommandPlugin() {
         new SlashMenuOption(label, icon, 'action', () => applyBlockType(editor, value, false), shortcut),
     ),
     new SlashMenuOption('표', '⊞', 'action', () => insertTable(editor)),
-    new SlashMenuOption('링크', '🔗', 'action', () => insertOrToggleLink(editor), '⌘K'),
     new SlashMenuOption('이미지', '🖼', 'image', () => {}),
     new SlashMenuOption('파일', '📎', 'file', () => {}),
   ];
@@ -988,6 +958,7 @@ function SlashCommandPlugin() {
                   {options.map((option, index) => (
                     <div
                       key={option.key}
+                      ref={option.setRefElement}
                       className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer"
                       style={{ background: selectedIndex === index ? 'rgb(var(--surface))' : 'transparent' }}
                       onMouseEnter={() => setHighlightedIndex(index)}
@@ -1080,6 +1051,7 @@ export function NotionEditor({
   noMediaDrop = false,
   autoGrow = false,
   minHeight,
+  extraBottomPadding = false,
 }: NotionEditorProps) {
   // provider의 'sync' 이벤트에서 동기화 여부를 직접 구독 — on()이 등록 즉시
   // 현재 상태를 replay하므로 늦게 마운트돼도 값이 맞는다 (prop 중계 불필요)
@@ -1124,7 +1096,7 @@ export function NotionEditor({
             <RichTextPlugin
               contentEditable={
                 <ContentEditable
-                  className="ne-root nodrag nowheel px-4 py-3"
+                  className={`ne-root nodrag nowheel px-4 pt-3 ${extraBottomPadding ? 'pb-32' : 'pb-3'}`}
                   spellCheck
                 />
               }
@@ -1161,7 +1133,7 @@ export function NotionEditor({
             <ContentExportPlugin onChange={onContentChange} />
           )}
 
-          {collabProvider && (
+          {collabProvider ? (
             <CollaborationPlugin
               id={`yjs-${nodeId}`}
               providerFactory={providerFactory}
@@ -1169,6 +1141,9 @@ export function NotionEditor({
               username={username}
               cursorColor={cursorColor}
             />
+          ) : (
+            // collabProvider 없을 땐 undo/redo 핸들러가 CollaborationPlugin 대신 필요하다
+            <HistoryPlugin />
           )}
         </LexicalComposer>
       </LexicalCollaboration>

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 // 오류 신고하기
 const BUG_REPORT_FORM_URL =
@@ -10,35 +11,36 @@ export default function BugReportButton() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        title="오류 신고하기"
-        aria-label="오류 신고하기"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background transition-colors hover:bg-surface"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
+      <Tooltip label="오류 신고하기">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          aria-label="오류 신고하기"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background transition-colors hover:bg-surface"
         >
-          <path d="M12 20a7 7 0 0 0 7-7v-2a7 7 0 1 0-14 0v2a7 7 0 0 0 7 7Z" />
-          <path d="M9 9V7a3 3 0 1 1 6 0v2" />
-          <path d="M12 13v4" />
-          <path d="M5 13H2" />
-          <path d="M22 13h-3" />
-          <path d="m5 7-2-2" />
-          <path d="m19 7 2-2" />
-          <path d="m5 19-2 2" />
-          <path d="m19 19 2 2" />
-        </svg>
-      </button>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 20a7 7 0 0 0 7-7v-2a7 7 0 1 0-14 0v2a7 7 0 0 0 7 7Z" />
+            <path d="M9 9V7a3 3 0 1 1 6 0v2" />
+            <path d="M12 13v4" />
+            <path d="M5 13H2" />
+            <path d="M22 13h-3" />
+            <path d="m5 7-2-2" />
+            <path d="m19 7 2-2" />
+            <path d="m5 19-2 2" />
+            <path d="m19 19 2 2" />
+          </svg>
+        </button>
+      </Tooltip>
 
       {isOpen && (
         <div
