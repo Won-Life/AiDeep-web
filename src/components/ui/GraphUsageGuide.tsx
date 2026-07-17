@@ -1,6 +1,7 @@
 'use client';
 import { useState, type ReactNode } from 'react';
 import { MAIN_NODE_COLOR } from '@/features/graph/constants/colors';
+import { useOnboardingSeen } from '@/components/layout/OnboardingPopup';
 
 // ponytail: 실제 노드 팔레트의 green은 파스텔톤이라 미리보기에서 흐릿함 — 가이드 전용으로 진한 메인 그린 토큰 사용
 const PREVIEW_GREEN = 'rgb(var(--ds-main))';
@@ -31,14 +32,6 @@ const SHORTCUTS = [
     ),
   },
   {
-    action: '노드 클릭',
-    effect: (
-      <Effect>
-        <Term>텍스트 에디터</Term> 열림
-      </Effect>
-    ),
-  },
-  {
     action: '노드를 다른 노드 위로 드래그',
     effect: <Effect>그 노드의 하위로 이동</Effect>,
   },
@@ -50,26 +43,16 @@ const SHORTCUTS = [
     action: 'Option(Alt) + 드래그',
     effect: <Effect>노드 하나만 이동</Effect>,
   },
-  {
-    action: '노드 선택 후 Delete',
-    effect: <Effect>노드 삭제</Effect>,
-  },
 ];
 
 export default function GraphUsageGuide() {
-  const [isOpen, setIsOpen] = useState(true);
+  // 최초 로그인(온보딩 미확인) 때만 기본 펼침, 그 외엔 기본 접힘 — 사용자가 버튼으로
+  // 직접 토글하면(manualOverride) 그 이후엔 이 세션 동안 그 선택을 따른다.
+  const seen = useOnboardingSeen();
+  const [manualOverride, setManualOverride] = useState<boolean | null>(null);
+  const isOpen = manualOverride ?? !seen;
 
-  if (!isOpen) {
-    return (
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
-      >
-        사용법
-      </button>
-    );
-  }
+  if (!isOpen) return null;
 
   return (
     <div className="w-[320px] rounded-xl border border-gray-700 bg-background p-4 shadow-md">
@@ -77,7 +60,7 @@ export default function GraphUsageGuide() {
         <p className="text-sm font-bold text-foreground">사용법</p>
         <button
           type="button"
-          onClick={() => setIsOpen(false)}
+          onClick={() => setManualOverride(false)}
           aria-label="사용법 닫기"
           className="flex h-5 w-5 items-center justify-center text-muted transition-colors hover:text-foreground"
         >
@@ -136,8 +119,8 @@ export default function GraphUsageGuide() {
             key={s.action}
             className="flex items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-0"
           >
-            <span className="text-muted">{s.action}</span>
-            <span className="text-right">{s.effect}</span>
+            <span className="min-w-0 flex-1 text-muted">{s.action}</span>
+            <span className="shrink-0 whitespace-nowrap text-right">{s.effect}</span>
           </li>
         ))}
       </ul>

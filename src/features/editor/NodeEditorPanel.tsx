@@ -297,6 +297,7 @@ export function NodeEditorPanel({
             cursorColor={cursorColor}
             onFirstLineChange={onFirstLineChange}
             toolbarSlot={<ToolbarPlugin />}
+            extraBottomPadding
           />
         </div>
       </div>
