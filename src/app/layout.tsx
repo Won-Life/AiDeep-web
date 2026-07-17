@@ -16,6 +16,7 @@ const DESCRIPTION =
   "아이디어를 마인드맵 형태의 그래프로 구조화하고, 팀이 실시간으로 함께 편집하는 협업 캔버스 도구";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://aideep.ai.kr"),
   title: "AiDeep",
   description: DESCRIPTION,
   openGraph: {
