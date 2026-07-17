@@ -174,12 +174,12 @@ export default function ChipHeader({
             email={user.email}
             onLogout={onLogout}
           />
-          <Tooltip label="AIDeep 사용법 보기" align="end">
+          <Tooltip label="AiDeep에 대하여" align="end">
             <a
               href={ONBOARDING_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="AIDeep 사용법 보기"
+              aria-label="AiDeep에 대하여"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background transition-colors hover:bg-surface"
             >
               <svg
