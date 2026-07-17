@@ -1454,38 +1454,52 @@ function GraphCanvasInner({
       return;
     }
 
-    const idsToArchive = new Set(pendingArchiveNodeIds);
-
     setIsArchiveDeleting(true);
-    // BE 삭제 API 호출 (병렬)
-    try {
-      await Promise.all(
-        pendingArchiveNodeIds.map((nodeId) => deleteNode(workspaceId, nodeId)),
-      );
-    } catch (error) {
-      console.error('[handleConfirmArchive] deleteNode failed', error);
-      // 실패 시 모달만 닫고 로컬 state 유지
-      setPendingArchiveNodeIds([]);
-      setIsArchiveModalOpen(false);
-      setIsArchiveDeleting(false);
-      return;
-    }
-
-    // 로컬 state 즉시 업데이트
-    setEdges((snapshot) =>
-      snapshot.filter(
-        (edge) =>
-          !idsToArchive.has(edge.source) && !idsToArchive.has(edge.target),
+    // BE 삭제 API 호출 (병렬) — 서버 deleteNode는 노드 단위 삭제라 부분 성공이
+    // 가능하다. 전체 성공/전체 유지로 처리하면 성공분이 서버에는 없는데 화면에
+    // 남아(유령 노드) 이후 편집이 전부 404가 되므로, 성공한 노드만 로컬에서 제거한다.
+    const results = await Promise.allSettled(
+      pendingArchiveNodeIds.map((nodeId) => deleteNode(workspaceId, nodeId)),
+    );
+    const deletedIds = new Set(
+      pendingArchiveNodeIds.filter(
+        (_, i) => results[i].status === 'fulfilled',
       ),
     );
-    setNodes((snapshot) =>
-      snapshot.filter((node) => !idsToArchive.has(node.id)),
-    );
-    setHoveredNodeId((prev) => (prev && idsToArchive.has(prev) ? null : prev));
-    setMyOpenEditorNodeIds((prev) => prev.filter((id) => !idsToArchive.has(id)));
-    setWorkingOnEditorNodeId((prev) =>
-      prev && idsToArchive.has(prev) ? null : prev,
-    );
+    results.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        console.error(
+          `[handleConfirmArchive] deleteNode failed: ${pendingArchiveNodeIds[i]}`,
+          result.reason,
+        );
+      }
+    });
+
+    // 로컬 state 즉시 업데이트 — 삭제 성공분만 제거, 실패분은 화면에 유지(재시도 가능)
+    if (deletedIds.size > 0) {
+      // 삭제된 노드의 대기 중 제목 저장 타이머 정리 — 발사되면 404
+      deletedIds.forEach((nodeId) => {
+        const timer = titleDebounceRef.current.get(nodeId);
+        if (timer) clearTimeout(timer);
+        titleDebounceRef.current.delete(nodeId);
+      });
+      setEdges((snapshot) =>
+        snapshot.filter(
+          (edge) =>
+            !deletedIds.has(edge.source) && !deletedIds.has(edge.target),
+        ),
+      );
+      setNodes((snapshot) =>
+        snapshot.filter((node) => !deletedIds.has(node.id)),
+      );
+      setHoveredNodeId((prev) => (prev && deletedIds.has(prev) ? null : prev));
+      setMyOpenEditorNodeIds((prev) =>
+        prev.filter((id) => !deletedIds.has(id)),
+      );
+      setWorkingOnEditorNodeId((prev) =>
+        prev && deletedIds.has(prev) ? null : prev,
+      );
+    }
     setPendingArchiveNodeIds([]);
     setIsArchiveModalOpen(false);
     setIsArchiveDeleting(false);
