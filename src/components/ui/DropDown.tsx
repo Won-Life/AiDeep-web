@@ -1,5 +1,6 @@
 'use client';
 import { useRef, useState } from 'react';
+import { EMAIL_RE, submitEarlyAccessEmail } from '@/lib/earlyAccessForm';
 
 interface DropDownProps {
   sidebarWidth: number;
@@ -20,12 +21,6 @@ const FEATURE_LABELS: Record<ComingSoonFeature, string> = {
 };
 
 type NotifyStatus = 'ask' | 'saving' | 'done' | 'error';
-
-// 얼리액세스 신청 → Google Form (AiDeep for Google Meet 얼리액세스 신청, forms.gle/feUDhTAbsy9mNoZd7)
-const NOTIFY_FORM_ACTION =
-  'https://docs.google.com/forms/d/e/1FAIpQLSc3tg4r6WO4zMFjh8kbHCBdcWjkQ1q90zTY3s-oDt5x1QfFCg/formResponse';
-const NOTIFY_EMAIL_ENTRY = 'entry.225956236';
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** 준비중 안내 + 얼리액세스 이메일 신청 모달 */
 function ComingSoonModal({
@@ -183,14 +178,7 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
     const requestId = ++notifyRequestRef.current;
     setNotifyStatus('saving');
     try {
-      // ponytail: Google Form은 CORS 응답을 안 주므로 no-cors(opaque) — 상태코드는 못 읽고
-      // 네트워크 실패만 잡힌다. 백엔드 알림 API 생기면 그걸로 교체.
-      await fetch(NOTIFY_FORM_ACTION, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ [NOTIFY_EMAIL_ENTRY]: email }).toString(),
-      });
+      await submitEarlyAccessEmail(email);
       if (notifyRequestRef.current === requestId) setNotifyStatus('done');
     } catch {
       if (notifyRequestRef.current === requestId) setNotifyStatus('error');
