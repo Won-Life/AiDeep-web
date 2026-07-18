@@ -137,7 +137,9 @@ client.interceptors.response.use(
     } catch (refreshError) {
       processQueue(refreshError, null);
       clearTokens();
-      if (typeof window !== 'undefined') {
+      // 이미 /login이면 재이동 생략 — 안 그러면 이 페이지 자체의 getMe() 호출이
+      // 401 → refresh 실패 → 리다이렉트 → 재마운트 → 401을 반복하는 새로고침 루프가 된다.
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
       return Promise.reject(refreshError);
