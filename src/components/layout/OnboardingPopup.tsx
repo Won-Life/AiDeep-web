@@ -156,7 +156,7 @@ export default function OnboardingPopup() {
                   rel="noopener noreferrer"
                   className="text-[14px] text-blue-600 underline hover:text-blue-700"
                 >
-                  서비스 둘러보고 얼리 엑세스 신청하기
+                  서비스 둘러보고 얼리 액세스 신청하기
                 </a>
 
                 <input
