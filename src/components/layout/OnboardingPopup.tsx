@@ -26,7 +26,8 @@ export function useOnboardingSeen(): boolean {
 export default function OnboardingPopup() {
   const seen = useOnboardingSeen();
   const [dismissed, setDismissed] = useState(false);
-  const [step, setStep] = useState<0 | 1>(0);
+  // ponytail: graph-onboard(step 0) 건너뛰고 meet-onboard(step 1)만 테스트하기 위해 기본값 변경
+  const [step, setStep] = useState<0 | 1>(1);
   const [email, setEmail] = useState('');
   const [emailInvalid, setEmailInvalid] = useState(false);
   const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>('ask');
@@ -155,7 +156,7 @@ export default function OnboardingPopup() {
                   rel="noopener noreferrer"
                   className="text-[14px] text-blue-600 underline hover:text-blue-700"
                 >
-                  서비스 설명 보러 가기
+                  서비스 둘러보고 얼리 액세스 신청하기
                 </a>
 
                 <input
