@@ -1,20 +1,15 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { getMe } from '@/api/user';
+
+// ponytail: 임시로 /를 그래프 온보딩 페이지로 즉시 보냄. 원래 getMe() 기반
+// 인증 분기(/workspace ↔ /login)로 되돌리려면 이 파일의 git history 참고.
+const GRAPH_ONBOARDING_URL = 'https://won-life.github.io/Aideep_graph_onboard/';
 
 export default function Page() {
-  const router = useRouter();
-
   useEffect(() => {
-    // getMe()가 401을 받으면 client.ts의 refresh queue가 자동으로 access/refresh
-    // 토큰 유효성을 검증한다 — 갱신 성공 시 재시도해 resolve, 실패 시 자체적으로
-    // window.location.href = '/login' 이동까지 처리한다(src/api/client.ts).
-    getMe()
-      .then(() => router.replace('/workspace'))
-      .catch(() => router.replace('/login'));
-  }, [router]);
+    window.location.replace(GRAPH_ONBOARDING_URL);
+  }, []);
 
   return (
     <div className="flex h-screen w-screen items-center justify-center text-[14px] text-muted">
