@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, signup, sendEmailCode, verifyEmailCode } from '@/api/auth';
 import { createWorkspace } from '@/api/workspace';
+import { getMe } from '@/api/user';
 import { ApiError } from '@/api/types';
 
 type AuthMode = 'login' | 'signup';
@@ -48,6 +49,16 @@ export default function LoginPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    // ponytail: /가 하던 "로그인 상태면 /workspace로" 역할을 임시로 이관.
+    // getMe()가 401을 받으면 client.ts의 refresh queue가 자동으로 access/refresh
+    // 토큰 유효성을 검증한다 — 갱신 성공 시 재시도해 resolve(그러면 아래 workspace
+    // 이동), 실패 시 자체적으로 이 페이지에 남는다(이미 /login이라 추가 이동 불필요).
+    getMe()
+      .then(() => router.replace('/workspace'))
+      .catch(() => {});
+  }, [router]);
 
   useEffect(() => {
     if (timerSeconds <= 0) {
