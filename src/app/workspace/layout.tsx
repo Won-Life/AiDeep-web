@@ -13,7 +13,8 @@ import ChipHeader from '@/components/layout/ChipHeader';
 import DropDown from '@/components/ui/DropDown';
 import AiChatPanel from '@/features/chat/AiChatPanel';
 import UserMenu from '@/components/layout/UserMenu';
-import OnboardingPopup from '@/components/layout/OnboardingPopup';
+// ponytail: 온보딩 팝업 임시 비활성화 — 되돌리려면 아래 주석 해제
+// import OnboardingPopup from '@/components/layout/OnboardingPopup';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
 import { getWorkspaces, getWorkspaceMembers } from '@/api/workspace';
@@ -383,7 +384,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         onLogout={handleLogout}
       />
 
-      <OnboardingPopup />
+      {/* ponytail: 임시로 온보딩 팝업 비활성화 — 되돌리려면 주석 해제 */}
+      {/* <OnboardingPopup /> */}
     </div>
   );
 }
