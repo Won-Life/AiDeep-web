@@ -24,6 +24,10 @@ type ApiResponse<T> =
 - refresh 요청은 raw `axios.post` 사용 (interceptor 재진입 방지).
 - refresh 실패 시: `clearTokens()` → `window.location.href = '/login'`.
 
+예외: `auth.ts`의 `completeOAuthSignup`(OAuth 신규 가입 완료)도 raw `axios.post`를 쓴다.
+이 엔드포인트의 401은 access token이 아니라 **signup ticket(5분) 만료**를 뜻해서,
+인터셉터가 refresh를 태우면 사용자가 만료 이유를 못 보고 `/login`으로 튕긴다.
+
 ## WebSocket 이벤트 (ws.ts)
 
 싱글턴 소켓. 워크스페이스 이동 시 기존 소켓 `removeAllListeners + disconnect` 후 재생성.
