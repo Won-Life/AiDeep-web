@@ -22,6 +22,16 @@ const EyeIcon = ({ open }: { open: boolean }) =>
     </svg>
   );
 
+// 구글 브랜드 로고 — 지정된 브랜드 색이라 디자인 토큰으로 대체하지 않는다
+const GoogleIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+    <path d="M19.6 10.23c0-.7-.06-1.37-.18-2H10v3.79h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.98-4.3 2.98-7.31Z" fill="#4285F4" />
+    <path d="M10 20c2.7 0 4.96-.9 6.61-2.43l-3.23-2.5c-.9.6-2.04.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H1.08v2.58A10 10 0 0 0 10 20Z" fill="#34A853" />
+    <path d="M4.41 11.9a6 6 0 0 1 0-3.83V5.49H1.08a10 10 0 0 0 0 9.02l3.33-2.6Z" fill="#FBBC05" />
+    <path d="M10 3.96c1.47 0 2.79.51 3.83 1.5l2.86-2.86C14.96.99 12.7 0 10 0A10 10 0 0 0 1.08 5.49l3.33 2.58C5.2 5.71 7.4 3.96 10 3.96Z" fill="#EA4335" />
+  </svg>
+);
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>('login');
@@ -246,6 +256,17 @@ export default function LoginPage() {
                   className="h-[56px] w-full rounded-[8px] border border-main bg-background text-[18px] font-semibold text-main hover:bg-main-5 transition-colors"
                 >
                   회원가입
+                </button>
+
+                {/* 구글 인증 페이지로의 이동이라 axios가 아닌 브라우저 전체 이동이어야 한다(XHR은 CORS로 차단).
+                    /api/* 로 보내면 next.config.ts의 rewrites가 백엔드로 포워딩한다. */}
+                <button
+                  type="button"
+                  onClick={() => { window.location.href = '/api/auth/google'; }}
+                  className="flex h-[56px] w-full items-center justify-center gap-[8px] rounded-[8px] border border-gray-700 bg-background text-[18px] font-semibold text-foreground hover:bg-surface transition-colors"
+                >
+                  <GoogleIcon />
+                  구글로 계속하기
                 </button>
               </div>
             </form>

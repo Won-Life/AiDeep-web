@@ -91,6 +91,11 @@ src/
    - `resultType=FAIL` → `ApiError` throw (errorCode, reason, data)
 3. 401 interceptor: refresh queue 처리 (아래 참고)
 
+**토큰 유입 경로**: 이메일 로그인·회원가입 응답 외에, 구글 OAuth 콜백이 리다이렉트로 넘겨주는
+쿼리 파라미터(`/oauth/callback?kind=login&accessToken=...&refreshToken=...`)도 있다. 콜백 페이지가
+`setTokens()`로 받아 저장한 뒤 `history.replaceState`로 쿼리를 즉시 지운다. 신규 사용자는
+`kind=signup_required`로 오며, `completeOAuthSignup`(raw axios — 401 = ticket 만료) 응답으로 토큰을 받는다.
+
 **API 응답 envelope**:
 ```typescript
 type ApiResponse<T> =

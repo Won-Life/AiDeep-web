@@ -59,6 +59,12 @@ export interface IssueMasterRequest {
   userId: string;
 }
 
+export interface OAuthSignupCompleteRequest {
+  ticket: string;
+  username: string;
+  agreedToTerms: boolean;
+}
+
 // ─── User ────────────────────────────────────────────────────────────
 
 export interface UserMeResponse {
