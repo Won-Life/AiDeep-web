@@ -45,7 +45,12 @@ const SHORTCUTS = [
   },
 ];
 
-export default function GraphUsageGuide() {
+export default function GraphUsageGuide({
+  highlight = false,
+}: {
+  /** 빈 캔버스 등에서 사용법 진입점을 main 컬러 글로우로 강조 */
+  highlight?: boolean;
+}) {
   // 최초 로그인(온보딩 미확인) 때만 기본 펼침, 그 외엔 기본 접힘 — 사용자가 버튼으로
   // 직접 토글하면(manualOverride) 그 이후엔 이 세션 동안 그 선택을 따른다.
   const seen = useOnboardingSeen();
@@ -58,6 +63,16 @@ export default function GraphUsageGuide() {
         type="button"
         onClick={() => setManualOverride(true)}
         className="rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
+        // 정적 글로우(애니메이션 없음) — 빈 캔버스에서 사용법 위치를 알려주는 용도
+        style={
+          highlight
+            ? {
+                borderColor: 'rgb(var(--ds-main))',
+                boxShadow:
+                  '0 0 0 3px rgb(var(--ds-main) / 0.3), 0 0 14px rgb(var(--ds-main) / 0.45)',
+              }
+            : undefined
+        }
       >
         사용법
       </button>

@@ -3175,44 +3175,65 @@ function GraphCanvasInner({
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
       {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출.
-          미니 그래프 일러스트(노드 파스텔 고정색) + 라임 CTA + 조작법 칩으로 가시성 강화 */}
+          실제 노드 모양 안에 용어를 그대로 써서(중심 주제/일반 주제/연결점) 사용법 창과 같은
+          어휘를 미리 학습시킨다. 노드 표면색은 UI 가이드의 고정 팔레트라 하드코딩 허용 */}
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
-          {/* 중심 노드 1개 + 서브 노드 2개 미니 그래프 — 실제 노드 스타일(흰 사각형·파스텔 원) 축소판 */}
-          <svg
-            width="168"
-            height="88"
-            viewBox="0 0 168 88"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M96 44 H116 V24 H134"
-              stroke="#D9D9D9"
-              strokeWidth="1.5"
-              fill="none"
-            />
-            <path
-              d="M96 44 H116 V64 H134"
-              stroke="#D9D9D9"
-              strokeWidth="1.5"
-              fill="none"
-            />
-            <rect
-              x="24"
-              y="28"
-              width="72"
-              height="32"
-              rx="8"
-              fill="#FFFFFF"
-              stroke="#D9D9D9"
-              strokeWidth="1.5"
-            />
-            <rect x="44" y="42" width="32" height="4" rx="2" fill="#CFCFCF" />
-            <circle cx="145" cy="24" r="11" fill="#E4F9C8" />
-            <circle cx="145" cy="64" r="11" fill="#D0EEFB" />
-          </svg>
-          <p className="mt-5 text-xl font-bold text-foreground">
+          {/* 미니 그래프: 중심 주제 노드 → 연결점 → 같은 색(같은 그래프) 일반 주제 노드 2개 */}
+          <div className="flex items-center" aria-hidden="true">
+            <div
+              className="relative rounded-lg border px-5 py-3 text-sm font-medium"
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderColor: '#D9D9D9',
+                color: '#2C2C2C',
+              }}
+            >
+              중심 주제 노드
+              {/* 연결점 — 노드 가장자리의 작은 점 */}
+              <span
+                className="absolute top-1/2 -right-[5px] h-2.5 w-2.5 -translate-y-1/2 rounded-full border-2"
+                style={{
+                  backgroundColor: 'rgb(var(--background))',
+                  borderColor: 'rgb(var(--ds-gray-700))',
+                }}
+              />
+              {/* 연결점 라벨 — 점 바로 위, 연결선과 겹치지 않는 노드 우상단 바깥 */}
+              <span className="absolute -top-5 right-0 translate-x-1/2 whitespace-nowrap text-[11px] text-muted">
+                연결점
+              </span>
+            </div>
+            <svg width="48" height="104" viewBox="0 0 48 104" fill="none">
+              <path
+                d="M0 52 H20 V26 H48"
+                stroke="#D9D9D9"
+                strokeWidth="1.5"
+                fill="none"
+              />
+              <path
+                d="M0 52 H20 V78 H48"
+                stroke="#D9D9D9"
+                strokeWidth="1.5"
+                fill="none"
+              />
+            </svg>
+            {/* 같은 그래프의 서브 노드는 같은 색 (색상 = 그래프 구분) */}
+            <div className="flex flex-col gap-5">
+              <span
+                className="rounded-full px-4 py-1.5 text-[13px]"
+                style={{ backgroundColor: '#E4F9C8', color: '#40512A' }}
+              >
+                일반 주제 노드
+              </span>
+              <span
+                className="rounded-full px-4 py-1.5 text-[13px]"
+                style={{ backgroundColor: '#E4F9C8', color: '#40512A' }}
+              >
+                일반 주제 노드
+              </span>
+            </div>
+          </div>
+          <p className="mt-6 text-xl font-bold text-foreground">
             첫 주제를 만들어 보세요
           </p>
           <p className="mt-1.5 text-sm text-muted">
@@ -3229,9 +3250,9 @@ function GraphCanvasInner({
           <div className="mt-7 flex flex-col gap-2.5">
             {(
               [
-                ['우클릭', '빈 공간에 중심 노드 만들기'],
-                ['더블 클릭', '빈 공간에 서브 노드 만들기'],
-                ['핸들 드래그', '노드 가장자리에서 끌어 연결된 노드 만들기'],
+                ['우클릭', '빈 곳에 중심 주제 노드 만들기'],
+                ['더블 클릭', '빈 곳에 일반 주제 노드 만들기'],
+                ['연결점 끌기', '노드 가장자리의 작은 점을 끌어 이어진 노드 만들기'],
               ] as const
             ).map(([action, desc]) => (
               <div key={action} className="flex items-center gap-2.5 text-sm">
@@ -3242,6 +3263,11 @@ function GraphCanvasInner({
               </div>
             ))}
           </div>
+          <p className="mt-6 text-[13px] text-muted">
+            더 자세한 설명은 우측 상단{' '}
+            <span className="font-bold text-main">사용법</span> 버튼에서 볼 수
+            있어요.
+          </p>
         </div>
       )}
       {/* 노드 생성 진입점을 항상 보이는 버튼으로 제공 (#204) — 뷰포트 중앙에 중심 노드 생성 */}
@@ -3271,7 +3297,7 @@ function GraphCanvasInner({
       {/* top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
           top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치. */}
       <div className="absolute top-20 right-4 z-40 flex items-start gap-2">
-        <GraphUsageGuide />
+        <GraphUsageGuide highlight={nodes.length === 0} />
         {myOpenEditorNodeIds.length > 0 && (
           <button
             type="button"
