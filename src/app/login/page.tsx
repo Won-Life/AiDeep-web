@@ -6,6 +6,7 @@ import { login, signup, sendEmailCode, verifyEmailCode } from '@/api/auth';
 import { createWorkspace } from '@/api/workspace';
 import { getMe } from '@/api/user';
 import { ApiError } from '@/api/types';
+import { TERMS_URL, PRIVACY_URL } from '@/lib/legalLinks';
 
 type AuthMode = 'login' | 'signup';
 
@@ -188,14 +189,14 @@ export default function LoginPage() {
   const labelClass = 'text-[16px] font-semibold text-foreground pl-[8px]';
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-[16px] bg-background p-6">
       <div className="w-full max-w-[700px] rounded-[16px] bg-background px-[24px] py-[88px] shadow-[0px_0px_4px_0px_rgba(44,44,44,0.25)]">
 
         {/* 로그인 */}
         {mode === 'login' && (
           <>
             <h1 className="mb-[64px] text-center text-[36px] font-bold leading-[48px] text-foreground">
-              AIDeep 로그인
+              AiDeep 로그인
             </h1>
 
             <form onSubmit={handleLogin} className="flex flex-col gap-[40px]">
@@ -277,7 +278,7 @@ export default function LoginPage() {
         {mode === 'signup' && (
           <>
             <h1 className="mb-[64px] text-center text-[36px] font-bold leading-[48px] text-foreground">
-              AIDeep 회원가입
+              AiDeep 회원가입
             </h1>
 
             <form onSubmit={handleSignup} className="flex flex-col gap-[40px]">
@@ -421,6 +422,29 @@ export default function LoginPage() {
 
               {error && <p className="text-[13px] text-text-red">* {error}</p>}
 
+              {/* 이메일 가입 경로에도 약관 고지 — 구글 가입 경로와 일관 (#206) */}
+              <p className="pl-[8px] text-[13px] text-muted">
+                회원가입 시{' '}
+                <a
+                  href={TERMS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  이용약관
+                </a>{' '}
+                및{' '}
+                <a
+                  href={PRIVACY_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  개인정보 처리방침
+                </a>
+                에 동의하는 것으로 간주됩니다.
+              </p>
+
               <div className="flex flex-col gap-[24px]">
                 <button
                   type="submit"
@@ -451,6 +475,26 @@ export default function LoginPage() {
           </>
         )}
       </div>
+
+      {/* 약관·개인정보처리방침 상시 접근 링크 (#206) */}
+      <nav className="flex items-center gap-[16px] text-[13px] text-muted">
+        <a
+          href={TERMS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-foreground transition-colors"
+        >
+          이용약관
+        </a>
+        <a
+          href={PRIVACY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-foreground transition-colors"
+        >
+          개인정보처리방침
+        </a>
+      </nav>
     </div>
   );
 }

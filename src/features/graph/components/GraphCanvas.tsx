@@ -58,6 +58,9 @@ import { MdBody, type WorkspaceRole } from '@/api/types';
 
 // TODO: 실제 노드 너비로 변경
 const NODE_WIDTH = 200;
+// 제목 없는 신규 서브 노드의 실측 폭 근사치 — "서브 노드" 플레이스홀더 + 패딩 기준.
+// 엣지 드래그 생성(좌측 방향)에서 NODE_WIDTH(200) 폴백이 거리를 과도하게 벌리는 것 방지 (#215)
+const EMPTY_SUB_NODE_WIDTH = 90;
 const NODE_HEIGHT = 48;
 const NODE_PADDING = 0; // 완전히 부딪힐 때만 충돌
 const HUB_OFFSET = 25; // Figma 메인 화면 디자인 실측: 엣지 elbow 수평 거리 25px
@@ -493,8 +496,13 @@ function adjustPositionRelativeToSource(
   excludeNodeId?: string,
   targetNode?: Node | null,
 ): { x: number; y: number } {
-  const sourceWidth = sourceNode?.width ?? NODE_WIDTH;
-  const targetWidth = targetNode?.width ?? NODE_WIDTH;
+  // React Flow v12는 실측 크기를 node.measured에 담는다 — node.width(명시값)는 대부분
+  // undefined라 NODE_WIDTH(200) 폴백이 서브 노드 실폭(~100px)을 크게 웃돌아
+  // 엣지 드래그 생성 시 노드 간 거리가 과도해진다 (#215)
+  const sourceWidth =
+    sourceNode?.measured?.width ?? sourceNode?.width ?? NODE_WIDTH;
+  const targetWidth =
+    targetNode?.measured?.width ?? targetNode?.width ?? NODE_WIDTH;
 
   // 연결 방향에 따라 X 좌표 계산
   const targetX =
@@ -950,6 +958,8 @@ function GraphCanvasInner({
   >(new Map());
   const isConnectingRef = useRef(false);
   const isMultiDragRef = useRef(false);
+  // 뷰포트 중앙 좌표 계산용 캔버스 래퍼 (#204 보이는 생성 버튼)
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const lastLiveEmitRef = useRef(0);
   const LIVE_EMIT_INTERVAL = 50; // ms
 
@@ -1817,13 +1827,16 @@ function GraphCanvasInner({
           );
         }
 
-        // source 노드 기준으로 적절한 거리에 위치 조정
+        // source 노드 기준으로 적절한 거리에 위치 조정 — 새 노드는 제목 없는
+        // 서브 노드이므로 실측 대신 근사 폭으로 거리 계산 (#215)
         const adjustedPosition = adjustPositionRelativeToSource(
           sourceNode,
           originalPosition.y,
           side,
           nodes,
           edges,
+          undefined,
+          { width: EMPTY_SUB_NODE_WIDTH } as Node,
         );
 
         // 생성 위치에 이미 노드가 있으면 아무것도 생성하지 않는다.
@@ -2010,16 +2023,8 @@ function GraphCanvasInner({
   /* =========================
      Empty pane right-click → create PROJECT node
      ========================= */
-  const onPaneContextMenu = useCallback(
-    async (event: React.MouseEvent | MouseEvent) => {
-      event.preventDefault();
-      if (isConnectingRef.current) return;
-
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
+  const createProjectNodeAt = useCallback(
+    async (position: { x: number; y: number }) => {
       try {
         // 그래프 색을 생성 시점에 확정한다 — 화면은 TextUpdateNode가 isMain이면
         // 항상 MAIN_NODE_COLOR(흰색)로 그리므로 표시는 그대로 흰색이다.
@@ -2044,11 +2049,44 @@ function GraphCanvasInner({
           },
         ]);
       } catch (err) {
-        console.error('[onPaneContextMenu] createProjectNode failed', err);
+        console.error('[createProjectNodeAt] createProjectNode failed', err);
       }
     },
-    [screenToFlowPosition, workspaceId, setNodes],
+    [workspaceId, setNodes],
   );
+
+  const onPaneContextMenu = useCallback(
+    async (event: React.MouseEvent | MouseEvent) => {
+      event.preventDefault();
+      if (isConnectingRef.current) return;
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      await createProjectNodeAt(position);
+    },
+    [screenToFlowPosition, createProjectNodeAt],
+  );
+
+  /* =========================
+     보이는 노드 생성 진입점 (#204) — 빈 캔버스 CTA·플로팅 + 버튼 공용
+     ========================= */
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const createProjectAtViewportCenter = useCallback(async () => {
+    if (isCreatingProject) return;
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    const position = screenToFlowPosition({
+      x: (rect?.left ?? 0) + (rect?.width ?? window.innerWidth) / 2,
+      y: (rect?.top ?? 0) + (rect?.height ?? window.innerHeight) / 2,
+    });
+    setIsCreatingProject(true);
+    try {
+      await createProjectNodeAt(position);
+    } finally {
+      setIsCreatingProject(false);
+    }
+  }, [isCreatingProject, screenToFlowPosition, createProjectNodeAt]);
 
   const onDragOver = useCallback(
     (event: DragEvent) => {
@@ -2979,7 +3017,11 @@ function GraphCanvasInner({
   }, [focusedNodeId, nodes, setCenter]);
 
   return (
-    <div className="relative w-full h-full bg-background" onDoubleClick={onPaneDoubleClick}>
+    <div
+      ref={wrapperRef}
+      className="relative w-full h-full bg-background"
+      onDoubleClick={onPaneDoubleClick}
+    >
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edgesWithPresentation}
@@ -3013,6 +3055,54 @@ function GraphCanvasInner({
       />
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
+      {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출 */}
+      {nodes.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-4">
+          <p className="text-base font-semibold text-foreground">
+            아직 노드가 없어요
+          </p>
+          <p className="text-sm text-muted">
+            첫 주제를 만들고 생각을 그래프로 정리해 보세요.
+          </p>
+          <button
+            type="button"
+            onClick={createProjectAtViewportCenter}
+            disabled={isCreatingProject}
+            className="pointer-events-auto rounded-md bg-foreground px-4 py-2 text-sm text-background transition-colors hover:opacity-90 disabled:opacity-50"
+          >
+            첫 주제 만들기
+          </button>
+          <div className="mt-2 flex flex-col items-center gap-1 text-sm text-muted">
+            <p>빈 공간 우클릭 — 중심 노드 만들기</p>
+            <p>빈 공간 더블 클릭 — 서브 노드 만들기</p>
+            <p>노드 가장자리 핸들 드래그 — 연결된 노드 만들기</p>
+          </div>
+        </div>
+      )}
+      {/* 노드 생성 진입점을 항상 보이는 버튼으로 제공 (#204) — 뷰포트 중앙에 중심 노드 생성 */}
+      {nodes.length > 0 && (
+        <button
+          type="button"
+          onClick={createProjectAtViewportCenter}
+          disabled={isCreatingProject}
+          title="새 중심 노드 만들기"
+          aria-label="새 중심 노드 만들기"
+          className="absolute bottom-4 right-14 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-gray-700 bg-background text-foreground transition-colors hover:bg-surface disabled:opacity-50"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      )}
       {/* top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
           top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치. */}
       <div className="absolute top-20 right-4 z-40 flex items-start gap-2">
@@ -3035,13 +3125,17 @@ function GraphCanvasInner({
               선택한 노드와 하위 서브 노드가 함께 보관 처리됩니다. (총{' '}
               {pendingArchiveNodeIds.length}개)
             </p>
+            <p className="mt-1 text-sm text-muted">
+              보관된 노드는 보관함에서 복원할 수 있어요. 단, 노드 간 연결선은
+              복원되지 않습니다.
+            </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={handleCancelArchive}
                 className="rounded-md border border-border px-3 py-1.5 text-sm"
               >
-                No
+                취소
               </button>
               <button
                 type="button"
@@ -3049,7 +3143,7 @@ function GraphCanvasInner({
                 disabled={isArchiveDeleting}
                 className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50"
               >
-                Yes
+                보관
               </button>
             </div>
           </div>

@@ -1,11 +1,12 @@
 'use client';
 import { useState, useSyncExternalStore } from 'react';
-import { EMAIL_RE, submitEarlyAccessEmail } from '@/lib/earlyAccessForm';
-
-type NotifyStatus = 'ask' | 'saving' | 'done' | 'error';
+import { PRIVACY_URL } from '@/lib/legalLinks';
 
 export const ONBOARDING_URL = 'https://won-life.github.io/Aideep_graph_onboard/';
 export const MEET_ONBOARDING_URL = 'https://won-life.github.io/Aideep_meet_onboard/';
+// 크롬 웹스토어에 출시된 AiDeep for Google Meet 익스텐션
+export const CHROME_EXTENSION_URL =
+  'https://chromewebstore.google.com/detail/aideep-for-google-meet/nheeajgmccanipbkppfjogaajinlhdcd?hl=ko&authuser=0';
 export const ONBOARDING_SEEN_KEY = 'aideep_onboarding_seen';
 
 const noopSubscribe = () => () => {};
@@ -28,9 +29,6 @@ export default function OnboardingPopup() {
   const [dismissed, setDismissed] = useState(false);
   // ponytail: graph-onboard(step 0) 건너뛰고 meet-onboard(step 1)만 테스트하기 위해 기본값 변경
   const [step, setStep] = useState<0 | 1>(1);
-  const [email, setEmail] = useState('');
-  const [emailInvalid, setEmailInvalid] = useState(false);
-  const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>('ask');
   const isOpen = !seen && !dismissed;
 
   const close = () => {
@@ -38,21 +36,6 @@ export default function OnboardingPopup() {
       localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
     } finally {
       setDismissed(true);
-    }
-  };
-
-  const applyEarlyAccess = async () => {
-    if (!EMAIL_RE.test(email.trim())) {
-      setEmailInvalid(true);
-      return;
-    }
-    setEmailInvalid(false);
-    setNotifyStatus('saving');
-    try {
-      await submitEarlyAccessEmail(email.trim());
-      setNotifyStatus('done');
-    } catch {
-      setNotifyStatus('error');
     }
   };
 
@@ -71,7 +54,7 @@ export default function OnboardingPopup() {
           <>
             <div className="flex items-start justify-between">
               <h2 className="text-[20px] font-bold text-foreground">
-                AIDeep이 처음이신가요?
+                AiDeep이 처음이신가요?
               </h2>
               <button
                 type="button"
@@ -87,7 +70,7 @@ export default function OnboardingPopup() {
               <strong className="font-bold text-foreground">
                 그래프 만들기, 노드 안에서 바로 편집하기, 자유롭게 옮기며 정리하기
               </strong>
-              까지 — AIDeep 사용법을 1분 만에 보여드릴게요.
+              까지 — AiDeep 사용법을 1분 만에 보여드릴게요.
             </p>
 
             <div className="flex gap-[12px]">
@@ -113,7 +96,7 @@ export default function OnboardingPopup() {
           <>
             <div className="flex items-start justify-between">
               <h2 className="text-[20px] font-bold text-foreground">
-                AiDeep X 구글 미트도, 곧 만나요
+                AiDeep X 구글 미트, 지금 만나보세요
               </h2>
               <button
                 type="button"
@@ -125,82 +108,58 @@ export default function OnboardingPopup() {
               </button>
             </div>
 
-            {notifyStatus === 'done' ? (
-              <>
-                <p className="text-[14px] leading-[22px] text-muted">
-                  신청 완료! 출시 소식이 준비되면 입력하신 이메일로 알려드릴게요.
-                </p>
-                <button
-                  type="button"
-                  onClick={close}
-                  className="h-[44px] w-full rounded-[8px] bg-main text-[14px] font-semibold text-white transition-colors hover:opacity-90"
-                >
-                  확인
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="text-[14px] leading-[22px] text-muted">
-                  구글 미트와 연동해서{' '}
-                  <strong className="font-bold text-foreground">
-                    회의 내용을 실시간으로 구조화하고, 회의록을 자동으로 만들어주는
-                  </strong>{' '}
-                  기능을 준비하고 있어요.
-                  <br />
-                  지금 얼리액세스를 신청하시면 출시 후 무료로 사용하실 수 있어요.
-                </p>
+            {/* 익스텐션은 크롬 웹스토어에 출시된 상태 — "곧 만나요·얼리액세스" 안내는
+                랜딩·웹스토어와 메시지가 어긋나므로 설치 안내로 교체 (#213, 피드백 2·24) */}
+            <p className="text-[14px] leading-[22px] text-muted">
+              구글 미트 자막으로{' '}
+              <strong className="font-bold text-foreground">
+                회의 내용을 실시간으로 구조화하고, 회의록을 자동으로 만들어주는
+              </strong>{' '}
+              크롬 익스텐션이 출시됐어요. 회의가 끝나면 회의록이 워크스페이스에
+              그래프로 정리돼 있어요.
+            </p>
 
-                <a
-                  href={MEET_ONBOARDING_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[14px] text-blue-600 underline hover:text-blue-700"
-                >
-                  서비스 둘러보고 얼리 액세스 신청하기
-                </a>
+            <a
+              href={MEET_ONBOARDING_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[14px] text-blue-600 underline hover:text-blue-700"
+            >
+              어떻게 동작하는지 둘러보기
+            </a>
 
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (emailInvalid) setEmailInvalid(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') applyEarlyAccess();
-                  }}
-                  disabled={notifyStatus === 'saving'}
-                  placeholder="이메일 주소"
-                  className="h-[44px] rounded-[8px] border border-border bg-background px-3 text-[14px] text-foreground outline-none focus:border-main disabled:opacity-50"
-                />
-                {emailInvalid && (
-                  <p className="text-[12px] text-muted">이메일 형식을 확인해주세요.</p>
-                )}
-                {notifyStatus === 'error' && (
-                  <p className="text-[12px] text-muted">
-                    전송에 실패했어요. 다시 시도해주세요.
-                  </p>
-                )}
+            {/* 외부 AI 처리 고지 — 기능 사용 지점 근처 노출 (#206, 피드백 16) */}
+            <p className="text-[12px] leading-[18px] text-muted">
+              회의 자막과 발화자 이름은 회의록 생성을 위해 외부 AI로 처리됩니다.
+              자세한 내용은{' '}
+              <a
+                href={PRIVACY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                개인정보처리방침
+              </a>
+              을 확인해주세요.
+            </p>
 
-                <div className="flex gap-[12px]">
-                  <button
-                    type="button"
-                    onClick={close}
-                    className="h-[44px] flex-1 rounded-[8px] border border-border bg-background text-[14px] font-semibold text-muted transition-colors hover:bg-surface"
-                  >
-                    닫기
-                  </button>
-                  <button
-                    type="button"
-                    onClick={applyEarlyAccess}
-                    disabled={notifyStatus === 'saving'}
-                    className="h-[44px] flex-1 rounded-[8px] bg-main text-[14px] font-semibold text-white transition-colors hover:opacity-90 disabled:opacity-50"
-                  >
-                    {notifyStatus === 'saving' ? '전송 중...' : '얼리액세스 신청하기'}
-                  </button>
-                </div>
-              </>
-            )}
+            <div className="flex gap-[12px]">
+              <button
+                type="button"
+                onClick={close}
+                className="h-[44px] flex-1 rounded-[8px] border border-border bg-background text-[14px] font-semibold text-muted transition-colors hover:bg-surface"
+              >
+                닫기
+              </button>
+              <a
+                href={CHROME_EXTENSION_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-[44px] flex-1 items-center justify-center rounded-[8px] bg-main text-[14px] font-semibold text-white transition-colors hover:opacity-90"
+              >
+                크롬 익스텐션 설치하기
+              </a>
+            </div>
           </>
         )}
       </div>

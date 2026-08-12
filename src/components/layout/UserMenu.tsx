@@ -3,12 +3,14 @@ import { useState, useRef, useEffect } from "react";
 
 import { uploadFile } from "@/api/upload";
 import { SHOW_TEMP_HIDDEN_UI } from "@/lib/uiFlags";
+import { TERMS_URL, PRIVACY_URL } from "@/lib/legalLinks";
 
 interface UserMenuProps {
   username: string;
   email: string;
   onLogout: () => void;
   onSettings?: () => void;
+  onOpenArchive?: () => void;
 }
 
 function UserIcon() {
@@ -70,6 +72,7 @@ export default function UserMenu({
   email,
   onLogout,
   onSettings,
+  onOpenArchive,
 }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [username, setUsername] = useState(initialUsername);
@@ -357,6 +360,30 @@ export default function UserMenu({
             </button>
             )}
 
+            {/* 보관함 — 보관된 노드 확인·복원 (#203) */}
+            {onOpenArchive && (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  onOpenArchive();
+                }}
+                className="flex items-center justify-center w-full rounded-[4px] bg-surface-hover hover:bg-surface-active transition-colors"
+                style={{ height: 26 }}
+              >
+                <span
+                  className="text-foreground whitespace-nowrap"
+                  style={{
+                    fontFamily: "Pretendard, sans-serif",
+                    fontSize: 11,
+                    fontWeight: 400,
+                    lineHeight: "18px",
+                  }}
+                >
+                  보관함
+                </span>
+              </button>
+            )}
+
             {/* 로그아웃 */}
             <button
               onClick={() => {
@@ -378,6 +405,35 @@ export default function UserMenu({
                 로그아웃
               </span>
             </button>
+
+            {/* 약관·개인정보처리방침 상시 접근 (#206) */}
+            <div
+              className="flex items-center justify-center gap-2 text-muted"
+              style={{
+                fontFamily: "Pretendard, sans-serif",
+                fontSize: 10,
+                lineHeight: "16px",
+                paddingBottom: 2,
+              }}
+            >
+              <a
+                href={TERMS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors"
+              >
+                이용약관
+              </a>
+              <span aria-hidden="true">·</span>
+              <a
+                href={PRIVACY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors"
+              >
+                개인정보처리방침
+              </a>
+            </div>
           </div>
         </div>
       )}

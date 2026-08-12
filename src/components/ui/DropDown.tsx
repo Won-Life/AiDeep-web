@@ -136,6 +136,27 @@ function CollapseIcon({ flipped }: { flipped: boolean }) {
   );
 }
 
+/** 준비 중 기능 상태 배지 — 사용 가능 여부 오해 방지 (#202) */
+function ComingSoonBadge() {
+  return (
+    <span
+      style={{
+        marginLeft: 'auto',
+        fontFamily: 'Pretendard, -apple-system, sans-serif',
+        fontSize: 11,
+        lineHeight: 1,
+        color: 'rgb(var(--muted))',
+        border: '1px solid rgb(var(--border))',
+        borderRadius: 8,
+        padding: '3px 6px',
+        flexShrink: 0,
+      }}
+    >
+      출시 예정
+    </span>
+  );
+}
+
 /** 아이콘 컨테이너: 20×20, radius 5px */
 function Icon({ bg, opacity = 1, children }: { bg: string; opacity?: number; children: React.ReactNode }) {
   return (
@@ -158,7 +179,8 @@ function Icon({ bg, opacity = 1, children }: { bg: string; opacity?: number; chi
 }
 
 export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
-  const [isOpen, setIsOpen] = useState(true);
+  // 준비 중 기능 모음이라 기본 접힘 — 작동하는 편집 기능(캔버스·에디터)이 우선 노출 (#202)
+  const [isOpen, setIsOpen] = useState(false);
   const [comingSoonFeature, setComingSoonFeature] =
     useState<ComingSoonFeature | null>(null);
   const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>('ask');
@@ -192,7 +214,8 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
         bottom: 16,
         left: sidebarWidth + 16,
         zIndex: 30,
-        width: 173,
+        // 항목 우측 "출시 예정" 배지가 들어갈 폭 (#202)
+        width: 216,
       }}
     >
       {/* ── toolbox_top: 22px, #F5F5F5, 상단 radius 16px ── */}
@@ -240,18 +263,18 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                 lineHeight: 1,
               }}
             >
-              AIDeep 도구
+              AiDeep 도구
             </span>
 
             {/* 항목 목록: column, gap 12px */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-              {/* AI 내용 요약 — 준비중 */}
+              {/* AI 내용 요약 — 준비중 (icon opacity 0.6, text muted, 출시 예정 배지) */}
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
                 onClick={() => openComingSoon('AI_SUMMARY')}
               >
-                <Icon bg="#FED7D9">
+                <Icon bg="#FED7D9" opacity={0.6}>
                   {/* 요약 아이콘: 텍스트 줄 3개 (8×8) */}
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                     <rect x="0.5" y="0.5" width="7" height="1" rx="0.5" fill="#2C2C2C" />
@@ -259,9 +282,10 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                     <rect x="0.5" y="5.5" width="5" height="1" rx="0.5" fill="#2C2C2C" />
                   </svg>
                 </Icon>
-                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--foreground))' }}>
+                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--muted))' }}>
                   AI 내용 요약
                 </span>
+                <ComingSoonBadge />
               </div>
 
               {/* AI 챗봇 사용하기 — 준비중 (패널 열기는 onChatOpen으로 복원 가능) */}
@@ -269,16 +293,17 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                 style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
                 onClick={() => openComingSoon('AI_CHATBOT')}
               >
-                <Icon bg="#D0EEFB">
+                <Icon bg="#D0EEFB" opacity={0.6}>
                   {/* 챗봇 아이콘: 원형 (7×8) */}
                   <svg width="7" height="8" viewBox="0 0 7 8" fill="none">
                     <circle cx="3.5" cy="4" r="2.5" stroke="#2C2C2C" strokeWidth="1" />
                     <circle cx="3.5" cy="4" r="1" fill="#2C2C2C" />
                   </svg>
                 </Icon>
-                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--foreground))' }}>
+                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--muted))' }}>
                   AI 챗봇 사용하기
                 </span>
+                <ComingSoonBadge />
               </div>
 
               {/* AI 자동 구조화 — 준비중 (icon opacity 0.6, text #A0A0A0) */}
@@ -299,6 +324,7 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                 <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--muted))' }}>
                   AI 자동 구조화
                 </span>
+                <ComingSoonBadge />
               </div>
 
               {/* 단어 정의 사전 — 준비중 (icon opacity 0.6, text #A0A0A0) */}
@@ -321,6 +347,7 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
                 <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--muted))' }}>
                   단어 정의 사전
                 </span>
+                <ComingSoonBadge />
               </div>
 
             </div>
