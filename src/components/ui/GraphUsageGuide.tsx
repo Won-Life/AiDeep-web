@@ -131,8 +131,9 @@ function GuideCard({
       <div className="flex h-[84px] items-center justify-center" aria-hidden="true">
         {children}
       </div>
-      <p className="mt-1 text-[13px] font-bold text-foreground">{title}</p>
-      <p className="mt-1 text-[12.5px] leading-[18px] text-muted">{desc}</p>
+      <p className="mt-1 text-[13.5px] font-bold text-foreground">{title}</p>
+      {/* 설명은 muted 대신 본문색 — 파스텔 카드 배경 위 시인성 확보 */}
+      <p className="mt-1.5 text-[13px] leading-[19px] text-foreground">{desc}</p>
     </div>
   );
 }
@@ -279,7 +280,8 @@ export default function GraphUsageGuide({
           title="내용 적기"
           desc={
             <>
-              주제를 클릭하면 텍스트 편집창이 열려 글을 적을 수 있어요.
+              주제를 클릭하면 <Term>텍스트 편집창</Term>이 열려 글을 적을 수
+              있어요.
               <br />
               전체화면도 가능해요! (<ExpandGlyph /> 버튼 클릭)
             </>
