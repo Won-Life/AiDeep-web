@@ -176,7 +176,7 @@ export default function GraphUsageGuide({
         style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
       >
         <GuideCard
-          title="노드 만들기"
+          title="단독 노드 만들기"
           desc={
             <>
               빈 곳을 우클릭하면 <Term>중심 주제</Term>, 더블 클릭하면{' '}
@@ -203,24 +203,7 @@ export default function GraphUsageGuide({
         </GuideCard>
 
         <GuideCard
-          title="끌어서 연결하기"
-          desc={
-            <>
-              노드를 다른 노드에 가까이 끌면
-              <br />
-              <Term>하위 주제</Term> 노드로 연결돼요.
-            </>
-          }
-        >
-          <div className="flex items-center gap-1.5">
-            <MiniPill>하위 주제</MiniPill>
-            <Arrow />
-            <MiniRect snap>중심 주제</MiniRect>
-          </div>
-        </GuideCard>
-
-        <GuideCard
-          title="연결점에서 만들기"
+          title="연결된 노드 만들기"
           desc={
             <>
               노드 가장자리의 <Term>연결점</Term>을 끌면 이어진 주제가 새로
@@ -252,12 +235,51 @@ export default function GraphUsageGuide({
         </GuideCard>
 
         <GuideCard
+          title="끌어서 연결하기"
+          desc={
+            <>
+              노드를 다른 노드에 가까이 끌면
+              <br />
+              <Term>하위 주제</Term> 노드로 연결돼요.
+            </>
+          }
+        >
+          <div className="flex items-center gap-1.5">
+            <MiniPill>하위 주제</MiniPill>
+            <Arrow />
+            <MiniRect snap>중심 주제</MiniRect>
+          </div>
+        </GuideCard>
+
+        <GuideCard
           title="내용 적기"
-          desc={<>노드를 클릭하면 편집창이 열려 글을 적을 수 있어요.</>}
+          desc={
+            <>
+              노드를 클릭하면 편집창이 열려요. 편집창의 ↗ 버튼을 누르면 전체
+              화면으로 크게 쓸 수 있어요.
+            </>
+          }
         >
           <div className="flex flex-col items-center gap-1.5">
             <MiniPill>하위 주제</MiniPill>
-            <div className="flex w-[128px] flex-col gap-1.5 rounded-md border border-gray-700 bg-background p-2">
+            <div className="relative flex w-[128px] flex-col gap-1.5 rounded-md border border-gray-700 bg-background p-2">
+              {/* 전체 화면 버튼 표시 */}
+              <svg
+                width="8"
+                height="8"
+                viewBox="0 0 12 12"
+                fill="none"
+                aria-hidden="true"
+                className="absolute top-1.5 right-1.5"
+              >
+                <path
+                  d="M1 11L11 1M8 1H11V4M4 11H1V8"
+                  stroke="rgb(var(--muted))"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
               <span
                 className="h-1.5 w-3/4 rounded-full"
                 style={{ backgroundColor: 'rgb(var(--surface-hover))' }}
@@ -277,6 +299,7 @@ export default function GraphUsageGuide({
 
       {/* 보조 팁 — 서로 다른 동작이므로 줄을 나누고 본문색으로 강조 */}
       <div className="mt-3 flex flex-col gap-1 border-t border-border pt-2.5">
+        <p className="text-[12px] font-bold text-main">Tip!</p>
         <p className="text-[12px] text-foreground">
           <span className="font-semibold">Shift + 드래그</span>
           <span className="text-muted"> — </span>여러 노드를 한번에 이동
