@@ -32,8 +32,8 @@ const SHORTCUTS = [
     ),
   },
   {
-    action: '노드를 다른 노드 위로 드래그',
-    effect: <Effect>그 노드의 하위로 이동</Effect>,
+    action: '노드를 다른 노드 가까이 끌기',
+    effect: <Effect>하위 노드로 연결됨</Effect>,
   },
   {
     action: 'Shift + 드래그',
