@@ -1,12 +1,9 @@
 'use client';
 import { useState, useSyncExternalStore } from 'react';
-import { PRIVACY_URL } from '@/lib/legalLinks';
+import { CHROME_EXTENSION_URL } from '@/lib/links';
 
 export const ONBOARDING_URL = 'https://won-life.github.io/Aideep_graph_onboard/';
 export const MEET_ONBOARDING_URL = 'https://won-life.github.io/Aideep_meet_onboard/';
-// 크롬 웹스토어에 출시된 AiDeep for Google Meet 익스텐션
-export const CHROME_EXTENSION_URL =
-  'https://chromewebstore.google.com/detail/aideep-for-google-meet/nheeajgmccanipbkppfjogaajinlhdcd?hl=ko&authuser=0';
 export const ONBOARDING_SEEN_KEY = 'aideep_onboarding_seen';
 
 const noopSubscribe = () => () => {};
@@ -96,7 +93,7 @@ export default function OnboardingPopup() {
           <>
             <div className="flex items-start justify-between">
               <h2 className="text-[20px] font-bold text-foreground">
-                AiDeep X 구글 미트, 지금 만나보세요
+                AiDeep for Google Meet 출시!
               </h2>
               <button
                 type="button"
@@ -108,15 +105,13 @@ export default function OnboardingPopup() {
               </button>
             </div>
 
-            {/* 익스텐션은 크롬 웹스토어에 출시된 상태 — "곧 만나요·얼리액세스" 안내는
-                랜딩·웹스토어와 메시지가 어긋나므로 설치 안내로 교체 (#213, 피드백 2·24) */}
             <p className="text-[14px] leading-[22px] text-muted">
-              구글 미트 자막으로{' '}
+              구글 미트와 연동해서{' '}
               <strong className="font-bold text-foreground">
-                회의 내용을 실시간으로 구조화하고, 회의록을 자동으로 만들어주는
-              </strong>{' '}
-              크롬 익스텐션이 나왔어요. 지금 설치하면 다음 회의부터 회의록이
-              워크스페이스에 그래프로 정리돼 있어요.
+                회의 내용을 실시간으로 구조화하고, 회의록을 자동으로 만들어줘요.
+              </strong>
+              <br />
+              지금 바로 설치해보세요.
             </p>
 
             <a
@@ -125,23 +120,8 @@ export default function OnboardingPopup() {
               rel="noopener noreferrer"
               className="text-[14px] text-blue-600 underline hover:text-blue-700"
             >
-              어떻게 동작하는지 둘러보기
+              서비스 둘러보기
             </a>
-
-            {/* 외부 AI 처리 고지 — 기능 사용 지점 근처 노출 (#206, 피드백 16) */}
-            <p className="text-[12px] leading-[18px] text-muted">
-              회의 자막과 발화자 이름은 회의록 생성을 위해 외부 AI로 처리됩니다.
-              자세한 내용은{' '}
-              <a
-                href={PRIVACY_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-foreground"
-              >
-                개인정보처리방침
-              </a>
-              을 확인해주세요.
-            </p>
 
             <div className="flex gap-[12px]">
               <button
@@ -157,7 +137,7 @@ export default function OnboardingPopup() {
                 rel="noopener noreferrer"
                 className="flex h-[44px] flex-1 items-center justify-center rounded-[8px] bg-main text-[14px] font-semibold text-white transition-colors hover:opacity-90"
               >
-                바로 사용해보기
+                크롬 익스텐션 다운로드
               </a>
             </div>
           </>
