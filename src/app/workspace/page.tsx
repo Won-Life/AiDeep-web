@@ -1,6 +1,7 @@
 "use client";
 
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
+import WorkspaceLoading from "@/components/ui/WorkspaceLoading";
 import { useWorkspaceLayout } from "./context";
 
 export default function WorkspacePage() {
@@ -18,11 +19,7 @@ export default function WorkspacePage() {
   const currentUserName = userMe?.username ?? "Anonymous";
 
   if (!workspaceId || !synced) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-        워크스페이스를 불러오는 중...
-      </div>
-    );
+    return <WorkspaceLoading />;
   }
 
   return (

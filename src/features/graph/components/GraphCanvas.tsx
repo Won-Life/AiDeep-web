@@ -3200,8 +3200,9 @@ function GraphCanvasInner({
                 className="absolute top-1/2 -right-[5px] h-2.5 w-2.5 -translate-y-1/2 rounded-full"
                 style={{ backgroundColor: '#2C2C2C' }}
               />
-              {/* 연결점 라벨 — 점 바로 위, 연결선과 겹치지 않는 노드 우상단 바깥 */}
-              <span className="absolute -top-5 right-0 translate-x-1/2 whitespace-nowrap text-[11px] text-muted">
+              {/* 연결점 라벨 — 점 바로 위, 연결선과 겹치지 않는 노드 우상단 바깥.
+                  연결점(검정)과 같은 색으로 맞춤 */}
+              <span className="absolute -top-5 right-0 translate-x-1/2 whitespace-nowrap text-[11px] text-foreground">
                 연결점
               </span>
             </div>
