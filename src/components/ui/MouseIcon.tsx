@@ -74,14 +74,7 @@ export function ConnectDragIcon() {
       aria-hidden="true"
       className="shrink-0"
     >
-      <circle
-        cx="4"
-        cy="5"
-        r="2.6"
-        stroke="rgb(var(--muted))"
-        strokeWidth="1.3"
-        fill="rgb(var(--background))"
-      />
+      <circle cx="4" cy="5" r="3" fill="#2C2C2C" />
       <path
         d="M8 5 H16"
         stroke="rgb(var(--ds-main))"

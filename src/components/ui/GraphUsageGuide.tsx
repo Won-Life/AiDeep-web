@@ -254,11 +254,8 @@ export default function GraphUsageGuide({
             <span className="relative">
               <MiniRect>중심 주제</MiniRect>
               <span
-                className="absolute top-1/2 -right-[4px] h-2 w-2 -translate-y-1/2 rounded-full border-2"
-                style={{
-                  backgroundColor: 'rgb(var(--background))',
-                  borderColor: 'rgb(var(--ds-gray-700))',
-                }}
+                className="absolute top-1/2 -right-[4px] h-2 w-2 -translate-y-1/2 rounded-full"
+                style={{ backgroundColor: '#2C2C2C' }}
               />
             </span>
             <svg width="34" height="8" viewBox="0 0 34 8" fill="none" aria-hidden="true">
