@@ -3174,27 +3174,73 @@ function GraphCanvasInner({
       />
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
-      {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출 */}
+      {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출.
+          미니 그래프 일러스트(노드 파스텔 고정색) + 라임 CTA + 조작법 칩으로 가시성 강화 */}
       {nodes.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-4">
-          <p className="text-base font-semibold text-foreground">
-            아직 노드가 없어요
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
+          {/* 중심 노드 1개 + 서브 노드 2개 미니 그래프 — 실제 노드 스타일(흰 사각형·파스텔 원) 축소판 */}
+          <svg
+            width="168"
+            height="88"
+            viewBox="0 0 168 88"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M96 44 H116 V24 H134"
+              stroke="#D9D9D9"
+              strokeWidth="1.5"
+              fill="none"
+            />
+            <path
+              d="M96 44 H116 V64 H134"
+              stroke="#D9D9D9"
+              strokeWidth="1.5"
+              fill="none"
+            />
+            <rect
+              x="24"
+              y="28"
+              width="72"
+              height="32"
+              rx="8"
+              fill="#FFFFFF"
+              stroke="#D9D9D9"
+              strokeWidth="1.5"
+            />
+            <rect x="44" y="42" width="32" height="4" rx="2" fill="#CFCFCF" />
+            <circle cx="145" cy="24" r="11" fill="#E4F9C8" />
+            <circle cx="145" cy="64" r="11" fill="#D0EEFB" />
+          </svg>
+          <p className="mt-5 text-xl font-bold text-foreground">
+            첫 주제를 만들어 보세요
           </p>
-          <p className="text-sm text-muted">
-            첫 주제를 만들고 생각을 그래프로 정리해 보세요.
+          <p className="mt-1.5 text-sm text-muted">
+            생각을 노드로 만들고, 연결하며 그래프로 정리하는 공간이에요.
           </p>
           <button
             type="button"
             onClick={createProjectAtViewportCenter}
             disabled={isCreatingProject}
-            className="pointer-events-auto rounded-md bg-foreground px-4 py-2 text-sm text-background transition-colors hover:opacity-90 disabled:opacity-50"
+            className="pointer-events-auto mt-5 rounded-lg bg-main px-6 py-2.5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             첫 주제 만들기
           </button>
-          <div className="mt-2 flex flex-col items-center gap-1 text-sm text-muted">
-            <p>빈 공간 우클릭 — 중심 노드 만들기</p>
-            <p>빈 공간 더블 클릭 — 서브 노드 만들기</p>
-            <p>노드 가장자리 핸들 드래그 — 연결된 노드 만들기</p>
+          <div className="mt-7 flex flex-col gap-2.5">
+            {(
+              [
+                ['우클릭', '빈 공간에 중심 노드 만들기'],
+                ['더블 클릭', '빈 공간에 서브 노드 만들기'],
+                ['핸들 드래그', '노드 가장자리에서 끌어 연결된 노드 만들기'],
+              ] as const
+            ).map(([action, desc]) => (
+              <div key={action} className="flex items-center gap-2.5 text-sm">
+                <span className="w-[88px] shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-center text-xs font-medium text-foreground">
+                  {action}
+                </span>
+                <span className="text-muted">{desc}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
