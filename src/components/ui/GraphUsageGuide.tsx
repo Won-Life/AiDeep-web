@@ -1,6 +1,7 @@
 'use client';
 import { useState, type ReactNode } from 'react';
 import { useOnboardingSeen } from '@/components/layout/OnboardingPopup';
+import MouseIcon from '@/components/ui/MouseIcon';
 
 /*
  * CONTEXT
@@ -70,10 +71,10 @@ function MiniPill({
   );
 }
 
-/** 마우스 동작 이름표 (우클릭·더블 클릭 등) */
-function KeyChip({ children }: { children: string }) {
+/** 마우스 동작 이름표 (아이콘 + 라벨) */
+function KeyChip({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex shrink-0 items-center rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted whitespace-nowrap">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted whitespace-nowrap">
       {children}
     </span>
   );
@@ -185,11 +186,17 @@ export default function GraphUsageGuide({
         >
           <div className="flex flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <KeyChip>우클릭</KeyChip>
+              <KeyChip>
+                <MouseIcon button="right" />
+                우클릭
+              </KeyChip>
               <MiniRect>중심 주제</MiniRect>
             </div>
             <div className="flex items-center gap-2">
-              <KeyChip>더블 클릭</KeyChip>
+              <KeyChip>
+                <MouseIcon button="double" />
+                더블 클릭
+              </KeyChip>
               <MiniPill>하위 주제</MiniPill>
             </div>
           </div>
@@ -268,10 +275,17 @@ export default function GraphUsageGuide({
         </GuideCard>
       </div>
 
-      <p className="mt-3 text-[11px] text-muted">
-        팁: Shift+드래그 — 여러 노드 한번에 이동 · Option(Alt)+드래그 — 노드
-        하나만 이동
-      </p>
+      {/* 보조 팁 — 서로 다른 동작이므로 줄을 나누고 본문색으로 강조 */}
+      <div className="mt-3 flex flex-col gap-1 border-t border-border pt-2.5">
+        <p className="text-[12px] text-foreground">
+          <span className="font-semibold">Shift + 드래그</span>
+          <span className="text-muted"> — </span>여러 노드를 한번에 이동
+        </p>
+        <p className="text-[12px] text-foreground">
+          <span className="font-semibold">Option(Alt) + 드래그</span>
+          <span className="text-muted"> — </span>노드 하나만 이동
+        </p>
+      </div>
     </div>
   );
 }

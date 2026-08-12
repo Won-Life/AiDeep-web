@@ -27,6 +27,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import ZoomControl from '@/components/ui/ZoomControl';
 import GraphUsageGuide from '@/components/ui/GraphUsageGuide';
+import MouseIcon, { ConnectDragIcon } from '@/components/ui/MouseIcon';
 import * as d3 from 'd3';
 import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
@@ -3247,13 +3248,18 @@ function GraphCanvasInner({
           <div className="mt-7 flex flex-col gap-2.5">
             {(
               [
-                ['우클릭', '중심 주제 만들기'],
-                ['더블 클릭', '하위 주제 만들기'],
-                ['연결점 끌기', '이어진 주제 만들기'],
+                ['우클릭', '중심 주제 만들기', <MouseIcon key="r" button="right" />],
+                [
+                  '더블 클릭',
+                  '하위 주제 만들기',
+                  <MouseIcon key="d" button="double" />,
+                ],
+                ['연결점 끌기', '이어진 주제 만들기', <ConnectDragIcon key="c" />],
               ] as const
-            ).map(([action, desc]) => (
+            ).map(([action, desc, icon]) => (
               <div key={action} className="flex items-center gap-2.5 text-sm">
-                <span className="w-[88px] shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-center text-xs font-medium text-foreground">
+                <span className="flex w-[108px] shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-foreground">
+                  {icon}
                   {action}
                 </span>
                 <span className="text-muted">{desc}</span>
