@@ -340,7 +340,7 @@ export default function GraphUsageGuide({
         <p className="text-[12px] font-bold text-main">Tip!</p>
         <p className="text-[12px] text-foreground">
           <span className="font-semibold">Shift + 드래그</span>
-          <span className="text-muted"> — </span>여러 주제를 한번에 이동
+          <span className="text-muted"> — </span>여러 주제를 한번에 선택
         </p>
         <p className="text-[12px] text-foreground">
           <span className="font-semibold">Option(Alt) + 드래그</span>
