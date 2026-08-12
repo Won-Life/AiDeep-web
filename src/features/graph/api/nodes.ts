@@ -115,6 +115,39 @@ export interface NodeDetail {
   updated_at: string;
 }
 
+export interface ArchivedNode {
+  node_id: string;
+  title: string;
+  node_type: string;
+  content: {
+    markdownBody?: string;
+    jsonBody?: string;
+    color?: string;
+    textColor?: string;
+  } | null;
+  position_x: number;
+  position_y: number;
+  workspace_id: string;
+  deleted_at: string;
+  depth: number;
+}
+
+export async function getArchivedNodes(
+  workspaceId: string,
+): Promise<ArchivedNode[]> {
+  return api<ArchivedNode[]>(`/workspace/${workspaceId}/node/archived`);
+}
+
+// 보관 시 엣지는 물리 삭제되므로 복원 노드는 독립 노드(root)로 돌아온다
+export async function restoreNode(
+  workspaceId: string,
+  nodeId: string,
+): Promise<ArchivedNode> {
+  return api<ArchivedNode>(`/workspace/${workspaceId}/node/${nodeId}/restore`, {
+    method: "PATCH",
+  });
+}
+
 export async function getNode(
   workspaceId: string,
   nodeId: string,

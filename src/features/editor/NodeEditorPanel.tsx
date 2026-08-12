@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { NotionEditor, ToolbarPlugin } from "./NotionEditor";
 import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 import { uploadFile } from "@/api/upload";
@@ -212,6 +212,48 @@ export function NodeEditorPanel({
 }: NodeEditorPanelProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
+  /*
+   * CONTEXT
+   * - Problem      : 패널 확장 방향이 handleSide로만 정해져(기본 오른쪽), 중심·독립
+   *                  노드나 화면 가장자리 노드에서 패널이 뷰포트를 벗어남 (#214).
+   * - Why          : 패널 오픈 시점에 노드의 화면 좌표를 측정해, 기본 방향으로 열면
+   *                  뷰포트를 벗어나고 반대 방향은 들어오는 경우에만 방향을 뒤집는다.
+   * - Alternatives : 항상 뷰포트 중앙 기준 방향 결정 — handleSide(연결선 반대편으로
+   *                  열림) 규칙이 깨져 연결선과 패널이 겹침.
+   * - Trade-offs   : 오픈 시 1회 측정이라 이후 pan/드래그에는 따라가지 않음(기존과 동일).
+   * - Edge Case    : 양쪽 다 벗어나는 극단 줌에서는 기본 방향 유지.
+   */
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [sideOverride, setSideOverride] = useState<"left" | "right" | null>(
+    null,
+  );
+  const PANEL_WIDTH = 315;
+  useEffect(() => {
+    // 레이아웃 확정 후 다음 프레임에 측정 — 이펙트 본문 동기 setState 회피(React Compiler 규칙)
+    const raf = requestAnimationFrame(() => {
+      // offsetParent = 노드 래퍼(relative div) — 노드의 화면상 위치·크기
+      const nodeRect = panelRef.current?.offsetParent?.getBoundingClientRect();
+      if (!nodeRect) return;
+      if (handleSide === "right") {
+        // left:0 → 오른쪽으로 확장. 오른쪽 경계를 벗어나면 왼쪽 확장으로 전환
+        if (
+          nodeRect.left + PANEL_WIDTH > window.innerWidth &&
+          nodeRect.right - PANEL_WIDTH >= 0
+        ) {
+          setSideOverride("left");
+        }
+      } else if (
+        nodeRect.right - PANEL_WIDTH < 0 &&
+        nodeRect.left + PANEL_WIDTH <= window.innerWidth
+      ) {
+        // right:0 → 왼쪽으로 확장. 왼쪽 경계를 벗어나면 오른쪽 확장으로 전환
+        setSideOverride("right");
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [handleSide]);
+  const effectiveSide = sideOverride ?? handleSide;
+
   const handleAddImage = useCallback((src: string) => {
     setAttachments((prev) => [...prev, { id: generateId(), type: "image", src, caption: "" }]);
   }, []);
@@ -307,12 +349,13 @@ export function NodeEditorPanel({
   // ── 기본 모드 (캔버스 노드 패널) ─────────────────────────────────────────
   return (
     <div
+      ref={panelRef}
       className="absolute w-[315px] min-h-[220px] max-h-[370px] bg-background border border-gray-700 overflow-hidden flex flex-col"
       style={{
         borderRadius: 16,
         top: "100%",
         marginTop: -12,
-        ...(handleSide === "left" ? { right: 0 } : { left: 0 }),
+        ...(effectiveSide === "left" ? { right: 0 } : { left: 0 }),
         zIndex: panelZIndex ?? 0,
       }}
       onClick={(e) => e.stopPropagation()}
@@ -321,7 +364,8 @@ export function NodeEditorPanel({
         onFocus?.();
       }}
     >
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-0.5">
+      {/* 버튼을 absolute 오버레이 대신 헤더 행으로 — 에디터 첫 줄과 겹침 방지 (#214) */}
+      <div className="flex items-center justify-end gap-0.5 px-3 pt-3 shrink-0">
         {onExpandClick && (
           <button
             type="button"
@@ -347,7 +391,7 @@ export function NodeEditorPanel({
       </div>
 
       {!collabProvider ? (
-        <div className="flex items-center justify-center h-full text-muted typo-body1">
+        <div className="flex flex-1 items-center justify-center text-muted typo-body1">
           워크스페이스를 불러오는 중...
         </div>
       ) : (

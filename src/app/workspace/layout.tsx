@@ -12,7 +12,7 @@ import Sidebar, {
 import ChipHeader from '@/components/layout/ChipHeader';
 import DropDown from '@/components/ui/DropDown';
 import AiChatPanel from '@/features/chat/AiChatPanel';
-import UserMenu from '@/components/layout/UserMenu';
+import ArchiveModal from '@/components/layout/ArchiveModal';
 import OnboardingPopup from '@/components/layout/OnboardingPopup';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
@@ -95,6 +95,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     return stored !== null ? stored === 'true' : true;
   });
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -369,6 +370,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         user={userMe}
         onLogout={handleLogout}
         workspaceId={workspaceId}
+        onOpenArchive={() => setIsArchiveOpen(true)}
       />
 
       <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setIsChatOpen(true)} />
@@ -377,11 +379,12 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         <AiChatPanel onClose={() => setIsChatOpen(false)} sidebarWidth={sidebarWidth} />
       )}
 
-      <UserMenu
-        username={userMe?.username ?? ''}
-        email={userMe?.email ?? ''}
-        onLogout={handleLogout}
-      />
+      {isArchiveOpen && workspaceId && (
+        <ArchiveModal
+          workspaceId={workspaceId}
+          onClose={() => setIsArchiveOpen(false)}
+        />
+      )}
 
       <OnboardingPopup />
     </div>

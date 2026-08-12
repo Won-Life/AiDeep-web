@@ -30,6 +30,7 @@ interface ChipHeaderProps {
   user: UserMeResponse | null;
   onLogout: () => void;
   workspaceId: string | null;
+  onOpenArchive?: () => void;
 }
 
 export default function ChipHeader({
@@ -40,6 +41,7 @@ export default function ChipHeader({
   user,
   onLogout,
   workspaceId,
+  onOpenArchive,
 }: ChipHeaderProps) {
   const mainNodes: Node<NodeView>[] = useMemo(
     () => nodes.filter((node) => node.data.isMain),
@@ -60,10 +62,39 @@ export default function ChipHeader({
 
   useEffect(() => {
     updateScrollState();
+    // 사이드바 너비 transition(300ms) 종료 후 실제 레이아웃 기준으로 재측정
+    const el = scrollRef.current;
+    const observer = el ? new ResizeObserver(updateScrollState) : null;
+    if (el && observer) observer.observe(el);
     window.addEventListener("resize", updateScrollState);
-    return () => window.removeEventListener("resize", updateScrollState);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateScrollState);
+    };
     // 노드 수·사이드바 너비 변화 시 재측정
   }, [mainNodes, sidebarWidth]);
+
+  // 활성 칩이 우측 경계를 넘어 잘리지 않도록 항상 보이는 위치로 스크롤
+  const scrollChipIntoView = (nodeId: string, behavior: ScrollBehavior) => {
+    const chip = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-chip-id="${CSS.escape(nodeId)}"]`,
+    );
+    chip?.scrollIntoView({ behavior, block: "nearest", inline: "nearest" });
+  };
+
+  useEffect(() => {
+    if (activeProjectId) scrollChipIntoView(activeProjectId, "smooth");
+  }, [activeProjectId]);
+
+  // 칩이 새로 추가되면(초기 로딩 제외) 마지막 칩이 보이도록 이동
+  const prevChipCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = prevChipCountRef.current;
+    prevChipCountRef.current = mainNodes.length;
+    if (prev === null || prev === 0 || mainNodes.length <= prev) return;
+    const last = mainNodes[mainNodes.length - 1];
+    if (last) scrollChipIntoView(last.id, "smooth");
+  }, [mainNodes]);
 
   return (
     <header
@@ -80,8 +111,13 @@ export default function ChipHeader({
         {mainNodes.map((node: Node<NodeView>) => (
           <button
             key={node.id}
+            data-chip-id={node.id}
             onClick={() => onNodeFocus?.(node.id)}
-            title={node.data?.title}
+            // 호버 확장(max-w-none)으로 우측 경계를 넘치면 확장된 만큼 스크롤해 전체 제목 노출
+            onMouseEnter={() =>
+              requestAnimationFrame(() => scrollChipIntoView(node.id, "auto"))
+            }
+            title={node.data?.title || "제목 없음"}
             // max-w-[10em]로 ~8글자 말줄임, 호버 시 max-w-none로 제자리에서 전체 제목까지 확장(pure CSS)
             className="text-sm transition-colors hover:bg-surface shrink-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-[10em] hover:max-w-none"
             style={{
@@ -102,7 +138,8 @@ export default function ChipHeader({
               fontWeight: activeProjectId === node.id ? 500 : 400,
             }}
           >
-            {node.data?.title}
+            {/* 제목 없는 PROJECT 노드가 빈 알약으로 보이지 않도록 플레이스홀더 표시 */}
+            {node.data?.title || "제목 없음"}
           </button>
         ))}
         </div>
@@ -115,7 +152,7 @@ export default function ChipHeader({
             onClick={() =>
               scrollRef.current?.scrollBy({ left: -240, behavior: "smooth" })
             }
-            className="absolute left-0 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/60 text-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-surface group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:border-main"
+            className="absolute left-0 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/60 text-foreground backdrop-blur-sm transition-opacity hover:bg-surface focus-visible:outline-none focus-visible:border-main"
           >
             <svg
               width="16"
@@ -141,7 +178,7 @@ export default function ChipHeader({
             onClick={() =>
               scrollRef.current?.scrollBy({ left: 240, behavior: "smooth" })
             }
-            className="absolute right-0 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/60 text-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-surface group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:border-main"
+            className="absolute right-0 top-1/2 z-40 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/60 text-foreground backdrop-blur-sm transition-opacity hover:bg-surface focus-visible:outline-none focus-visible:border-main"
           >
             <svg
               width="16"
@@ -173,6 +210,7 @@ export default function ChipHeader({
             username={user.username}
             email={user.email}
             onLogout={onLogout}
+            onOpenArchive={onOpenArchive}
           />
           <Tooltip label="AiDeep에 대하여" align="end">
             <a

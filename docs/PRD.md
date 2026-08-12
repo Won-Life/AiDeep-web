@@ -74,7 +74,9 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
   - 현재 포커스된 노드(마지막 클릭): `background: surface-hover`, `color: foreground`, `font-weight: 500`
   - 비활성 chip: `color: muted`, `font-weight: 400`
   - 노드가 없으면 좌측 빈 공간
-  - PROJECT 노드가 10개 초과 시 오버플로우로 잘림 (스크롤 없음)
+  - 칩이 넘치면 가로 스크롤(스크롤바 숨김) + 좌우 원형 스크롤 버튼(넘친 방향만 표시)
+  - 활성 칩·새로 추가된 칩은 자동으로 보이는 위치로 스크롤. 칩 hover 확장 시에도 잘리지 않게 스크롤 보정 (#216)
+  - 제목 없는 PROJECT 노드 칩은 "제목 없음" 플레이스홀더 표시 (#204)
 - 우측: 협업자 아바타 목록 → 내 프로필 메뉴 → 공유 버튼
 - 사이드바 너비에 따라 `left` 값이 동적으로 전환 (300ms transition)
 
@@ -148,10 +150,9 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 **컨텍스트 메뉴 (우클릭)**:
 - 노드 바로 위(`bottom: 100%, marginBottom: 8px`, `z-index: 50`)에 렌더링
 - 흰색 배경, 그림자 `0px 0px 4px rgba(44,44,44,0.25)`, `rounded-lg`
-- **3가지 항목**:
-  1. **프로젝트 노드로 변경** — 서브 노드를 PROJECT 노드(`isMain=true`)로 승격. ChipHeader에 추가됨
-  2. **아카이브로 이동** — 소프트 딜리트. 하위 서브트리 포함 삭제 확인 모달 표시
-  3. **노드 삭제** — 삭제. 확인 모달 흐름으로 처리
+- **항목** (용어는 "보관"으로 통일 — #203):
+  1. **프로젝트 노드로 변경** — 서브 노드를 PROJECT 노드(`isMain=true`)로 승격. 현재 임시 숨김(`SHOW_TEMP_HIDDEN_UI`)
+  2. **보관하기** — 소프트 딜리트(deleted_at). 하위 서브트리 포함 보관 확인 모달 표시
 - 빈 캔버스 클릭 시 메뉴 닫힘
 
 #### 노드 생성
@@ -161,6 +162,8 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 | 빈 공간 클릭 | 클릭 좌표에 서브 노드 생성 (랜덤 파스텔 색) |
 | 핸들 드래그 후 빈 공간 드롭 | source 노드 기준 적정 거리에 서브 노드 생성 + 엣지 자동 연결 |
 | 사이드바 서브아이템 드래그 드롭 | 드롭 좌표 또는 인접 노드에 snap, 에디터 내용까지 함께 이식 |
+| 빈 캔버스 "첫 주제 만들기" CTA | 노드 0개일 때 empty state 안내(우클릭·더블클릭·핸들 드래그 힌트 포함)와 함께 표시. 뷰포트 중앙에 PROJECT 노드 생성 (#204) |
+| 우하단 `+` 플로팅 버튼 | 노드가 있을 때 항상 노출되는 생성 진입점. 뷰포트 중앙에 PROJECT 노드 생성 (#204) |
 
 - **노드 위치 결정 로직**: `adjustPositionRelativeToSource` — source 노드에서 100px(`DEFAULT_NODE_DISTANCE`) 떨어진 X 위치, 형제 노드와 Y 방향(노드 높이 + 24px 간격) 겹치지 않도록 자동 배치
 - **연결 드래그 중 빈 공간 드롭 판별**: `isConnectingRef`로 `onPaneClick`과 구분 — 연결 드래그 종료인지 캔버스 빈 클릭인지 충돌 방지
@@ -185,14 +188,20 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 - **드래그 완료**: `moveNode` REST API 저장. 실패해도 로컬 state 유지 (새로고침 시 서버 값으로 복구)
 - **D3 + ReactFlow 좌표계**: D3는 중심점 기준, ReactFlow는 좌상단 기준. 변환 로직이 tick마다 실행됨
 
-#### 노드 삭제 (아카이브)
-- Delete 키 또는 우클릭 메뉴 → 확인 모달 표시 (`onBeforeDelete`로 기본 삭제 가로채기)
-- **모달 카피**: "보관하시겠습니까?" + "선택한 노드와 하위 서브 노드가 함께 보관 처리됩니다. (총 N개)"
+#### 노드 보관 (소프트 딜리트) — #203
+- Delete 키 또는 우클릭 메뉴 "보관하기" → 확인 모달 표시 (`onBeforeDelete`로 기본 삭제 가로채기)
+- **모달 카피**: "보관하시겠습니까?" + "선택한 노드와 하위 서브 노드가 함께 보관 처리됩니다. (총 N개)" + "보관함에서 복원 가능, 연결선은 미복원" 고지. 버튼: 취소 / 보관
 - 삭제 대상 수(하위 서브트리 포함)를 직접 명시해 실수 방지
 - **확인 버튼**: `isArchiveDeleting=true` 동안 disabled — API 중복 호출 방지
 - 확인 시: `deleteNode` API 병렬 호출 → 성공 후 state 제거
 - 실패 시: 모달 닫기 + 로컬 state 유지 (새로고침으로 서버 상태 복구)
 - 모달 열려있는 동안 `onEdgesChange`의 remove 타입은 차단 (isArchiveModalOpen 가드)
+
+#### 보관함 · 복원 — #203
+- UserMenu → "보관함" → `ArchiveModal`: `GET /node/archived`로 보관 노드 목록(제목·보관일) 표시
+- "복원" → `PATCH /node/:nodeId/restore` — `deleted_at` 해제 + `depth 0` 재설정 후 캔버스 state에 즉시 삽입
+- 보관 시 엣지가 물리 삭제되므로 복원 노드는 항상 독립 노드로 돌아옴 (연결선 미복원 — 모달 카피로 고지)
+- 협업자에게는 서버가 `NODE_CREATE`로 broadcast
 
 #### 노드 클릭 → 에디터 패널
 
@@ -201,6 +210,8 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 - `handleSide === 'left'` → `right: 0` (노드 왼쪽으로 열림)
 - `handleSide === 'right'` → `left: 0` (노드 오른쪽으로 열림)
 - 연결선이 뻗어나가는 방향 반대편에 패널이 붙어 연결선과 겹치지 않음
+- **뷰포트 보정 (#214)**: 패널 오픈 시 노드 화면 좌표를 측정해, 기본 방향으로 열면 뷰포트를 벗어나고 반대 방향은 들어오는 경우 방향을 뒤집음 (오픈 시 1회)
+- **헤더 행 (#214)**: ↗(전체화면)·×(닫기) 버튼은 absolute 오버레이가 아니라 패널 상단 헤더 행 — 에디터 첫 줄과 겹치지 않음
 
 **패널 크기**: `width: 360px`, `minHeight: 220px`, `maxHeight: 480px`, `shadow-lg`
 

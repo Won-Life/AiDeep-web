@@ -7,6 +7,7 @@ import { completeOAuthSignup } from '@/api/auth';
 import { createWorkspace } from '@/api/workspace';
 import { ApiError } from '@/api/types';
 import { resolveCallbackPhase } from './resolveCallbackPhase';
+import { TERMS_URL, PRIVACY_URL } from '@/lib/legalLinks';
 
 const inputClass =
   'h-[56px] w-full rounded-[8px] border border-gray-700 bg-surface px-[16px] text-[16px] text-foreground outline-none placeholder:text-muted focus:border-main transition-colors';
@@ -124,7 +125,7 @@ function OAuthCallback() {
   return (
     <CallbackCard>
       <h1 className="mb-[64px] text-center text-[36px] font-bold leading-[48px] text-foreground">
-        AIDeep 회원가입
+        AiDeep 회원가입
       </h1>
 
       <form onSubmit={handleSignupSubmit} className="flex flex-col gap-[40px]">
@@ -152,7 +153,26 @@ function OAuthCallback() {
             onChange={(e) => setAgreedToTerms(e.target.checked)}
             className="h-[20px] w-[20px] accent-main"
           />
-          이용약관 및 개인정보 처리방침에 동의합니다. (필수)
+          <span>
+            <a
+              href={TERMS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2"
+            >
+              이용약관
+            </a>{' '}
+            및{' '}
+            <a
+              href={PRIVACY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2"
+            >
+              개인정보 처리방침
+            </a>
+            에 동의합니다. (필수)
+          </span>
         </label>
 
         {error && <p className="text-[13px] text-text-red">* {error}</p>}
