@@ -8,6 +8,8 @@ export type RectNode = SimulationNodeDatum & {
   height: number;
   fx?: number | null;
   fy?: number | null;
+  /** 화면에 숨겨진 노드 — 충돌 계산에서 제외(밀지도 밀리지도 않음) */
+  ghost?: boolean;
 };
 
 export function rectCollide<NodeType extends RectNode>(
@@ -20,6 +22,7 @@ export function rectCollide<NodeType extends RectNode>(
       for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i];
         const b = nodes[j];
+        if (a.ghost || b.ghost) continue;
 
         const ax1 = a.x - a.width / 2 - padding;
         const ay1 = a.y - a.height / 2 - padding;

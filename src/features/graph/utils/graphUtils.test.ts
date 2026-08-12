@@ -6,6 +6,10 @@ import {
   applyDepthOnEdgeCreate,
   applyDepthOnEdgeDelete,
   isRootNode,
+  buildChildrenMap,
+  computeCollapseState,
+  buildCollapseButtons,
+  type CollapsedSides,
 } from './graphUtils'
 
 function e(source: string, target: string): Edge {
@@ -168,5 +172,128 @@ describe('isRootNode', () => {
 
   it('depth가 없으면 0으로 취급해 root다', () => {
     expect(isRootNode(n('A'))).toBe(true)
+  })
+})
+
+// depth·handleSide를 함께 갖는 노드 헬퍼
+function nh(id: string, depth: number, handleSide?: 'left' | 'right'): Node {
+  return {
+    id,
+    position: { x: 0, y: 0 },
+    data: { depth, ...(handleSide ? { handleSide } : {}) },
+  } as Node
+}
+
+const cm = (entries: Array<[string, CollapsedSides]>) => new Map(entries)
+
+describe('buildChildrenMap', () => {
+  it('source → target 인접 리스트를 만든다', () => {
+    const map = buildChildrenMap([e('A', 'B'), e('A', 'C'), e('B', 'D')])
+    expect(map.get('A')).toEqual(['B', 'C'])
+    expect(map.get('B')).toEqual(['D'])
+    expect(map.get('D')).toBeUndefined()
+  })
+})
+
+describe('computeCollapseState', () => {
+  // root ─(right)→ R1 ─→ R2
+  //      └(left)─→ L1
+  const nodes = [
+    nh('root', 0),
+    nh('R1', 1, 'right'),
+    nh('R2', 2, 'right'),
+    nh('L1', 1, 'left'),
+  ]
+  const edges = [e('root', 'R1'), e('R1', 'R2'), e('root', 'L1')]
+
+  it('빈 collapsedMap이면 아무것도 숨기지 않는다', () => {
+    const r = computeCollapseState(nodes, edges, new Map())
+    expect(r.hiddenIds.size).toBe(0)
+    expect(r.hiddenCounts.size).toBe(0)
+  })
+
+  it('비루트를 접으면 자손 전체를 숨기고 본인은 남긴다', () => {
+    const r = computeCollapseState(nodes, edges, cm([['R1', { right: true }]]))
+    expect(r.hiddenIds).toEqual(new Set(['R2']))
+    expect(r.hiddenIds.has('R1')).toBe(false)
+    expect(r.hiddenCounts.get('R1')).toEqual({ right: 1 })
+  })
+
+  it('루트의 한 방향만 접으면 그 방향 서브트리만 숨긴다', () => {
+    const r = computeCollapseState(nodes, edges, cm([['root', { right: true }]]))
+    expect(r.hiddenIds).toEqual(new Set(['R1', 'R2']))
+    expect(r.hiddenCounts.get('root')).toEqual({ right: 2 })
+  })
+
+  it('루트 양방향을 접으면 방향별로 독립 계산한다', () => {
+    const r = computeCollapseState(
+      nodes, edges, cm([['root', { left: true, right: true }]]),
+    )
+    expect(r.hiddenIds).toEqual(new Set(['R1', 'R2', 'L1']))
+    expect(r.hiddenCounts.get('root')).toEqual({ left: 1, right: 2 })
+  })
+
+  it('삭제된 노드의 stale 항목은 무시한다', () => {
+    const r = computeCollapseState(nodes, edges, cm([['ghost', { right: true }]]))
+    expect(r.hiddenIds.size).toBe(0)
+  })
+
+  it('접힌 뒤 추가된 자손도 숨긴다 (매번 현재 edges 기준 재계산)', () => {
+    const grown = [...nodes, nh('R3', 3, 'right')]
+    const grownEdges = [...edges, e('R2', 'R3')]
+    const r = computeCollapseState(grown, grownEdges, cm([['R1', { right: true }]]))
+    expect(r.hiddenIds).toEqual(new Set(['R2', 'R3']))
+  })
+
+  it('비루트는 stale 방향 키로도 접힘을 유지하고 개수는 현재 handleSide에 기록한다', () => {
+    // R1의 handleSide는 right인데 접힘 키가 left로 남은 경우(재부모화 반전)
+    const r = computeCollapseState(nodes, edges, cm([['R1', { left: true }]]))
+    expect(r.hiddenIds).toEqual(new Set(['R2']))
+    expect(r.hiddenCounts.get('R1')).toEqual({ right: 1 })
+  })
+})
+
+describe('buildCollapseButtons', () => {
+  const nodes = [
+    nh('root', 0),
+    nh('R1', 1, 'right'),
+    nh('R2', 2, 'right'),
+    nh('L1', 1, 'left'),
+  ]
+  const edges = [e('root', 'R1'), e('R1', 'R2'), e('root', 'L1')]
+  const childrenMap = buildChildrenMap(edges)
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
+
+  it('루트는 자식이 있는 방향마다 버튼을 만든다', () => {
+    const empty = computeCollapseState(nodes, edges, new Map())
+    const buttons = buildCollapseButtons(nodes[0], childrenMap, nodeById, new Map(), empty)
+    expect(buttons).toEqual([
+      { side: 'left', collapsed: false, hiddenCount: 0 },
+      { side: 'right', collapsed: false, hiddenCount: 0 },
+    ])
+  })
+
+  it('루트에서 자식 없는 방향은 버튼이 없다', () => {
+    const oneSideNodes = [nh('root', 0), nh('R1', 1, 'right')]
+    const oneSideEdges = [e('root', 'R1')]
+    const map = buildChildrenMap(oneSideEdges)
+    const byId = new Map(oneSideNodes.map((n) => [n.id, n]))
+    const empty = computeCollapseState(oneSideNodes, oneSideEdges, new Map())
+    const buttons = buildCollapseButtons(oneSideNodes[0], map, byId, new Map(), empty)
+    expect(buttons).toEqual([{ side: 'right', collapsed: false, hiddenCount: 0 }])
+  })
+
+  it('비루트는 자식이 있으면 자기 handleSide 방향 버튼 하나다', () => {
+    const collapsed = cm([['R1', { right: true }]])
+    const state = computeCollapseState(nodes, edges, collapsed)
+    const buttons = buildCollapseButtons(nodes[1], childrenMap, nodeById, collapsed, state)
+    expect(buttons).toEqual([{ side: 'right', collapsed: true, hiddenCount: 1 }])
+  })
+
+  it('자식이 없는 노드는 버튼이 없다', () => {
+    const empty = computeCollapseState(nodes, edges, new Map())
+    expect(
+      buildCollapseButtons(nodes[2], childrenMap, nodeById, new Map(), empty),
+    ).toEqual([])
   })
 })
