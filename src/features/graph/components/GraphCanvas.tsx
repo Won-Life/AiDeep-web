@@ -26,7 +26,9 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import ZoomControl from '@/components/ui/ZoomControl';
-import GraphUsageGuide from '@/components/ui/GraphUsageGuide';
+import GraphUsageGuide, {
+  type GraphUsageGuideHandle,
+} from '@/components/ui/GraphUsageGuide';
 import MouseIcon, { ConnectDragIcon } from '@/components/ui/MouseIcon';
 import * as d3 from 'd3';
 import { nodeTypes } from '@/types/nodeTypes';
@@ -973,6 +975,8 @@ function GraphCanvasInner({
   const isMultiDragRef = useRef(false);
   // 뷰포트 중앙 좌표 계산용 캔버스 래퍼 (#204 보이는 생성 버튼)
   const wrapperRef = useRef<HTMLDivElement>(null);
+  // 빈 캔버스 안내의 인라인 "사용법" 버튼으로 사용법 창을 여는 핸들
+  const usageGuideRef = useRef<GraphUsageGuideHandle>(null);
   const lastLiveEmitRef = useRef(0);
   const LIVE_EMIT_INTERVAL = 50; // ms
 
@@ -3266,9 +3270,17 @@ function GraphCanvasInner({
               </div>
             ))}
           </div>
-          <p className="mt-6 text-[13px] text-muted">
+          <p className="mt-6 flex items-center gap-1.5 text-[13px] text-muted">
             자세한 방법은 우측 상단{' '}
-            <span className="font-bold text-main">사용법</span> 버튼에 있어요.
+            {/* 실제 사용법 버튼과 동일한 디자인·동작 — 클릭 시 사용법 창 열림 */}
+            <button
+              type="button"
+              onClick={() => usageGuideRef.current?.open()}
+              className="pointer-events-auto rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
+            >
+              사용법
+            </button>{' '}
+            버튼에 있어요.
           </p>
         </div>
       )}
@@ -3299,7 +3311,7 @@ function GraphCanvasInner({
       {/* top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
           top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치. */}
       <div className="absolute top-20 right-4 z-40 flex items-start gap-2">
-        <GraphUsageGuide highlight={nodes.length === 0} />
+        <GraphUsageGuide ref={usageGuideRef} highlight={nodes.length === 0} />
         {myOpenEditorNodeIds.length > 0 && (
           <button
             type="button"

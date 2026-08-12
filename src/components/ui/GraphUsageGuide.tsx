@@ -1,7 +1,17 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import {
+  useImperativeHandle,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import { useOnboardingSeen } from '@/components/layout/OnboardingPopup';
 import MouseIcon from '@/components/ui/MouseIcon';
+
+/** 외부(빈 캔버스 안내 등)에서 사용법 창을 열기 위한 핸들 */
+export interface GraphUsageGuideHandle {
+  open: () => void;
+}
 
 /*
  * CONTEXT
@@ -140,15 +150,19 @@ function GuideCard({
 
 export default function GraphUsageGuide({
   highlight = false,
+  ref,
 }: {
   /** 빈 캔버스 등에서 사용법 진입점을 main 컬러 글로우로 강조 */
   highlight?: boolean;
+  ref?: Ref<GraphUsageGuideHandle>;
 }) {
   // 최초 로그인(온보딩 미확인) 때만 기본 펼침, 그 외엔 기본 접힘 — 사용자가 버튼으로
   // 직접 토글하면(manualOverride) 그 이후엔 이 세션 동안 그 선택을 따른다.
   const seen = useOnboardingSeen();
   const [manualOverride, setManualOverride] = useState<boolean | null>(null);
   const isOpen = manualOverride ?? !seen;
+
+  useImperativeHandle(ref, () => ({ open: () => setManualOverride(true) }), []);
 
   if (!isOpen) {
     return (
