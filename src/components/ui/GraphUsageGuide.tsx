@@ -207,8 +207,8 @@ export default function GraphUsageGuide({
           title="연결된 노드 만들기"
           desc={
             <>
-              노드 가장자리의 <Term>연결점</Term>을 끌면 이어진 주제가 새로
-              생겨요.
+              노드 <Term>연결점</Term>을 끌고 놓으면 연결된{' '}
+              <Term>하위 주제</Term>가 새로 생겨요.
             </>
           }
         >
