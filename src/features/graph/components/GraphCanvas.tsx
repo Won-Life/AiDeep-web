@@ -3120,15 +3120,14 @@ function GraphCanvasInner({
       {isArchiveModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[360px] rounded-xl border border-border bg-background p-5 shadow-xl">
-            <p className="text-base font-semibold">노드를 보관할까요?</p>
+            {/* 보관함 UI가 활성화되기 전까지는 사용자 입장에서 복구 수단이 없으므로
+                "삭제"로 안내한다 (보관함 활성화 시 카피를 보관 문구로 되돌릴 것) */}
+            <p className="text-base font-semibold">노드를 삭제할까요?</p>
             <p className="mt-2 text-sm text-muted">
               선택한 노드와 아래에 연결된 노드까지 총{' '}
-              {pendingArchiveNodeIds.length}개가 보관함으로 이동해요.
+              {pendingArchiveNodeIds.length}개가 삭제돼요.
             </p>
-            <p className="mt-1 text-sm text-muted">
-              보관함에서 언제든 되돌릴 수 있어요. 다만 노드 사이를 잇던 연결선은
-              함께 돌아오지 않아요.
-            </p>
+            <p className="mt-1 text-sm text-muted">삭제한 노드는 되돌릴 수 없어요.</p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -3143,7 +3142,7 @@ function GraphCanvasInner({
                 disabled={isArchiveDeleting}
                 className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50"
               >
-                보관하기
+                삭제하기
               </button>
             </div>
           </div>
