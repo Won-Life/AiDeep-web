@@ -80,6 +80,28 @@ function KeyChip({ children }: { children: ReactNode }) {
   );
 }
 
+/** 전체 화면 버튼 모양 — 일러스트의 ↗ 아이콘과 동일한 양쪽 화살표 */
+function ExpandGlyph() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 12 12"
+      fill="none"
+      aria-label="전체화면"
+      className="-mt-0.5 inline align-middle"
+    >
+      <path
+        d="M1 11L11 1M8 1H11V4M4 11H1V8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** 이동 방향 화살표 */
 function Arrow() {
   return (
@@ -176,7 +198,7 @@ export default function GraphUsageGuide({
         style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
       >
         <GuideCard
-          title="단독 노드 만들기"
+          title="단독 주제 만들기"
           desc={
             <>
               빈 곳을 우클릭하면 <Term>중심 주제</Term>,
@@ -204,11 +226,12 @@ export default function GraphUsageGuide({
         </GuideCard>
 
         <GuideCard
-          title="연결된 노드 만들기"
+          title="연결된 주제 만들기"
           desc={
             <>
-              노드 <Term>연결점</Term>을 끌고 놓으면 연결된{' '}
-              <Term>하위 주제</Term>가 새로 생겨요.
+              주제의 <Term>연결점</Term>을 끌어서 놓으면,
+              <br />
+              연결된 <Term>하위 주제</Term>가 새로 생겨요.
             </>
           }
         >
@@ -236,12 +259,12 @@ export default function GraphUsageGuide({
         </GuideCard>
 
         <GuideCard
-          title="끌어서 연결하기"
+          title="주제끼리 연결하기"
           desc={
             <>
-              노드를 다른 노드에 가까이 끌면
+              주제를 다른 주제에 가까이 끌면
               <br />
-              <Term>하위 주제</Term> 노드로 연결돼요.
+              <Term>하위 주제</Term>로 연결돼요.
             </>
           }
         >
@@ -256,8 +279,8 @@ export default function GraphUsageGuide({
           title="내용 적기"
           desc={
             <>
-              노드를 클릭하면 텍스트 편집창이 열려 글을 적을 수 있어요. ↗
-              버튼을 누르면 전체 화면으로도 쓸 수 있어요.
+              주제를 클릭하면 텍스트 편집창이 열려 글을 적을 수 있어요.{' '}
+              <ExpandGlyph /> 버튼을 누르면 전체 화면으로도 쓸 수 있어요.
             </>
           }
         >
@@ -303,11 +326,11 @@ export default function GraphUsageGuide({
         <p className="text-[12px] font-bold text-main">Tip!</p>
         <p className="text-[12px] text-foreground">
           <span className="font-semibold">Shift + 드래그</span>
-          <span className="text-muted"> — </span>여러 노드를 한번에 이동
+          <span className="text-muted"> — </span>여러 주제를 한번에 이동
         </p>
         <p className="text-[12px] text-foreground">
           <span className="font-semibold">Option(Alt) + 드래그</span>
-          <span className="text-muted"> — </span>노드 하나만 이동
+          <span className="text-muted"> — </span>주제 하나만 이동
         </p>
       </div>
     </div>
