@@ -1,6 +1,7 @@
 'use client';
 import { useState, useSyncExternalStore } from 'react';
 import { CHROME_EXTENSION_URL } from '@/lib/links';
+import { PRIVACY_URL } from '@/lib/legalLinks';
 
 export const ONBOARDING_URL = 'https://won-life.github.io/Aideep_graph_onboard/';
 export const MEET_ONBOARDING_URL = 'https://won-life.github.io/Aideep_meet_onboard/';
@@ -123,6 +124,21 @@ export default function OnboardingPopup() {
               서비스 둘러보기
             </a>
 
+            {/* 외부 AI 처리 고지 — 기능 사용 지점 근처 노출 (#206, 피드백 16) */}
+            <p className="text-[12px] leading-[18px] text-muted">
+              회의 자막과 발화자 이름은 회의록 생성을 위해 외부 AI로 처리됩니다.
+              자세한 내용은{' '}
+              <a
+                href={PRIVACY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                개인정보처리방침
+              </a>
+              을 확인해주세요.
+            </p>
+
             <div className="flex gap-[12px]">
               <button
                 type="button"
@@ -135,6 +151,7 @@ export default function OnboardingPopup() {
                 href={CHROME_EXTENSION_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={close}
                 className="flex h-[44px] flex-1 items-center justify-center rounded-[8px] bg-main text-[14px] font-semibold text-white transition-colors hover:opacity-90"
               >
                 크롬 익스텐션 다운로드

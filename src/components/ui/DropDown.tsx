@@ -45,20 +45,22 @@ function ComingSoonModal({
           Google Meet을 먼저 만나보세요.
         </p>
         <div className="flex gap-2">
-          <a
-            href={CHROME_EXTENSION_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex flex-1 h-[32px] items-center justify-center rounded-[8px] bg-main text-white text-[13px]"
-          >
-            크롬 익스텐션 다운로드
-          </a>
           <button
+            type="button"
             onClick={onClose}
             className="flex-1 h-[32px] rounded-[8px] bg-surface text-foreground text-[13px] border border-border"
           >
             닫기
           </button>
+          <a
+            href={CHROME_EXTENSION_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onClose}
+            className="flex flex-1 h-[32px] items-center justify-center rounded-[8px] bg-main text-white text-[13px]"
+          >
+            크롬 익스텐션 다운로드
+          </a>
         </div>
       </div>
     </div>
