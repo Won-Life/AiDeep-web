@@ -179,8 +179,9 @@ export default function GraphUsageGuide({
           title="단독 노드 만들기"
           desc={
             <>
-              빈 곳을 우클릭하면 <Term>중심 주제</Term>, 더블 클릭하면{' '}
-              <Term>하위 주제</Term>가 생겨요.
+              빈 곳을 우클릭하면 <Term>중심 주제</Term>,
+              <br />
+              더블 클릭하면 <Term>하위 주제</Term>가 생겨요.
             </>
           }
         >
