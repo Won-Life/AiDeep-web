@@ -190,7 +190,7 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 
 #### 노드 보관 (소프트 딜리트) — #203
 - Delete 키 또는 우클릭 메뉴 "보관하기" → 확인 모달 표시 (`onBeforeDelete`로 기본 삭제 가로채기)
-- **모달 카피**: "보관하시겠습니까?" + "선택한 노드와 하위 서브 노드가 함께 보관 처리됩니다. (총 N개)" + "보관함에서 복원 가능, 연결선은 미복원" 고지. 버튼: 취소 / 보관
+- **모달 카피**: "노드를 보관할까요?" + "선택한 노드와 아래에 연결된 노드까지 총 N개가 보관함으로 이동해요." + "보관함에서 언제든 되돌릴 수 있어요. 다만 노드 사이를 잇던 연결선은 함께 돌아오지 않아요." 버튼: 취소 / 보관하기
 - 삭제 대상 수(하위 서브트리 포함)를 직접 명시해 실수 방지
 - **확인 버튼**: `isArchiveDeleting=true` 동안 disabled — API 중복 호출 방지
 - 확인 시: `deleteNode` API 병렬 호출 → 성공 후 state 제거
@@ -199,7 +199,7 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 
 #### 보관함 · 복원 — #203
 - UserMenu → "보관함" → `ArchiveModal`: `GET /node/archived`로 보관 노드 목록(제목·보관일) 표시
-- "복원" → `PATCH /node/:nodeId/restore` — `deleted_at` 해제 + `depth 0` 재설정 후 캔버스 state에 즉시 삽입
+- "되돌리기"(복원) → `PATCH /node/:nodeId/restore` — `deleted_at` 해제 + `depth 0` 재설정 후 캔버스 state에 즉시 삽입
 - 보관 시 엣지가 물리 삭제되므로 복원 노드는 항상 독립 노드로 돌아옴 (연결선 미복원 — 모달 카피로 고지)
 - 협업자에게는 서버가 `NODE_CREATE`로 broadcast
 

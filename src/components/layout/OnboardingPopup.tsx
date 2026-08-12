@@ -115,8 +115,8 @@ export default function OnboardingPopup() {
               <strong className="font-bold text-foreground">
                 회의 내용을 실시간으로 구조화하고, 회의록을 자동으로 만들어주는
               </strong>{' '}
-              크롬 익스텐션이 출시됐어요. 회의가 끝나면 회의록이 워크스페이스에
-              그래프로 정리돼 있어요.
+              크롬 익스텐션이 나왔어요. 지금 설치하면 다음 회의부터 회의록이
+              워크스페이스에 그래프로 정리돼 있어요.
             </p>
 
             <a
@@ -157,7 +157,7 @@ export default function OnboardingPopup() {
                 rel="noopener noreferrer"
                 className="flex h-[44px] flex-1 items-center justify-center rounded-[8px] bg-main text-[14px] font-semibold text-white transition-colors hover:opacity-90"
               >
-                크롬 익스텐션 설치하기
+                바로 사용해보기
               </a>
             </div>
           </>

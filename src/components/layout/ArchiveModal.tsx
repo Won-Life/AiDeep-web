@@ -111,7 +111,9 @@ export default function ArchiveModal({
       >
         <p className="text-base font-semibold text-foreground">보관함</p>
         <p className="mt-1 text-sm text-muted">
-          보관된 노드를 복원할 수 있어요. 노드 간 연결선은 복원되지 않습니다.
+          보관한 노드를 다시 캔버스로 되돌릴 수 있어요. 노드 사이를 잇던
+          연결선은 함께 돌아오지 않으니, 되돌린 뒤 필요한 곳에 다시 연결해
+          주세요.
         </p>
 
         <div className="mt-4 max-h-[320px] overflow-y-auto">
@@ -148,7 +150,7 @@ export default function ArchiveModal({
                     disabled={restoringId !== null}
                     className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover disabled:opacity-50"
                   >
-                    {restoringId === item.node_id ? "복원 중..." : "복원"}
+                    {restoringId === item.node_id ? "되돌리는 중..." : "되돌리기"}
                   </button>
                 </li>
               ))}
