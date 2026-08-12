@@ -353,6 +353,7 @@ function findClosestNodeInRange(
   draggedNode: Node,
   nodes: Node[],
   edges: Edge[],
+  hiddenIds: Set<string>, // 접힘으로 숨겨진 노드 — 시각 피드백 없는 hover/드롭 대상 방지 위해 후보에서 제외
   threshold: number = 50, // 픽셀 단위 임계값
 ): Node | null {
   let closestNode: Node | null = null;
@@ -372,6 +373,7 @@ function findClosestNodeInRange(
 
   for (const node of nodes) {
     if (node.id === draggedNode.id) continue;
+    if (hiddenIds.has(node.id)) continue; // 접힌 서브트리의 숨겨진 노드는 hover/드롭 후보 제외
 
     // 연결 유효성 체크
     if (isInvalidConnection(node.id, draggedNode.id, nodes, edges)) continue;
@@ -2138,13 +2140,18 @@ function GraphCanvasInner({
         data: {},
       };
 
-      const closestNode = findClosestNodeInRange(draggedPreview, nodes, edges);
+      const closestNode = findClosestNodeInRange(
+        draggedPreview,
+        nodes,
+        edges,
+        collapseState.hiddenIds,
+      );
       const isInvalid =
         closestNode &&
         isInvalidConnection(closestNode.id, draggedPreview.id, nodes, edges);
       setHoveredNodeId(isInvalid ? null : (closestNode?.id ?? null));
     },
-    [screenToFlowPosition, nodes, edges, setNodes],
+    [screenToFlowPosition, nodes, edges, collapseState.hiddenIds, setNodes],
   );
 
   const onDrop = useCallback(
@@ -2366,7 +2373,12 @@ function GraphCanvasInner({
   const onNodeDrag = useCallback(
     (event: React.MouseEvent, draggedNode: Node) => {
       // 드래그 중에 가까운 노드 찾기
-      const closestNode = findClosestNodeInRange(draggedNode, nodes, edges);
+      const closestNode = findClosestNodeInRange(
+        draggedNode,
+        nodes,
+        edges,
+        collapseState.hiddenIds,
+      );
       // 이미 연결된 노드는 hover 효과 제외
       const isInvalid =
         closestNode &&
@@ -2394,6 +2406,36 @@ function GraphCanvasInner({
 
           if (beforeSide !== afterSide) {
             const newSide: 'left' | 'right' = afterSide;
+
+            // 대칭이동으로 draggedNode의 handleSide가 newSide로 바뀌는데, rootNode의
+            // 그 방향이 이미 접혀 있으면 computeCollapseState가 draggedNode를 hidden
+            // 판정해 커서 아래에서 사라진다 — 자동으로 펼쳐서 방지한다.
+            // rootNode가 실제 root(depth 0)면 방향별 항목만 해제(computeCollapseState의
+            // root 분기와 동일), getRootNodeForSubtree의 fallback(조상 체인 끝, 비루트)이면
+            // 방향 무관 단일 접힘이므로(비root 분기) 항목 전체를 해제해야 판정이 맞는다.
+            setCollapsedMap((prevCollapsedMap) => {
+              const entry = prevCollapsedMap.get(rootNode.id);
+              if (!entry) return prevCollapsedMap;
+              const rootIsCollapseRoot = isRootNode(rootNode);
+              const isCollapsedTowardNewSide = rootIsCollapseRoot
+                ? Boolean(entry[newSide])
+                : Boolean(entry.left || entry.right);
+              if (!isCollapsedTowardNewSide) return prevCollapsedMap;
+
+              const nextCollapsedMap = new Map(prevCollapsedMap);
+              if (rootIsCollapseRoot) {
+                const updatedSides = { ...entry, [newSide]: undefined };
+                if (!updatedSides.left && !updatedSides.right) {
+                  nextCollapsedMap.delete(rootNode.id);
+                } else {
+                  nextCollapsedMap.set(rootNode.id, updatedSides);
+                }
+              } else {
+                nextCollapsedMap.delete(rootNode.id);
+              }
+              return nextCollapsedMap;
+            });
+
             const subtreeIds = getSameGraphDescendantIds(
               draggedNode,
               nodes,
@@ -2607,7 +2649,15 @@ function GraphCanvasInner({
         );
       }
     },
-    [nodes, edges, workspaceId, setNodes, setEdges],
+    [
+      nodes,
+      edges,
+      workspaceId,
+      collapseState.hiddenIds,
+      setNodes,
+      setEdges,
+      setCollapsedMap,
+    ],
   );
 
   const onNodeDragStop = useCallback(
