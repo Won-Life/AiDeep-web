@@ -66,4 +66,31 @@ describe('rectCollide', () => {
     expect(nodes[0].x).toBe(0)
     expect(nodes[1].x).toBe(10)
   })
+
+  it('ghost 노드는 밀리지도, 상대를 밀지도 않는다', () => {
+    // 겹쳐 있어도 ghost가 낀 쌍은 충돌 계산에서 제외 — x·y 모두 불변
+    // (ghost 로직이 없다면 overlapY(50) < overlapX(90)라 y축으로 밀린다)
+    const nodes = [node('a', 0, 0), node('b', 10, 0)]
+    nodes[1].ghost = true
+    run(nodes)
+    expect(nodes[0].x).toBe(0)
+    expect(nodes[0].y).toBe(0)
+    expect(nodes[1].x).toBe(10)
+    expect(nodes[1].y).toBe(0)
+  })
+
+  it('ghost와 겹친 쌍만 건너뛰고 비ghost 쌍은 기존대로 밀어낸다', () => {
+    // a-b(비ghost, X 겹침 10) → 밀림 / c는 a와 겹치지만 ghost → 위치 불변
+    const nodes = [
+      node('a', 0, 0, 100, 100),
+      node('b', 90, 0, 100, 100),
+      node('c', 0, 10, 100, 100),
+    ]
+    nodes[2].ghost = true
+    run(nodes)
+    expect(nodes[1].x).toBeGreaterThan(90)
+    expect(nodes[0].x).toBeLessThan(0)
+    expect(nodes[2].x).toBe(0)
+    expect(nodes[2].y).toBe(10)
+  })
 })

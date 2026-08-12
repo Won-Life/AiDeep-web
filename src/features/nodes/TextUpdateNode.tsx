@@ -16,6 +16,10 @@ import {
   MAIN_NODE_COLOR,
 } from '@/features/graph/constants/colors';
 import NodeContextMenu from '@/components/ui/NodeContextMenu';
+import type {
+  CollapseButtonView,
+  CollapseSide,
+} from '@/features/graph/utils/graphUtils';
 
 // 같은 userId는 항상 같은 커서 색상을 갖도록 보장 (협업 시 사용자 식별용)
 function getUserCursorColor(userId: string): string {
@@ -46,11 +50,13 @@ export type NodeView = {
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
   isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
+  collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
   onDeleteNode?: (nodeId: string) => void; // 노드 삭제 (확인 모달 경유)
   onClosePanel?: (nodeId: string) => void; // 패널 닫기
   onForwardPanel?: (nodeId: string) => void; // 패널 포커스
   onChange?: (nodeId: string, value: string) => void;
+  onToggleCollapse?: (nodeId: string, side: CollapseSide) => void;
 };
 
 export function TextUpdaterNode({ data, id, selected }: NodeProps) {
@@ -67,6 +73,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
 
   const [isNodeHovered, setIsNodeHovered] = useState(false);
+  const collapseButtons = nodeData.collapseButtons ?? [];
   const { provider: collabProvider } = useYjsProvider({
     nodeId: isNodeHovered || showInputBox ? id : null,
     userName,
@@ -247,6 +254,40 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         >
           {isEmpty ? PLACEHOLDER : label}
         </div>
+        {/* 접기/펼치기 버튼 — 자식이 있는 방향에만. 펼침: hover 시 셰브론, 접힘: 항상 개수 뱃지.
+            노드 div의 자식이라 버튼 위 hover도 노드 hover로 유지된다(mouseleave 미발화). */}
+        {collapseButtons.map((btn) => {
+          const isVisible = btn.collapsed || isNodeHovered;
+          return (
+            <div
+              key={btn.side}
+              className="nodrag absolute top-1/2 -translate-y-1/2"
+              style={{
+                ...(btn.side === 'left'
+                  ? { right: '100%', paddingRight: 4 }
+                  : { left: '100%', paddingLeft: 4 }),
+                opacity: isVisible ? 1 : 0,
+                pointerEvents: isVisible ? 'auto' : 'none',
+              }}
+            >
+              <button
+                type="button"
+                aria-label={btn.collapsed ? '자식 노드 펼치기' : '자식 노드 접기'}
+                className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-border bg-background px-1 text-[10px] font-medium leading-none text-muted transition-colors hover:border-gray-700 hover:text-foreground"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  nodeData.onToggleCollapse?.(id, btn.side);
+                }}
+              >
+                {btn.collapsed
+                  ? btn.hiddenCount
+                  : btn.side === 'left'
+                    ? '<'
+                    : '>'}
+              </button>
+            </div>
+          );
+        })}
         {!hasParent ? (
           <>
             <Handle

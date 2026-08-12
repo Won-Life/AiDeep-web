@@ -188,18 +188,21 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 - **드래그 완료**: `moveNode` REST API 저장. 실패해도 로컬 state 유지 (새로고침 시 서버 값으로 복구)
 - **D3 + ReactFlow 좌표계**: D3는 중심점 기준, ReactFlow는 좌상단 기준. 변환 로직이 tick마다 실행됨
 
-#### 노드 보관 (소프트 딜리트) — #203
-- Delete 키 또는 우클릭 메뉴 "보관하기" → 확인 모달 표시 (`onBeforeDelete`로 기본 삭제 가로채기)
-- **모달 카피**: "보관하시겠습니까?" + "선택한 노드와 하위 서브 노드가 함께 보관 처리됩니다. (총 N개)" + "보관함에서 복원 가능, 연결선은 미복원" 고지. 버튼: 취소 / 보관
+#### 노드 삭제 (서버는 소프트 딜리트) — #203
+- Delete 키 또는 우클릭 메뉴 "삭제하기" → 확인 모달 표시 (`onBeforeDelete`로 기본 삭제 가로채기)
+- **모달 카피**: "노드를 삭제할까요?" + "선택한 노드와 아래에 연결된 노드까지 총 N개가 삭제돼요." + "삭제한 노드는 되돌릴 수 없어요." 버튼: 취소 / 삭제하기
+- 서버 동작은 소프트 딜리트(`deleted_at`)지만, 보관함 UI가 숨김 상태라 사용자에겐 복구 수단이 없으므로 "삭제"로 안내한다
 - 삭제 대상 수(하위 서브트리 포함)를 직접 명시해 실수 방지
 - **확인 버튼**: `isArchiveDeleting=true` 동안 disabled — API 중복 호출 방지
 - 확인 시: `deleteNode` API 병렬 호출 → 성공 후 state 제거
 - 실패 시: 모달 닫기 + 로컬 state 유지 (새로고침으로 서버 상태 복구)
 - 모달 열려있는 동안 `onEdgesChange`의 remove 타입은 차단 (isArchiveModalOpen 가드)
 
-#### 보관함 · 복원 — #203
+#### 보관함 · 복원 — #203, 임시 숨김 (`SHOW_TEMP_HIDDEN_UI`)
+> 백엔드 복원 API(Aideep_backend#83) 배포 전까지 UserMenu의 "보관함" 진입점을 숨김.
+> 활성화 시 함께 되돌릴 것: UserMenu 보관함 노출, NodeContextMenu "삭제하기"→"보관하기", GraphCanvas 확인 모달 카피를 보관 문구로.
 - UserMenu → "보관함" → `ArchiveModal`: `GET /node/archived`로 보관 노드 목록(제목·보관일) 표시
-- "복원" → `PATCH /node/:nodeId/restore` — `deleted_at` 해제 + `depth 0` 재설정 후 캔버스 state에 즉시 삽입
+- "되돌리기"(복원) → `PATCH /node/:nodeId/restore` — `deleted_at` 해제 + `depth 0` 재설정 후 캔버스 state에 즉시 삽입
 - 보관 시 엣지가 물리 삭제되므로 복원 노드는 항상 독립 노드로 돌아옴 (연결선 미복원 — 모달 카피로 고지)
 - 협업자에게는 서버가 `NODE_CREATE`로 broadcast
 

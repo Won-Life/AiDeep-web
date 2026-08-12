@@ -360,8 +360,10 @@ export default function UserMenu({
             </button>
             )}
 
-            {/* 보관함 — 보관된 노드 확인·복원 (#203) */}
-            {onOpenArchive && (
+            {/* 보관함 — 보관된 노드 확인·복원 (#203).
+                백엔드 복원 API(Aideep_backend#83) 배포 전까지 임시 숨김.
+                활성화 시 NodeContextMenu·GraphCanvas 모달 카피도 "보관" 문구로 함께 되돌릴 것 */}
+            {SHOW_TEMP_HIDDEN_UI && onOpenArchive && (
               <button
                 onClick={() => {
                   setIsOpen(false);

@@ -31,8 +31,8 @@ export default function NodeContextMenu({
         </button>
       )}
 
-      {/* 보관하기 — 삭제·보관·아카이브 용어를 '보관'으로 통일 (#203).
-          실동작도 soft delete + 보관함 복원이라 라벨과 일치한다.
+      {/* 삭제하기 — 보관함 UI 활성화 전까지는 복구 수단이 없으므로 "삭제"로 안내.
+          보관함(SHOW_TEMP_HIDDEN_UI) 활성화 시 "보관하기"로 되돌릴 것 (#203).
           숨김 항목이 있으면 하단만, 단독이면 전체 라운딩 */}
       <button
         type="button"
@@ -44,7 +44,7 @@ export default function NodeContextMenu({
         }`}
       >
         <span className="typo-cap2 text-foreground whitespace-nowrap">
-          보관하기
+          삭제하기
         </span>
       </button>
     </div>
