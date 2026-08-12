@@ -129,3 +129,159 @@ export function getSameColorDescendantIds(
 
   return descendants;
 }
+
+/*
+ * CONTEXT
+ * - Problem      : 노드 접기(collapse)는 로컬 뷰 상태인데, 협업 중 접힌 서브트리에
+ *                  노드가 추가·이동·삭제될 수 있다. 토글 시점에 자손에 hidden을 직접
+ *                  기록하면 이후 변경분과 어긋난다.
+ * - Why          : "누가 접혔는지"만 저장하고 숨길 자손은 매 렌더 현재 edges 기준으로
+ *                  재계산한다(파생 상태). getDescendantIds는 BFS 단계마다 전체 edges를
+ *                  스캔하므로, 인접 리스트를 1회 구축해 O(자손수)로 순회한다.
+ * - Alternatives : 토글 시점 hidden 플래그 기록 — 접힌 뒤 협업자가 추가한 노드가
+ *                  숨겨지지 않아 탈락. 노드 배열에서 제거 — WS 단일 진실 소스와 충돌.
+ * - Trade-offs   : 렌더마다 O(V+E) 재계산 — 마인드맵 규모(수천 노드)에서 무시 가능.
+ * - Edge Case    : 접힌 노드가 삭제되면 collapsedMap에 stale 항목이 남는다 — 노드
+ *                  조회 실패 시 무시하므로 무해. 비루트는 sides 방향 무관 단일 접힘으로
+ *                  판정해 재부모화로 handleSide가 반전돼도 접힘이 유지된다. 크로스
+ *                  그래프(legacy) 자손도 도달 가능하면 함께 숨긴다 — 경계에서 멈추면
+ *                  부모 체인 없는 노드가 허공에 남는다.
+ */
+export type CollapseSide = "left" | "right";
+export type CollapsedSides = { left?: boolean; right?: boolean };
+
+export interface CollapseButtonView {
+  side: CollapseSide;
+  collapsed: boolean;
+  hiddenCount: number;
+}
+
+export interface CollapseComputation {
+  hiddenIds: Set<string>;
+  hiddenCounts: Map<string, { left?: number; right?: number }>;
+}
+
+export function buildChildrenMap(edges: Edge[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const edge of edges) {
+    const children = map.get(edge.source);
+    if (children) children.push(edge.target);
+    else map.set(edge.source, [edge.target]);
+  }
+  return map;
+}
+
+const sideOf = (node: Node | undefined): CollapseSide =>
+  (node?.data?.handleSide as CollapseSide | undefined) ?? "right";
+
+/** startIds 본인들 + 그 아래 자손 전체 */
+function collectSubtree(
+  startIds: string[],
+  childrenMap: Map<string, string[]>,
+): Set<string> {
+  const result = new Set<string>(startIds);
+  const queue = [...startIds];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+    for (const child of childrenMap.get(current) ?? []) {
+      if (!result.has(child)) {
+        result.add(child);
+        queue.push(child);
+      }
+    }
+  }
+  return result;
+}
+
+/** 특정 방향의 직계 자식 — 루트는 자식의 handleSide로, 비루트는 자신의 handleSide로 판별 */
+function getChildIdsBySide(
+  node: Node,
+  childrenMap: Map<string, string[]>,
+  nodeById: Map<string, Node>,
+  side: CollapseSide,
+): string[] {
+  const children = childrenMap.get(node.id) ?? [];
+  if (isRootNode(node)) {
+    return children.filter((childId) => sideOf(nodeById.get(childId)) === side);
+  }
+  return sideOf(node) === side ? children : [];
+}
+
+export function computeCollapseState(
+  nodes: Node[],
+  edges: Edge[],
+  collapsedMap: Map<string, CollapsedSides>,
+): CollapseComputation {
+  const hiddenIds = new Set<string>();
+  const hiddenCounts = new Map<string, { left?: number; right?: number }>();
+  if (collapsedMap.size === 0) return { hiddenIds, hiddenCounts };
+
+  const childrenMap = buildChildrenMap(edges);
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+
+  for (const [nodeId, sides] of collapsedMap) {
+    const node = nodeById.get(nodeId);
+    if (!node) continue; // 삭제된 노드의 stale 항목
+
+    if (isRootNode(node)) {
+      const counts: { left?: number; right?: number } = {};
+      for (const side of ["left", "right"] as const) {
+        if (!sides[side]) continue;
+        const childIds = getChildIdsBySide(node, childrenMap, nodeById, side);
+        const subtree = collectSubtree(childIds, childrenMap);
+        subtree.forEach((id) => hiddenIds.add(id));
+        counts[side] = subtree.size;
+      }
+      hiddenCounts.set(nodeId, counts);
+    } else if (sides.left || sides.right) {
+      const childIds = childrenMap.get(nodeId) ?? [];
+      const subtree = collectSubtree(childIds, childrenMap);
+      subtree.forEach((id) => hiddenIds.add(id));
+      // 비루트 뱃지는 현재 handleSide 방향에 기록 (computed key는 타입 추론이
+      // 모호해 조건식으로 명시)
+      hiddenCounts.set(
+        nodeId,
+        sideOf(node) === "left"
+          ? { left: subtree.size }
+          : { right: subtree.size },
+      );
+    }
+  }
+
+  return { hiddenIds, hiddenCounts };
+}
+
+export function buildCollapseButtons(
+  node: Node,
+  childrenMap: Map<string, string[]>,
+  nodeById: Map<string, Node>,
+  collapsedMap: Map<string, CollapsedSides>,
+  collapseState: CollapseComputation,
+): CollapseButtonView[] {
+  const sides = collapsedMap.get(node.id) ?? {};
+  const counts = collapseState.hiddenCounts.get(node.id) ?? {};
+
+  if (isRootNode(node)) {
+    return (["left", "right"] as const)
+      .filter(
+        (side) =>
+          getChildIdsBySide(node, childrenMap, nodeById, side).length > 0,
+      )
+      .map((side) => ({
+        side,
+        collapsed: Boolean(sides[side]),
+        hiddenCount: counts[side] ?? 0,
+      }));
+  }
+
+  if ((childrenMap.get(node.id) ?? []).length === 0) return [];
+  const side = sideOf(node);
+  return [
+    {
+      side,
+      collapsed: Boolean(sides.left || sides.right),
+      hiddenCount: counts[side] ?? 0,
+    },
+  ];
+}
