@@ -279,8 +279,9 @@ export default function GraphUsageGuide({
           title="내용 적기"
           desc={
             <>
-              주제를 클릭하면 텍스트 편집창이 열려 글을 적을 수 있어요.{' '}
-              <ExpandGlyph /> 버튼을 누르면 전체 화면으로도 쓸 수 있어요.
+              주제를 클릭하면 텍스트 편집창이 열려 글을 적을 수 있어요.
+              <br />
+              전체화면도 가능해요! (<ExpandGlyph /> 버튼 클릭)
             </>
           }
         >
