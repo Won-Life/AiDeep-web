@@ -3189,7 +3189,7 @@ function GraphCanvasInner({
                 color: '#2C2C2C',
               }}
             >
-              중심 주제 노드
+              중심 주제
               {/* 연결점 — 노드 가장자리의 작은 점 */}
               <span
                 className="absolute top-1/2 -right-[5px] h-2.5 w-2.5 -translate-y-1/2 rounded-full border-2"
@@ -3221,23 +3221,20 @@ function GraphCanvasInner({
             <div className="flex flex-col gap-5">
               <span
                 className="rounded-full px-4 py-1.5 text-[13px]"
-                style={{ backgroundColor: '#E4F9C8', color: '#40512A' }}
+                style={{ backgroundColor: '#D0EEFB', color: '#254756' }}
               >
-                하위 주제 노드
+                하위 주제
               </span>
               <span
                 className="rounded-full px-4 py-1.5 text-[13px]"
-                style={{ backgroundColor: '#E4F9C8', color: '#40512A' }}
+                style={{ backgroundColor: '#D0EEFB', color: '#254756' }}
               >
-                하위 주제 노드
+                하위 주제
               </span>
             </div>
           </div>
           <p className="mt-6 text-xl font-bold text-foreground">
-            지금 머릿속을 가장 많이 차지하는 생각은 무엇인가요?
-          </p>
-          <p className="mt-1.5 text-sm text-muted">
-            그 생각 하나를 첫 주제로 만들고, 연결하며 그래프로 펼쳐 보세요.
+            머릿속 생각을 하나 꺼내볼까요?
           </p>
           <button
             type="button"
@@ -3250,9 +3247,9 @@ function GraphCanvasInner({
           <div className="mt-7 flex flex-col gap-2.5">
             {(
               [
-                ['우클릭', '빈 곳에 중심 주제 노드 만들기'],
-                ['더블 클릭', '빈 곳에 하위 주제 노드 만들기'],
-                ['연결점 끌기', '노드 가장자리의 작은 점을 끌어 이어진 노드 만들기'],
+                ['우클릭', '중심 주제 만들기'],
+                ['더블 클릭', '하위 주제 만들기'],
+                ['연결점 끌기', '이어진 주제 만들기'],
               ] as const
             ).map(([action, desc]) => (
               <div key={action} className="flex items-center gap-2.5 text-sm">
@@ -3264,9 +3261,8 @@ function GraphCanvasInner({
             ))}
           </div>
           <p className="mt-6 text-[13px] text-muted">
-            더 자세한 설명은 우측 상단{' '}
-            <span className="font-bold text-main">사용법</span> 버튼에서 볼 수
-            있어요.
+            자세한 방법은 우측 상단{' '}
+            <span className="font-bold text-main">사용법</span> 버튼에 있어요.
           </p>
         </div>
       )}
