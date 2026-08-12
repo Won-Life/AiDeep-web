@@ -1,6 +1,6 @@
 'use client';
-import { useRef, useState } from 'react';
-import { EMAIL_RE, submitEarlyAccessEmail } from '@/lib/earlyAccessForm';
+import { useState } from 'react';
+import { CHROME_EXTENSION_URL } from '@/lib/links';
 
 interface DropDownProps {
   sidebarWidth: number;
@@ -20,32 +20,14 @@ const FEATURE_LABELS: Record<ComingSoonFeature, string> = {
   WORD_DICTIONARY: '단어 정의 사전',
 };
 
-type NotifyStatus = 'ask' | 'saving' | 'done' | 'error';
-
-/** 준비중 안내 + 얼리액세스 이메일 신청 모달 */
+/** 준비중 안내 + 익스텐션 다운로드 유도 모달 */
 function ComingSoonModal({
   feature,
-  status,
-  onSubmit,
   onClose,
 }: {
   feature: ComingSoonFeature;
-  status: NotifyStatus;
-  onSubmit: (email: string) => void;
   onClose: () => void;
 }) {
-  const [email, setEmail] = useState('');
-  const [invalid, setInvalid] = useState(false);
-
-  const submit = () => {
-    if (!EMAIL_RE.test(email.trim())) {
-      setInvalid(true);
-      return;
-    }
-    setInvalid(false);
-    onSubmit(email.trim());
-  };
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
@@ -58,63 +40,26 @@ function ComingSoonModal({
         <span className="text-[16px] font-bold text-foreground">
           {FEATURE_LABELS[feature]}
         </span>
-
-        {status === 'done' ? (
-          <>
-            <p className="text-[14px] text-foreground leading-relaxed">
-              신청 완료! 출시 소식이 준비되면 입력하신 이메일로 알려드릴게요.
-            </p>
-            <button
-              onClick={onClose}
-              className="h-[32px] rounded-[8px] bg-main text-white text-[13px]"
-            >
-              확인
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="text-[14px] text-foreground leading-relaxed">
-              준비 중인 기능입니다. 기능이 완성되면 사용하실 수 있게 이메일로 소식을 받아보시겠어요?
-            </p>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (invalid) setInvalid(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') submit();
-              }}
-              disabled={status === 'saving'}
-              placeholder="이메일 주소"
-              className="h-[36px] rounded-[8px] bg-surface text-foreground text-[13px] px-3 border border-border outline-none focus:border-main disabled:opacity-50"
-            />
-            {invalid && (
-              <p className="text-[12px] text-muted">이메일 형식을 확인해주세요.</p>
-            )}
-            {status === 'error' && (
-              <p className="text-[12px] text-muted">
-                전송에 실패했어요. 다시 시도해주세요.
-              </p>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={submit}
-                disabled={status === 'saving'}
-                className="flex-1 h-[32px] rounded-[8px] bg-main text-white text-[13px] disabled:opacity-50"
-              >
-                {status === 'saving' ? '전송 중...' : '신청'}
-              </button>
-              <button
-                onClick={onClose}
-                className="flex-1 h-[32px] rounded-[8px] bg-surface text-foreground text-[13px] border border-border"
-              >
-                아니오
-              </button>
-            </div>
-          </>
-        )}
+        <p className="text-[14px] text-foreground leading-relaxed">
+          준비 중인 기능이에요. 그동안 회의를 자동 구조화해주는 AiDeep for
+          Google Meet을 먼저 만나보세요.
+        </p>
+        <div className="flex gap-2">
+          <a
+            href={CHROME_EXTENSION_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-1 h-[32px] items-center justify-center rounded-[8px] bg-main text-white text-[13px]"
+          >
+            크롬 익스텐션 다운로드
+          </a>
+          <button
+            onClick={onClose}
+            className="flex-1 h-[32px] rounded-[8px] bg-surface text-foreground text-[13px] border border-border"
+          >
+            닫기
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -183,28 +128,12 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [comingSoonFeature, setComingSoonFeature] =
     useState<ComingSoonFeature | null>(null);
-  const [notifyStatus, setNotifyStatus] = useState<NotifyStatus>('ask');
-  // 모달을 닫았다 다시 열면 이전 fetch가 뒤늦게 resolve되며 새 화면 상태를 덮는 것을 막는 토큰
-  const notifyRequestRef = useRef(0);
 
   // onChatOpen: 챗봇 준비중 처리 이후 미사용. 패널 재활성화 시 openComingSoon 대신 연결.
   void onChatOpen;
 
   const openComingSoon = (feature: ComingSoonFeature) => {
-    notifyRequestRef.current += 1;
-    setNotifyStatus('ask');
     setComingSoonFeature(feature);
-  };
-
-  const handleNotifySubmit = async (email: string) => {
-    const requestId = ++notifyRequestRef.current;
-    setNotifyStatus('saving');
-    try {
-      await submitEarlyAccessEmail(email);
-      if (notifyRequestRef.current === requestId) setNotifyStatus('done');
-    } catch {
-      if (notifyRequestRef.current === requestId) setNotifyStatus('error');
-    }
   };
 
   return (
@@ -358,8 +287,6 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
       {comingSoonFeature && (
         <ComingSoonModal
           feature={comingSoonFeature}
-          status={notifyStatus}
-          onSubmit={handleNotifySubmit}
           onClose={() => setComingSoonFeature(null)}
         />
       )}
