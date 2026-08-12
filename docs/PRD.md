@@ -125,7 +125,7 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 | 드래그 snap 대상 (PROJECT) | 파란 테두리, `borderWidth: 2px` |
 | 다른 유저가 보는 노드 | 유저 대표 색상 테두리 2px. PROJECT는 `border-color`, 서브는 `border: 2px solid` |
 | 뷰어 없음 + snap 없음 (서브) | `border: none` |
-| 제목 비어있음 | placeholder 텍스트 표시: PROJECT → "중심 노드", 서브 → "서브 노드", 색상 `rgb(var(--ds-gray-500))` |
+| 제목 비어있음 | placeholder 텍스트 표시: PROJECT → "중심 주제", 서브 → "서브 주제" (용어 통일), 색상 `rgb(var(--ds-gray-500))` |
 | 제목 있음 | 최대 2줄 (`WebkitLineClamp: 2`), 초과 시 말줄임. `wordBreak: break-word`, `lineHeight: 1.4em` |
 | 노드 텍스트 정렬 | **center** |
 | 핸들 (연결점) — source | 노드 hover 시에만 표시 (`opacity: 0 → 1`) |

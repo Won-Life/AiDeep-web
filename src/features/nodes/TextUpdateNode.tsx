@@ -87,8 +87,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const viewers = (nodeData.viewers ?? []) as NodeViewer[];
   const isHovered = nodeData.isHovered ?? false;
 
-  // 부모가 없는 서브 노드는 양쪽에 핸들 표시
-  const PLACEHOLDER = isMain ? '중심 노드' : '서브 노드';
+  // 플레이스홀더는 온보딩·사용법과 동일한 "주제" 어휘로 통일 (#204 용어 정리)
+  const PLACEHOLDER = isMain ? '중심 주제' : '서브 주제';
 
   const label = nodeData.title || '';
   const isEmpty = label === '';
