@@ -261,7 +261,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           return (
             <div
               key={btn.side}
-              className="nodrag absolute top-1/2 -translate-y-1/2"
+              className="nodrag absolute top-1/2 -translate-y-1/2 transition-opacity duration-150"
               style={{
                 ...(btn.side === 'left'
                   ? { right: '100%', paddingRight: 4 }
@@ -273,17 +273,38 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               <button
                 type="button"
                 aria-label={btn.collapsed ? '자식 노드 펼치기' : '자식 노드 접기'}
-                className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-border bg-background px-1 text-[10px] font-medium leading-none text-muted transition-colors hover:border-gray-700 hover:text-foreground"
+                className={`flex h-5 min-w-5 items-center justify-center rounded-full shadow-sm transition-all duration-150 ${
+                  isVisible ? 'scale-100' : 'scale-90'
+                } ${
+                  btn.collapsed
+                    ? 'bg-main px-1 text-[10px] font-semibold leading-none text-white hover:opacity-90'
+                    : 'border border-border bg-background text-muted hover:bg-surface-hover hover:text-foreground'
+                }`}
                 onClick={(event) => {
                   event.stopPropagation();
                   nodeData.onToggleCollapse?.(id, btn.side);
                 }}
               >
-                {btn.collapsed
-                  ? btn.hiddenCount
-                  : btn.side === 'left'
-                    ? '<'
-                    : '>'}
+                {btn.collapsed ? (
+                  btn.hiddenCount
+                ) : (
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    aria-hidden="true"
+                    className={btn.side === 'left' ? 'rotate-180' : undefined}
+                  >
+                    <path
+                      d="M3.5 2 6.5 5 3.5 8"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
               </button>
             </div>
           );
