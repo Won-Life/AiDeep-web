@@ -49,6 +49,11 @@ import {
   applyDepthOnEdgeCreate,
   applyDepthOnEdgeDelete,
   isRootNode,
+  computeCollapseState,
+  buildChildrenMap,
+  buildCollapseButtons,
+  type CollapseSide,
+  type CollapsedSides,
 } from '../utils/graphUtils';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
@@ -792,6 +797,7 @@ interface D3Node extends d3.SimulationNodeDatum {
   height: number;
   fx?: number | null;
   fy?: number | null;
+  ghost?: boolean;
 }
 
 interface GraphCanvasInnerProps {
@@ -861,6 +867,10 @@ function GraphCanvasInner({
     null,
   );
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  // 접기/펼치기 — 로컬 뷰 상태. 서버 저장·협업 공유 없음, 새로고침 시 초기화 (스펙: docs/superpowers/specs/2026-08-12-node-collapse-design.md)
+  const [collapsedMap, setCollapsedMap] = useState<
+    Map<string, CollapsedSides>
+  >(new Map());
   const [contextMenuNodeId, setContextMenuNodeId] = useState<string | null>(
     null,
   );
@@ -1181,11 +1191,41 @@ function GraphCanvasInner({
     );
   };
 
+  const handleToggleCollapse = (nodeId: string, side: CollapseSide) => {
+    const target = nodes.find((n) => n.id === nodeId);
+    if (!target) return;
+    setCollapsedMap((prev) => {
+      const next = new Map(prev);
+      const sides = { ...(next.get(nodeId) ?? {}) };
+      if (isRootNode(target)) {
+        sides[side] = !sides[side];
+      } else {
+        // 비루트는 방향 무관 단일 접힘 — 재부모화로 handleSide가 반전된 stale 키가
+        // 있어도 클릭 한 번으로 펼쳐지도록 양쪽을 지우고 다시 세운다
+        const wasCollapsed = Boolean(sides.left || sides.right);
+        delete sides.left;
+        delete sides.right;
+        if (!wasCollapsed) sides[side] = true;
+      }
+      if (!sides.left && !sides.right) next.delete(nodeId);
+      else next.set(nodeId, sides);
+      return next;
+    });
+  };
+
   // 키보드 Backspace 삭제(onBeforeDelete)와 동일 플로우: 확인 모달 → 서브트리 삭제 + WS 동기화
   const handleDeleteNode = (nodeId: string) => {
     setContextMenuNodeId(null);
     requestArchiveForNodes([nodeId]);
   };
+
+  const collapseState = useMemo(
+    () => computeCollapseState(nodes, edges, collapsedMap),
+    [nodes, edges, collapsedMap],
+  );
+
+  const collapseChildrenMap = buildChildrenMap(edges);
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
   const nodesWithCallbacks = nodes.map((node) => {
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
@@ -1197,6 +1237,7 @@ function GraphCanvasInner({
     return {
       ...node,
       zIndex: isContextMenuOpen ? 1000 : isEditorOpen ? 100 : undefined,
+      hidden: collapseState.hiddenIds.has(node.id),
       data: {
         ...node.data,
         handleSide: node.data?.isMain ? undefined : node.data?.handleSide,
@@ -1212,6 +1253,14 @@ function GraphCanvasInner({
         onClosePanel: handleClosePanel,
         onForwardPanel: handleForwardPanel,
         onChange: handleTitleChange,
+        collapseButtons: buildCollapseButtons(
+          node,
+          collapseChildrenMap,
+          nodeById,
+          collapsedMap,
+          collapseState,
+        ),
+        onToggleCollapse: handleToggleCollapse,
       },
     };
   });
@@ -1335,6 +1384,16 @@ function GraphCanvasInner({
       setWorkingOnEditorNodeId((prev) =>
         prev && deletedIds.has(prev) ? null : prev,
       );
+      // 삭제된 노드의 접힘 항목 정리 — stale 항목은 계산 시 무시되므로 필수는
+      // 아니지만 맵이 커지지 않게 유지
+      setCollapsedMap((prev) => {
+        if (!Array.from(prev.keys()).some((id) => deletedIds.has(id))) {
+          return prev;
+        }
+        const next = new Map(prev);
+        deletedIds.forEach((id) => next.delete(id));
+        return next;
+      });
     }
     setPendingArchiveNodeIds([]);
     setIsArchiveModalOpen(false);
@@ -1342,8 +1401,15 @@ function GraphCanvasInner({
   }, [pendingArchiveNodeIds, workspaceId, setNodes, setEdges]);
 
   const edgesWithPresentation = useMemo(
-    () => edges.map((edge) => buildEdgePresentation(edge, nodes, edges)),
-    [nodes, edges],
+    () =>
+      edges.map((edge) => ({
+        ...buildEdgePresentation(edge, nodes, edges),
+        // 양 끝 중 하나라도 숨겨진 노드면 엣지도 숨김
+        hidden:
+          collapseState.hiddenIds.has(edge.source) ||
+          collapseState.hiddenIds.has(edge.target),
+      })),
+    [nodes, edges, collapseState],
   );
 
   const onEdgesChange = useCallback(
@@ -2261,6 +2327,9 @@ function GraphCanvasInner({
         fy: fixedNodeIds.has(n.id)
           ? n.position.y + (n.height ?? NODE_HEIGHT) / 2
           : null,
+        // 숨겨진 노드는 충돌 계산에서 제외 — 단, 배열에는 남겨 접힌 부모 드래그 시
+        // 자손 delta 이동(onNodeDrag의 d3NodesRef 경유)은 유지한다
+        ghost: collapseState.hiddenIds.has(n.id),
       }));
 
       d3NodesRef.current = d3Nodes;
@@ -2291,7 +2360,7 @@ function GraphCanvasInner({
         ]),
       );
     },
-    [nodes, edges],
+    [nodes, edges, collapseState],
   );
 
   const onNodeDrag = useCallback(
