@@ -3175,11 +3175,11 @@ function GraphCanvasInner({
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
       {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출.
-          실제 노드 모양 안에 용어를 그대로 써서(중심 주제/일반 주제/연결점) 사용법 창과 같은
+          실제 노드 모양 안에 용어를 그대로 써서(중심 주제/하위 주제/연결점) 사용법 창과 같은
           어휘를 미리 학습시킨다. 노드 표면색은 UI 가이드의 고정 팔레트라 하드코딩 허용 */}
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
-          {/* 미니 그래프: 중심 주제 노드 → 연결점 → 같은 색(같은 그래프) 일반 주제 노드 2개 */}
+          {/* 미니 그래프: 중심 주제 노드 → 연결점 → 같은 색(같은 그래프) 하위 주제 노드 2개 */}
           <div className="flex items-center" aria-hidden="true">
             <div
               className="relative rounded-lg border px-5 py-3 text-sm font-medium"
@@ -3223,21 +3223,21 @@ function GraphCanvasInner({
                 className="rounded-full px-4 py-1.5 text-[13px]"
                 style={{ backgroundColor: '#E4F9C8', color: '#40512A' }}
               >
-                일반 주제 노드
+                하위 주제 노드
               </span>
               <span
                 className="rounded-full px-4 py-1.5 text-[13px]"
                 style={{ backgroundColor: '#E4F9C8', color: '#40512A' }}
               >
-                일반 주제 노드
+                하위 주제 노드
               </span>
             </div>
           </div>
           <p className="mt-6 text-xl font-bold text-foreground">
-            첫 주제를 만들어 보세요
+            지금 머릿속을 가장 많이 차지하는 생각은 무엇인가요?
           </p>
           <p className="mt-1.5 text-sm text-muted">
-            생각을 노드로 만들고, 연결하며 그래프로 정리하는 공간이에요.
+            그 생각 하나를 첫 주제로 만들고, 연결하며 그래프로 펼쳐 보세요.
           </p>
           <button
             type="button"
@@ -3251,7 +3251,7 @@ function GraphCanvasInner({
             {(
               [
                 ['우클릭', '빈 곳에 중심 주제 노드 만들기'],
-                ['더블 클릭', '빈 곳에 일반 주제 노드 만들기'],
+                ['더블 클릭', '빈 곳에 하위 주제 노드 만들기'],
                 ['연결점 끌기', '노드 가장자리의 작은 점을 끌어 이어진 노드 만들기'],
               ] as const
             ).map(([action, desc]) => (

@@ -27,7 +27,7 @@ const SHORTCUTS = [
     action: '빈공간 더블 클릭',
     effect: (
       <Effect>
-        <Term>일반 주제 노드</Term> 생성
+        <Term>하위 주제 노드</Term> 생성
       </Effect>
     ),
   },
@@ -132,7 +132,7 @@ export default function GraphUsageGuide({
               }}
             />
             <span className="text-sm text-muted">
-              <Term>일반 주제 노드</Term> — 중심 주제에서 뻗어나가는 하위 주제
+              <Term>하위 주제 노드</Term> — 중심 주제에서 뻗어나가는 세부 내용
             </span>
           </div>
         </div>
