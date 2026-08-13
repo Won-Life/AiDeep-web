@@ -16,21 +16,27 @@ import type { CSSProperties } from 'react';
 // 클러스터 배치 — 중앙(카드 영역)을 피해서 가장자리에만 둔다. 렌더마다 동일해야 하므로 모듈 상수.
 // delay·duration은 Tailwind arbitrary property 대신 인라인 style — animate-[...] 쇼트핸드와의
 // CSS 생성 순서 경합을 피해 클러스터별 주기를 결정적으로 보장한다.
+// rotate는 부유 애니메이션(transform)과 겹치지 않도록 내부 래퍼에 적용한다.
+type GraphVariant = 'chain' | 'tree' | 'hub' | 'zigzag' | 'branch';
+
 const CLUSTERS: Array<{
   className: string; // 위치·크기 (Tailwind arbitrary)
   style: CSSProperties; // animationDelay·animationDuration
-  variant: 'chain' | 'tree';
+  rotate: number; // 내부 래퍼 회전 각도 (deg)
+  variant: GraphVariant;
 }> = [
-  { className: 'left-[6%] top-[12%] w-[180px]', style: { animationDelay: '0s', animationDuration: '16s' }, variant: 'tree' },
-  { className: 'left-[10%] bottom-[14%] w-[140px]', style: { animationDelay: '-5s', animationDuration: '19s' }, variant: 'chain' },
-  { className: 'right-[7%] top-[18%] w-[150px]', style: { animationDelay: '-9s', animationDuration: '14s' }, variant: 'chain' },
-  { className: 'right-[9%] bottom-[10%] w-[190px]', style: { animationDelay: '-3s', animationDuration: '18s' }, variant: 'tree' },
-  { className: 'left-[38%] top-[4%] hidden w-[120px] md:block', style: { animationDelay: '-12s', animationDuration: '20s' }, variant: 'chain' },
-  { className: 'right-[36%] bottom-[3%] hidden w-[130px] md:block', style: { animationDelay: '-7s', animationDuration: '15s' }, variant: 'chain' },
+  { className: 'left-[6%] top-[12%] w-[180px]', style: { animationDelay: '0s', animationDuration: '16s' }, rotate: -6, variant: 'tree' },
+  { className: 'left-[10%] bottom-[14%] w-[150px]', style: { animationDelay: '-5s', animationDuration: '19s' }, rotate: 8, variant: 'hub' },
+  { className: 'right-[7%] top-[18%] w-[160px]', style: { animationDelay: '-9s', animationDuration: '14s' }, rotate: 5, variant: 'zigzag' },
+  { className: 'right-[9%] bottom-[10%] w-[190px]', style: { animationDelay: '-3s', animationDuration: '18s' }, rotate: -4, variant: 'branch' },
+  { className: 'left-[38%] top-[4%] hidden w-[120px] md:block', style: { animationDelay: '-12s', animationDuration: '20s' }, rotate: 10, variant: 'chain' },
+  { className: 'right-[36%] bottom-[3%] hidden w-[140px] md:block', style: { animationDelay: '-7s', animationDuration: '15s' }, rotate: -9, variant: 'hub' },
 ];
 
-// 미니 마인드맵 일러스트 — 엣지는 gray-700, 노드는 그린/회색 저투명도
-function MiniGraph({ variant }: { variant: 'chain' | 'tree' }) {
+// 미니 마인드맵 일러스트 — 엣지는 gray-700, 노드는 그린/회색 저투명도.
+// 변형 5종: chain(3노드 꺾은선), tree(1→3 분기), hub(중심 방사형),
+// zigzag(4노드 지그재그), branch(체인 중간 분기) — 같은 모양 반복으로 단조로워 보이지 않게.
+function MiniGraph({ variant }: { variant: GraphVariant }) {
   const edge = 'rgb(var(--ds-gray-700))';
   const green = 'rgb(var(--ds-main))';
   const gray = 'rgb(var(--ds-gray-500))';
@@ -41,6 +47,40 @@ function MiniGraph({ variant }: { variant: 'chain' | 'tree' }) {
         <circle cx="14" cy="40" r="6" fill={green} opacity="0.35" />
         <circle cx="52" cy="22" r="8" fill={green} opacity="0.5" />
         <circle cx="98" cy="34" r="5" fill={gray} opacity="0.4" />
+      </svg>
+    );
+  }
+  if (variant === 'hub') {
+    return (
+      <svg viewBox="0 0 130 110" fill="none" className="h-auto w-full">
+        <path d="M65 55 L22 30 M65 55 L104 22 M65 55 L114 78 M65 55 L38 92" stroke={edge} strokeWidth="1.5" opacity="0.5" />
+        <circle cx="65" cy="55" r="9" fill={green} opacity="0.5" />
+        <circle cx="22" cy="30" r="5" fill={gray} opacity="0.4" />
+        <circle cx="104" cy="22" r="6" fill={green} opacity="0.3" />
+        <circle cx="114" cy="78" r="5" fill={gray} opacity="0.4" />
+        <circle cx="38" cy="92" r="6" fill={green} opacity="0.35" />
+      </svg>
+    );
+  }
+  if (variant === 'zigzag') {
+    return (
+      <svg viewBox="0 0 150 70" fill="none" className="h-auto w-full">
+        <path d="M10 55 L50 18 L95 50 L140 15" stroke={edge} strokeWidth="1.5" opacity="0.5" />
+        <circle cx="10" cy="55" r="4" fill={gray} opacity="0.4" />
+        <circle cx="50" cy="18" r="7" fill={green} opacity="0.45" />
+        <circle cx="95" cy="50" r="6" fill={green} opacity="0.3" />
+        <circle cx="140" cy="15" r="5" fill={gray} opacity="0.4" />
+      </svg>
+    );
+  }
+  if (variant === 'branch') {
+    return (
+      <svg viewBox="0 0 130 100" fill="none" className="h-auto w-full">
+        <path d="M15 85 L55 55 L95 30 M55 55 L105 75" stroke={edge} strokeWidth="1.5" opacity="0.5" />
+        <circle cx="15" cy="85" r="5" fill={gray} opacity="0.4" />
+        <circle cx="55" cy="55" r="8" fill={green} opacity="0.5" />
+        <circle cx="95" cy="30" r="6" fill={green} opacity="0.3" />
+        <circle cx="105" cy="75" r="5" fill={gray} opacity="0.4" />
       </svg>
     );
   }
@@ -75,7 +115,9 @@ export default function LoginBackground() {
           className={`absolute motion-safe:animate-[login-float_16s_ease-in-out_infinite] ${c.className}`}
           style={c.style}
         >
-          <MiniGraph variant={c.variant} />
+          <div style={{ transform: `rotate(${c.rotate}deg)` }}>
+            <MiniGraph variant={c.variant} />
+          </div>
         </div>
       ))}
     </div>
