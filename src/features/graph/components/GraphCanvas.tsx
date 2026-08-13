@@ -22,6 +22,7 @@ import {
   ConnectionLineType,
   useReactFlow,
   ReactFlowProvider,
+  useNodesInitialized,
   type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -824,6 +825,29 @@ interface GraphCanvasInnerProps {
   edges: Edge[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
+  onFirstPaint?: () => void;
+}
+
+// 첫 페인트 신호 — 로딩 오버레이 해제 시점을 "데이터 도착"이 아니라 "그래프가 실제로
+// 화면에 그려진 후"로 잡기 위한 컴포넌트. useNodesInitialized(전 노드 DOM 측정 완료,
+// fitView와 같은 기준)에 rAF 2회를 겹쳐 해당 프레임이 페인트된 다음 1회만 호출한다.
+// 빈 워크스페이스는 nodesInitialized가 true가 되지 않으므로 노드 0개면 즉시 신호.
+function FirstPaintSignal({
+  nodeCount,
+  onFirstPaint,
+}: {
+  nodeCount: number;
+  onFirstPaint: () => void;
+}) {
+  const nodesInitialized = useNodesInitialized();
+  const firedRef = useRef(false);
+  useEffect(() => {
+    if (firedRef.current) return;
+    if (!nodesInitialized && nodeCount > 0) return;
+    firedRef.current = true;
+    requestAnimationFrame(() => requestAnimationFrame(onFirstPaint));
+  }, [nodesInitialized, nodeCount, onFirstPaint]);
+  return null;
 }
 
 export function convertToReactFlow(
@@ -874,6 +898,7 @@ function GraphCanvasInner({
   edges,
   setNodes,
   setEdges,
+  onFirstPaint,
 }: GraphCanvasInnerProps) {
   const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
   const [workingOnEditorNodeId, setWorkingOnEditorNodeId] = useState<string | null>(
@@ -1328,7 +1353,46 @@ function GraphCanvasInner({
         }
       });
 
-      setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
+      setNodes((snapshot) => {
+        // 이전 폭은 반드시 applyNodeChanges 전에 캡처한다 — applyNodeChanges는 노드를
+        // 얕은 복사만 하고 measured 객체를 제자리 수정하므로(@xyflow/react applyChange),
+        // 스냅샷 노드의 measured도 같은 객체라 apply 후에 읽으면 이미 새 폭이다.
+        const prevWidths = new Map<string, number>();
+        for (const change of nonRemoveChanges) {
+          if (change.type !== 'dimensions' || !change.dimensions) continue;
+          const width = snapshot.find((n) => n.id === change.id)?.measured
+            ?.width;
+          if (width != null) prevWidths.set(change.id, width);
+        }
+
+        const next = applyNodeChanges(nonRemoveChanges, snapshot);
+        // 왼쪽 자식 노드(handleSide 'left')는 폭이 변해도 오른쪽 가장자리(부모 방향
+        // 연결점)를 고정한다 — React Flow 앵커는 좌상단이라 기본은 오른쪽으로 자라서,
+        // 제목이 길어지면 부모 쪽을 파고드는 것처럼 보였다. 폭 변화량만큼 x를 반대로
+        // 보정해 왼쪽으로 자라는 것처럼 만든다. 최초 측정(이전 폭 없음)은 보정하지
+        // 않는다 — 마운트 직후 위치가 서버 좌표에서 어긋나면 안 되므로.
+        // 보정은 로컬 전용(서버 PATCH 없음): 각 클라이언트가 자기 측정 이벤트에 같은
+        // 규칙을 적용하므로 협업자 화면에서도 동일하게 동작한다.
+        for (const change of nonRemoveChanges) {
+          if (change.type !== 'dimensions' || !change.dimensions) continue;
+          const prevWidth = prevWidths.get(change.id);
+          if (prevWidth == null) continue;
+          const deltaW = change.dimensions.width - prevWidth;
+          if (deltaW === 0) continue;
+          const idx = next.findIndex((n) => n.id === change.id);
+          if (idx === -1) continue;
+          const data = next[idx].data as { handleSide?: 'left' | 'right' };
+          if (data.handleSide !== 'left') continue;
+          next[idx] = {
+            ...next[idx],
+            position: {
+              ...next[idx].position,
+              x: next[idx].position.x - deltaW,
+            },
+          };
+        }
+        return next;
+      });
     },
     [requestArchiveForNodes, setNodes],
   );
@@ -3177,6 +3241,9 @@ function GraphCanvasInner({
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
+      {onFirstPaint && (
+        <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
+      )}
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
       {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출.
@@ -3366,6 +3433,7 @@ interface GraphCanvasProps {
   edges: Edge[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
+  onFirstPaint?: () => void;
 }
 
 export default function GraphCanvas({
@@ -3379,6 +3447,7 @@ export default function GraphCanvas({
   edges,
   setNodes,
   setEdges,
+  onFirstPaint,
 }: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -3393,6 +3462,7 @@ export default function GraphCanvas({
         edges={edges}
         setNodes={setNodes}
         setEdges={setEdges}
+        onFirstPaint={onFirstPaint}
       />
     </ReactFlowProvider>
   );
