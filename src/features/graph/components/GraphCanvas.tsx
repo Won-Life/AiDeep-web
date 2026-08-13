@@ -1354,6 +1354,17 @@ function GraphCanvasInner({
       });
 
       setNodes((snapshot) => {
+        // 이전 폭은 반드시 applyNodeChanges 전에 캡처한다 — applyNodeChanges는 노드를
+        // 얕은 복사만 하고 measured 객체를 제자리 수정하므로(@xyflow/react applyChange),
+        // 스냅샷 노드의 measured도 같은 객체라 apply 후에 읽으면 이미 새 폭이다.
+        const prevWidths = new Map<string, number>();
+        for (const change of nonRemoveChanges) {
+          if (change.type !== 'dimensions' || !change.dimensions) continue;
+          const width = snapshot.find((n) => n.id === change.id)?.measured
+            ?.width;
+          if (width != null) prevWidths.set(change.id, width);
+        }
+
         const next = applyNodeChanges(nonRemoveChanges, snapshot);
         // 왼쪽 자식 노드(handleSide 'left')는 폭이 변해도 오른쪽 가장자리(부모 방향
         // 연결점)를 고정한다 — React Flow 앵커는 좌상단이라 기본은 오른쪽으로 자라서,
@@ -1364,15 +1375,14 @@ function GraphCanvasInner({
         // 규칙을 적용하므로 협업자 화면에서도 동일하게 동작한다.
         for (const change of nonRemoveChanges) {
           if (change.type !== 'dimensions' || !change.dimensions) continue;
-          const prev = snapshot.find((n) => n.id === change.id);
-          const prevWidth = prev?.measured?.width;
-          if (!prev || prevWidth == null) continue;
-          const data = prev.data as { handleSide?: 'left' | 'right' };
-          if (data.handleSide !== 'left') continue;
+          const prevWidth = prevWidths.get(change.id);
+          if (prevWidth == null) continue;
           const deltaW = change.dimensions.width - prevWidth;
           if (deltaW === 0) continue;
           const idx = next.findIndex((n) => n.id === change.id);
           if (idx === -1) continue;
+          const data = next[idx].data as { handleSide?: 'left' | 'right' };
+          if (data.handleSide !== 'left') continue;
           next[idx] = {
             ...next[idx],
             position: {
