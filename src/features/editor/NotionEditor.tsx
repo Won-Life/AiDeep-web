@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -106,6 +107,7 @@ export interface NotionEditorProps {
   autoGrow?: boolean;
   minHeight?: number;
   extraBottomPadding?: boolean;
+  compactTop?: boolean; // 캔버스 미니 패널 — 본문 상단 패딩 축소 (pt-3 → pt-1)
 }
 
 // ─── Media Commands ───────────────────────────────────────────────────────────
@@ -666,9 +668,10 @@ export function ToolbarPlugin() {
     BLOCK_OPTIONS.find((b) => b.value === blockType)?.label ?? '텍스트';
 
   return (
+    // 전체화면에서 툴바는 62.5% 콘텐츠 컬럼 안에 있어 borderBottom 하이라인이 화면 중간에서
+    // 잘려 보였다 — 구분선 대신 라운드 보더 + 은은한 그림자의 플로팅 바로 감싸 잘림 자체를 없앤다.
     <div
-      className="nodrag nowheel flex items-center gap-0.5 px-2 py-1.5 shrink-0 select-none"
-      style={{ borderBottom: '1px solid rgb(var(--border))' }}
+      className="nodrag nowheel mt-3 mb-1 flex shrink-0 select-none items-center gap-0.5 rounded-[12px] border border-border bg-background px-2 py-1.5 shadow-[0px_2px_12px_0px_rgba(44,44,44,0.06)]"
       onMouseDown={(e) => e.preventDefault()}
     >
       {/* Hidden file inputs */}
@@ -893,9 +896,19 @@ class SlashMenuOption extends MenuOption {
   }
 }
 
-function SlashCommandPlugin() {
+function SlashCommandPlugin({
+  onMenuVisibleChange,
+  menuActiveSyncRef,
+}: {
+  // 메뉴 모달 표시 여부(React 상태 채널) — 닫힘 시 TitleTracker가 제목을 재반영한다
+  onMenuVisibleChange?: (visible: boolean) => void;
+  // 트리거 매치 여부(동기 ref 채널) — '/' 입력과 같은 업데이트 사이클에 세팅되어,
+  // onOpen setState가 커밋되기 전에 TitleTracker 리스너가 '/'를 제목으로 내보내는 깜빡임을 막는다
+  menuActiveSyncRef?: RefObject<boolean>;
+}) {
   const [editor] = useLexicalComposerContext();
   const [queryString, setQueryString] = useState<string | null>(null);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -947,6 +960,29 @@ function SlashCommandPlugin() {
     ? allOptions.filter((option) => option.title.toLowerCase().includes(queryString.toLowerCase()))
     : allOptions;
 
+  // 모달이 실제로 보이는 조건: 트리거 매치가 살아있고 + 필터 결과가 있을 때 (menuRenderFn과 동일 기준).
+  // '/xyz'처럼 매치 결과가 없어 모달이 사라지면 '/'는 일반 텍스트로 취급되어야 하므로 visible=false.
+  const menuVisible = resolutionOpen && options.length > 0;
+  useEffect(() => {
+    onMenuVisibleChange?.(menuVisible);
+  }, [menuVisible, onMenuVisibleChange]);
+
+  // triggerFn은 Lexical 업데이트 리스너 안에서 동기 호출된다 — 매치 여부를 ref로 즉시 공유.
+  // (SlashCommandPlugin이 TitleTrackerPlugin보다 먼저 마운트되어 리스너 등록 순서가 보장된다)
+  const triggerFnWithSync = useCallback(
+    (text: string, ed: LexicalEditor) => {
+      const match = checkForTriggerMatch(text, ed);
+      if (menuActiveSyncRef) {
+        const q = match?.matchingString ?? '';
+        menuActiveSyncRef.current =
+          match !== null &&
+          (q === '' || allOptions.some((o) => o.title.toLowerCase().includes(q.toLowerCase())));
+      }
+      return match;
+    },
+    [checkForTriggerMatch, allOptions, menuActiveSyncRef],
+  );
+
   const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -978,7 +1014,13 @@ function SlashCommandPlugin() {
           else option.onSelect();
           closeMenu();
         }}
-        triggerFn={checkForTriggerMatch}
+        triggerFn={triggerFnWithSync}
+        onOpen={() => setResolutionOpen(true)}
+        onClose={() => {
+          setResolutionOpen(false);
+          // Escape·blur는 에디터 업데이트 없이 닫혀 triggerFn이 재실행되지 않는다 — ref 직접 해제
+          if (menuActiveSyncRef) menuActiveSyncRef.current = false;
+        }}
         options={options}
         menuRenderFn={(anchorElementRef, { selectedIndex, selectOptionAndCleanUp, setHighlightedIndex }) =>
           anchorElementRef.current && options.length > 0
@@ -1058,14 +1100,25 @@ function ContentExportPlugin({
 
 function TitleTrackerPlugin({
   onChange,
+  suppressed = false,
+  suppressedSyncRef,
 }: {
   onChange: (text: string) => void;
+  // 슬래시 메뉴 모달이 떠있는 동안엔 '/'+검색어를 노드 제목에 내보내지 않는다.
+  // suppressed(상태)와 suppressedSyncRef(동기 ref)의 이중 채널 — 이유는 SlashCommandPlugin 주석 참고.
+  suppressed?: boolean;
+  suppressedSyncRef?: RefObject<boolean>;
 }) {
   const [editor] = useLexicalComposerContext();
   const prevTitleRef = useRef<string | null>('');
+  const suppressedRef = useRef(suppressed);
+  useEffect(() => {
+    suppressedRef.current = suppressed;
+  }, [suppressed]);
 
   useEffect(() => {
     return editor.registerUpdateListener(({ editorState }) => {
+      if (suppressedRef.current || suppressedSyncRef?.current) return;
       editorState.read(() => {
         const firstChild = $getRoot().getFirstChild();
         const title = firstChild ? firstChild.getTextContent().trim() : '';
@@ -1075,7 +1128,20 @@ function TitleTrackerPlugin({
         }
       });
     });
-  }, [editor, onChange]);
+  }, [editor, onChange, suppressedSyncRef]);
+
+  // 메뉴가 닫히면 현재 첫 줄을 재반영 — 옵션 선택 없이 닫혀 '/'가 남았으면 일반 텍스트로 취급
+  useEffect(() => {
+    if (suppressed) return;
+    editor.getEditorState().read(() => {
+      const firstChild = $getRoot().getFirstChild();
+      const title = firstChild ? firstChild.getTextContent().trim() : '';
+      if (title !== prevTitleRef.current) {
+        prevTitleRef.current = title;
+        onChange(title);
+      }
+    });
+  }, [suppressed, editor, onChange]);
 
   return null;
 }
@@ -1094,7 +1160,12 @@ export function NotionEditor({
   autoGrow = false,
   minHeight,
   extraBottomPadding = false,
+  compactTop = false,
 }: NotionEditorProps) {
+  // 슬래시 메뉴 표시 여부 — 메뉴가 떠있는 동안 TitleTracker의 제목 반영을 멈춘다.
+  // 상태(닫힘 시 재반영 트리거)와 동기 ref(첫 '/' 깜빡임 방지) 이중 채널.
+  const [slashMenuVisible, setSlashMenuVisible] = useState(false);
+  const slashMenuActiveRef = useRef(false);
   // provider의 'sync' 이벤트에서 동기화 여부를 직접 구독 — on()이 등록 즉시
   // 현재 상태를 replay하므로 늦게 마운트돼도 값이 맞는다 (prop 중계 불필요)
   // provider null이면 렌더 시 파생값으로 false 처리 — effect 본문 동기 setState 금지(lint error)
@@ -1138,13 +1209,13 @@ export function NotionEditor({
             <RichTextPlugin
               contentEditable={
                 <ContentEditable
-                  className={`ne-root nodrag nowheel px-4 pt-3 ${extraBottomPadding ? 'pb-32' : 'pb-3'}`}
+                  className={`ne-root nodrag nowheel px-4 ${compactTop ? 'pt-1' : 'pt-3'} ${extraBottomPadding ? 'pb-32' : 'pb-3'}`}
                   spellCheck
                 />
               }
               placeholder={
                 <div
-                  className="absolute top-3 left-4 pointer-events-none select-none"
+                  className={`absolute ${compactTop ? 'top-1' : 'top-3'} left-4 pointer-events-none select-none`}
                   style={{ color: 'rgb(var(--muted))', fontSize: 14 }}
                 >
                   {isSynced ? '노트를 작성하세요…' : '로딩 중…'}
@@ -1165,12 +1236,19 @@ export function NotionEditor({
           <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
           <MarkdownPastePlugin />
           <MediaPlugin />
-          <SlashCommandPlugin />
+          <SlashCommandPlugin
+            onMenuVisibleChange={setSlashMenuVisible}
+            menuActiveSyncRef={slashMenuActiveRef}
+          />
           <EditorShortcutsPlugin />
           {!noMediaDrop && <DragDropPlugin />}
 
           {onFirstLineChange && (
-            <TitleTrackerPlugin onChange={onFirstLineChange} />
+            <TitleTrackerPlugin
+              onChange={onFirstLineChange}
+              suppressed={slashMenuVisible}
+              suppressedSyncRef={slashMenuActiveRef}
+            />
           )}
           {onContentChange && (
             <ContentExportPlugin onChange={onContentChange} />
