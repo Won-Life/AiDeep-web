@@ -22,6 +22,7 @@ import {
   ConnectionLineType,
   useReactFlow,
   ReactFlowProvider,
+  useNodesInitialized,
   type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -824,6 +825,29 @@ interface GraphCanvasInnerProps {
   edges: Edge[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
+  onFirstPaint?: () => void;
+}
+
+// 첫 페인트 신호 — 로딩 오버레이 해제 시점을 "데이터 도착"이 아니라 "그래프가 실제로
+// 화면에 그려진 후"로 잡기 위한 컴포넌트. useNodesInitialized(전 노드 DOM 측정 완료,
+// fitView와 같은 기준)에 rAF 2회를 겹쳐 해당 프레임이 페인트된 다음 1회만 호출한다.
+// 빈 워크스페이스는 nodesInitialized가 true가 되지 않으므로 노드 0개면 즉시 신호.
+function FirstPaintSignal({
+  nodeCount,
+  onFirstPaint,
+}: {
+  nodeCount: number;
+  onFirstPaint: () => void;
+}) {
+  const nodesInitialized = useNodesInitialized();
+  const firedRef = useRef(false);
+  useEffect(() => {
+    if (firedRef.current) return;
+    if (!nodesInitialized && nodeCount > 0) return;
+    firedRef.current = true;
+    requestAnimationFrame(() => requestAnimationFrame(onFirstPaint));
+  }, [nodesInitialized, nodeCount, onFirstPaint]);
+  return null;
 }
 
 export function convertToReactFlow(
@@ -874,6 +898,7 @@ function GraphCanvasInner({
   edges,
   setNodes,
   setEdges,
+  onFirstPaint,
 }: GraphCanvasInnerProps) {
   const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
   const [workingOnEditorNodeId, setWorkingOnEditorNodeId] = useState<string | null>(
@@ -3177,6 +3202,9 @@ function GraphCanvasInner({
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
+      {onFirstPaint && (
+        <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
+      )}
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
       {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출.
@@ -3366,6 +3394,7 @@ interface GraphCanvasProps {
   edges: Edge[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
+  onFirstPaint?: () => void;
 }
 
 export default function GraphCanvas({
@@ -3379,6 +3408,7 @@ export default function GraphCanvas({
   edges,
   setNodes,
   setEdges,
+  onFirstPaint,
 }: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -3393,6 +3423,7 @@ export default function GraphCanvas({
         edges={edges}
         setNodes={setNodes}
         setEdges={setEdges}
+        onFirstPaint={onFirstPaint}
       />
     </ReactFlowProvider>
   );

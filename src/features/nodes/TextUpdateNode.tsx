@@ -111,6 +111,11 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
 
   const viewerBorderColor = viewers.length > 0 ? viewers[0].color : null;
 
+  // main 노드 기본 테두리는 자기 그래프 색 — 흰 배경 유지 규칙 안에서 소속 그래프를 드러낸다.
+  // 파스텔 톤(--ds-sub-*)은 1px로는 식별이 어려워 색이 있으면 2px로 표시.
+  // 색 미저장 legacy main은 회색(EDGE_COLOR) 폴백.
+  const mainOwnBorderColor = nodeData.color || null;
+
   const containerStyle = isMain
     ? {
         // 프로젝트(main) 노드는 그래프 색을 데이터로 보유하더라도 항상 흰 배경으로 표시 (도메인 규칙)
@@ -119,8 +124,11 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           ? '#93C5FD'
           : selected
             ? 'rgb(var(--ds-main))'
-            : (viewerBorderColor ?? EDGE_COLOR),
-        borderWidth: isHovered || selected || viewerBorderColor ? '2px' : '1px',
+            : (viewerBorderColor ?? mainOwnBorderColor ?? EDGE_COLOR),
+        borderWidth:
+          isHovered || selected || viewerBorderColor || mainOwnBorderColor
+            ? '2px'
+            : '1px',
       }
     : {
         backgroundColor: nodeData.color || '#ffffff',

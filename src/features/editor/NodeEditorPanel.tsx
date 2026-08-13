@@ -365,7 +365,8 @@ export function NodeEditorPanel({
       }}
     >
       {/* 버튼을 absolute 오버레이 대신 헤더 행으로 — 에디터 첫 줄과 겹침 방지 (#214) */}
-      <div className="flex items-center justify-end gap-0.5 px-3 pt-3 shrink-0">
+      {/* 플레이스홀더 위 총 여백 = 헤더 pt(4) + 버튼(22) + 에디터 pt(4) ≈ 30px — 기존 46px의 2/3 */}
+      <div className="flex items-center justify-end gap-0.5 px-3 pt-1 shrink-0">
         {onExpandClick && (
           <button
             type="button"
@@ -402,6 +403,7 @@ export function NodeEditorPanel({
           cursorColor={cursorColor}
           onFirstLineChange={onFirstLineChange}
           onContentChange={onContentChange}
+          compactTop
         />
       )}
     </div>
