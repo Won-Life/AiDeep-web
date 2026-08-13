@@ -495,3 +495,15 @@
     opacity: 1;
   }
 }
+
+/* 로그인 배경 노드 부유 애니메이션 — src/app/login/LoginBackground.tsx 전용.
+   transform만 사용(리플로우 없음). reduced-motion 대응은 사용처의 motion-safe: 변형이 담당. */
+@keyframes login-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
