@@ -19,6 +19,7 @@ import type { CSSProperties } from 'react';
 // rotate는 부유 애니메이션(transform)과 겹치지 않도록 내부 래퍼에 적용한다.
 type GraphVariant = 'chain' | 'tree' | 'hub' | 'zigzag' | 'branch';
 
+// 6개에서 3개로 감량(과밀 완화) — 모양이 가장 구분되는 tree·zigzag·branch만 남긴다.
 const CLUSTERS: Array<{
   className: string; // 위치·크기 (Tailwind arbitrary)
   style: CSSProperties; // animationDelay·animationDuration
@@ -26,11 +27,8 @@ const CLUSTERS: Array<{
   variant: GraphVariant;
 }> = [
   { className: 'left-[6%] top-[12%] w-[180px]', style: { animationDelay: '0s', animationDuration: '16s' }, rotate: -6, variant: 'tree' },
-  { className: 'left-[10%] bottom-[14%] w-[150px]', style: { animationDelay: '-5s', animationDuration: '19s' }, rotate: 8, variant: 'hub' },
   { className: 'right-[7%] top-[18%] w-[160px]', style: { animationDelay: '-9s', animationDuration: '14s' }, rotate: 5, variant: 'zigzag' },
   { className: 'right-[9%] bottom-[10%] w-[190px]', style: { animationDelay: '-3s', animationDuration: '18s' }, rotate: -4, variant: 'branch' },
-  { className: 'left-[38%] top-[4%] hidden w-[120px] md:block', style: { animationDelay: '-12s', animationDuration: '20s' }, rotate: 10, variant: 'chain' },
-  { className: 'right-[36%] bottom-[3%] hidden w-[140px] md:block', style: { animationDelay: '-7s', animationDuration: '15s' }, rotate: -9, variant: 'hub' },
 ];
 
 // 미니 마인드맵 일러스트 — 엣지는 gray-700, 노드는 그린/회색 저투명도.
