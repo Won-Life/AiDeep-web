@@ -472,3 +472,26 @@
     font-weight: var(--typo-cap3-weight);
   }
 }
+
+/* 워크스페이스 로딩 인디케이터 — 노드가 차례로 밝아지는 루프 (WorkspaceLoading.tsx) */
+@keyframes workspace-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  40%,
+  60% {
+    opacity: 1;
+  }
+}
+
+.workspace-loading-pulse {
+  animation: workspace-loading-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-loading-pulse {
+    animation: none;
+    opacity: 1;
+  }
+}
