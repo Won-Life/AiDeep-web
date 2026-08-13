@@ -7,6 +7,7 @@ import { createWorkspace } from '@/api/workspace';
 import { getMe } from '@/api/user';
 import { ApiError } from '@/api/types';
 import { TERMS_URL, PRIVACY_URL } from '@/lib/legalLinks';
+import LoginBackground from './LoginBackground';
 
 type AuthMode = 'login' | 'signup';
 
@@ -30,6 +31,16 @@ const GoogleIcon = () => (
     <path d="M10 20c2.7 0 4.96-.9 6.61-2.43l-3.23-2.5c-.9.6-2.04.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H1.08v2.58A10 10 0 0 0 10 20Z" fill="#34A853" />
     <path d="M4.41 11.9a6 6 0 0 1 0-3.83V5.49H1.08a10 10 0 0 0 0 9.02l3.33-2.6Z" fill="#FBBC05" />
     <path d="M10 3.96c1.47 0 2.79.51 3.83 1.5l2.86-2.86C14.96.99 12.7 0 10 0A10 10 0 0 0 1.08 5.49l3.33 2.58C5.2 5.71 7.4 3.96 10 3.96Z" fill="#EA4335" />
+  </svg>
+);
+
+// AiDeep 노드 로고 마크 — 타이틀 위 브랜드 표식 (장식)
+const LogoMark = () => (
+  <svg width="44" height="32" viewBox="0 0 44 32" fill="none" aria-hidden="true" className="mx-auto">
+    <path d="M12 16 L26 8 M26 8 L36 20" stroke="rgb(var(--ds-gray-700))" strokeWidth="1.5" />
+    <circle cx="12" cy="16" r="5" fill="rgb(var(--ds-main))" opacity="0.45" />
+    <circle cx="26" cy="8" r="7" fill="rgb(var(--ds-main))" />
+    <circle cx="36" cy="20" r="4.5" fill="rgb(var(--ds-gray-500))" opacity="0.6" />
   </svg>
 );
 
@@ -184,20 +195,23 @@ export default function LoginPage() {
   };
 
   const inputClass =
-    'h-[56px] w-full rounded-[8px] border border-gray-700 bg-surface px-[16px] text-[16px] text-foreground outline-none placeholder:text-muted focus:border-main transition-colors';
+    'h-[56px] w-full rounded-[8px] border border-gray-700 bg-background/60 px-[16px] text-[16px] text-foreground outline-none placeholder:text-muted focus:border-main transition-colors';
 
   const labelClass = 'text-[16px] font-semibold text-foreground pl-[8px]';
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-[16px] bg-background p-6">
-      <div className="w-full max-w-[700px] rounded-[16px] bg-background px-[24px] py-[88px] shadow-[0px_0px_4px_0px_rgba(44,44,44,0.25)]">
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-[16px] bg-background p-6">
+      <LoginBackground />
+      <div className="relative z-10 w-full max-w-[480px] rounded-[20px] border border-border/60 bg-background/70 px-[32px] py-[48px] shadow-[0px_8px_40px_0px_rgba(44,44,44,0.12)] backdrop-blur-xl">
 
         {/* 로그인 */}
         {mode === 'login' && (
           <>
-            <h1 className="mb-[64px] text-center text-[36px] font-bold leading-[48px] text-foreground">
+            <LogoMark />
+            <h1 className="mb-[8px] mt-[16px] text-center text-[28px] font-bold leading-[36px] text-foreground">
               AiDeep 로그인
             </h1>
+            <p className="mb-[40px] text-center text-[14px] text-muted">복잡한 머리가 가벼워지는 곳</p>
 
             <form onSubmit={handleLogin} className="flex flex-col gap-[40px]">
               <div className="flex flex-col gap-[24px]">
@@ -249,7 +263,11 @@ export default function LoginPage() {
                   {loading ? '처리 중...' : '로그인'}
                 </button>
 
-                <div className="border-t border-border" />
+                <div className="flex items-center gap-[12px]">
+                  <div className="flex-1 border-t border-border" />
+                  <span className="text-[13px] text-muted">또는</span>
+                  <div className="flex-1 border-t border-border" />
+                </div>
 
                 <button
                   type="button"
@@ -277,9 +295,11 @@ export default function LoginPage() {
         {/* 회원가입 */}
         {mode === 'signup' && (
           <>
-            <h1 className="mb-[64px] text-center text-[36px] font-bold leading-[48px] text-foreground">
+            <LogoMark />
+            <h1 className="mb-[8px] mt-[16px] text-center text-[28px] font-bold leading-[36px] text-foreground">
               AiDeep 회원가입
             </h1>
+            <p className="mb-[40px] text-center text-[14px] text-muted">복잡한 머리가 가벼워지는 곳</p>
 
             <form onSubmit={handleSignup} className="flex flex-col gap-[40px]">
               <div className="flex flex-col gap-[24px]">
@@ -461,7 +481,11 @@ export default function LoginPage() {
                   {loading ? '처리 중...' : '회원가입'}
                 </button>
 
-                <div className="border-t border-border" />
+                <div className="flex items-center gap-[12px]">
+                  <div className="flex-1 border-t border-border" />
+                  <span className="text-[13px] text-muted">또는</span>
+                  <div className="flex-1 border-t border-border" />
+                </div>
 
                 <button
                   type="button"
@@ -477,7 +501,7 @@ export default function LoginPage() {
       </div>
 
       {/* 약관·개인정보처리방침 상시 접근 링크 (#206) */}
-      <nav className="flex items-center gap-[16px] text-[13px] text-muted">
+      <nav className="relative z-10 flex items-center gap-[16px] text-[13px] text-muted">
         <a
           href={TERMS_URL}
           target="_blank"
