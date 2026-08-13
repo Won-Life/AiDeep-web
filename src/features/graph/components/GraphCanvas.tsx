@@ -1353,7 +1353,36 @@ function GraphCanvasInner({
         }
       });
 
-      setNodes((snapshot) => applyNodeChanges(nonRemoveChanges, snapshot));
+      setNodes((snapshot) => {
+        const next = applyNodeChanges(nonRemoveChanges, snapshot);
+        // 왼쪽 자식 노드(handleSide 'left')는 폭이 변해도 오른쪽 가장자리(부모 방향
+        // 연결점)를 고정한다 — React Flow 앵커는 좌상단이라 기본은 오른쪽으로 자라서,
+        // 제목이 길어지면 부모 쪽을 파고드는 것처럼 보였다. 폭 변화량만큼 x를 반대로
+        // 보정해 왼쪽으로 자라는 것처럼 만든다. 최초 측정(이전 폭 없음)은 보정하지
+        // 않는다 — 마운트 직후 위치가 서버 좌표에서 어긋나면 안 되므로.
+        // 보정은 로컬 전용(서버 PATCH 없음): 각 클라이언트가 자기 측정 이벤트에 같은
+        // 규칙을 적용하므로 협업자 화면에서도 동일하게 동작한다.
+        for (const change of nonRemoveChanges) {
+          if (change.type !== 'dimensions' || !change.dimensions) continue;
+          const prev = snapshot.find((n) => n.id === change.id);
+          const prevWidth = prev?.measured?.width;
+          if (!prev || prevWidth == null) continue;
+          const data = prev.data as { handleSide?: 'left' | 'right' };
+          if (data.handleSide !== 'left') continue;
+          const deltaW = change.dimensions.width - prevWidth;
+          if (deltaW === 0) continue;
+          const idx = next.findIndex((n) => n.id === change.id);
+          if (idx === -1) continue;
+          next[idx] = {
+            ...next[idx],
+            position: {
+              ...next[idx].position,
+              x: next[idx].position.x - deltaW,
+            },
+          };
+        }
+        return next;
+      });
     },
     [requestArchiveForNodes, setNodes],
   );
