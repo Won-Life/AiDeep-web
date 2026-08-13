@@ -365,8 +365,10 @@ export function NodeEditorPanel({
       }}
     >
       {/* 버튼을 absolute 오버레이 대신 헤더 행으로 — 에디터 첫 줄과 겹침 방지 (#214) */}
-      {/* 플레이스홀더 위 총 여백 = 헤더 pt(4) + 버튼(22) + 에디터 pt(4) ≈ 30px — 기존 46px의 2/3 */}
-      <div className="flex items-center justify-end gap-0.5 px-3 pt-1 shrink-0">
+      {/* 헤더 pt는 12px 이상 필수: 패널이 노드 아래로 12px 겹쳐 올라가므로(marginTop -12)
+          그보다 얕으면 왼쪽 열림(right:0 정렬)에서 X·전체화면 버튼이 노드에 가려진다.
+          플레이스홀더 위 총 여백 = 헤더 pt(12) + 버튼(22) + 에디터 pt(4) = 38px */}
+      <div className="flex items-center justify-end gap-0.5 px-3 pt-3 shrink-0">
         {onExpandClick && (
           <button
             type="button"
