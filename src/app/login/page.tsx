@@ -211,7 +211,7 @@ export default function LoginPage() {
             <h1 className="mb-[8px] mt-[16px] text-center text-[28px] font-bold leading-[36px] text-foreground">
               AiDeep 로그인
             </h1>
-            <p className="mb-[40px] text-center text-[14px] text-muted">회의가 마인드맵이 되는 곳</p>
+            <p className="mb-[40px] text-center text-[14px] text-muted">복잡한 머리가 가벼워지는 곳</p>
 
             <form onSubmit={handleLogin} className="flex flex-col gap-[40px]">
               <div className="flex flex-col gap-[24px]">
@@ -299,7 +299,7 @@ export default function LoginPage() {
             <h1 className="mb-[8px] mt-[16px] text-center text-[28px] font-bold leading-[36px] text-foreground">
               AiDeep 회원가입
             </h1>
-            <p className="mb-[40px] text-center text-[14px] text-muted">회의가 마인드맵이 되는 곳</p>
+            <p className="mb-[40px] text-center text-[14px] text-muted">복잡한 머리가 가벼워지는 곳</p>
 
             <form onSubmit={handleSignup} className="flex flex-col gap-[40px]">
               <div className="flex flex-col gap-[24px]">
