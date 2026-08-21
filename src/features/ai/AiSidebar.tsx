@@ -1,21 +1,17 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { chatWithAi } from '@/api/ai';
 
 export const AI_SIDEBAR_WIDTH = 320;
 export const AI_SIDEBAR_VISIBLE_WIDTH = 40;
 
 type Phase = 'input' | 'loading' | 'response';
 
-// 나중에 실제 파이프라인 API로 교체
-async function fetchAiResponse(_question: string): Promise<string> {
-  await new Promise((r) => setTimeout(r, 1200));
-  return `여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다.`;
-}
-
 interface AiSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
+  workspaceId: string | null;
 }
 
 /** AI 아이콘: 20×20 원형 */
@@ -60,7 +56,7 @@ function ToolIcon({ bg, opacity = 1, children }: { bg: string; opacity?: number;
   );
 }
 
-export default function AiSidebar({ isOpen, onToggle }: AiSidebarProps) {
+export default function AiSidebar({ isOpen, onToggle, workspaceId }: AiSidebarProps) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>('input');
   const [question, setQuestion] = useState('');
@@ -77,16 +73,16 @@ export default function AiSidebar({ isOpen, onToggle }: AiSidebarProps) {
   }, [isChatOpen, isOpen]);
 
   const handleSubmit = useCallback(async () => {
-    if (!question.trim() || phase !== 'input') return;
+    if (!question.trim() || phase !== 'input' || !workspaceId) return;
     setPhase('loading');
     try {
-      const result = await fetchAiResponse(question.trim());
-      setResponse(result);
+      const result = await chatWithAi(workspaceId, { query: question.trim() });
+      setResponse(result.answer);
       setPhase('response');
     } catch {
       setPhase('input');
     }
-  }, [question, phase]);
+  }, [question, phase, workspaceId]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {

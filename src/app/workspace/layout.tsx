@@ -313,7 +313,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         workspaceId={workspaceId}
       />
 
-      <AiSidebar isOpen={isAiSidebarOpen} onToggle={handleToggleAiSidebar} />
+      <AiSidebar isOpen={isAiSidebarOpen} onToggle={handleToggleAiSidebar} workspaceId={workspaceId} />
 
       <UserMenu
         username={userMe?.username ?? ''}

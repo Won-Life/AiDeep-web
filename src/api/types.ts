@@ -198,6 +198,20 @@ export interface SyncResponse {
   edges: EdgeResponse[];
 }
 
+// ─── AI ──────────────────────────────────────────────────────────────
+
+export type AiSearchType = 'mmr' | 'hybrid' | 'semantic';
+
+export interface ChatRequest {
+  query: string;
+  searchType?: AiSearchType;
+}
+
+export interface ChatResponse {
+  answer: string;
+  sources: Record<string, unknown>[];
+}
+
 // ─── Upload ──────────────────────────────────────────────────────────
 
 export interface UploadResponse {
