@@ -11,7 +11,10 @@ import Sidebar, {
 } from '@/components/layout/Sidebar';
 import ChipHeader from '@/components/layout/ChipHeader';
 import DropDown from '@/components/ui/DropDown';
-import AiChatPanel from '@/features/chat/AiChatPanel';
+import AiChatPanel, {
+  AI_CHAT_HANDLE_WIDTH,
+  AI_CHAT_PANEL_WIDTH,
+} from '@/features/chat/AiChatPanel';
 import ArchiveModal from '@/components/layout/ArchiveModal';
 import OnboardingPopup from '@/components/layout/OnboardingPopup';
 import { getMe } from '@/api/user';
@@ -94,7 +97,10 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     const stored = sessionStorage.getItem('sidebar_open');
     return stored !== null ? stored === 'true' : true;
   });
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem('aideep_chat_open') === 'true';
+  });
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
@@ -118,6 +124,19 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     setIsSidebarOpen((prev) => {
       const next = !prev;
       sessionStorage.setItem('sidebar_open', String(next));
+      return next;
+    });
+  }, []);
+
+  const setChatOpen = useCallback((next: boolean) => {
+    setIsChatOpen(next);
+    sessionStorage.setItem('aideep_chat_open', String(next));
+  }, []);
+
+  const handleToggleChat = useCallback(() => {
+    setIsChatOpen((current) => {
+      const next = !current;
+      sessionStorage.setItem('aideep_chat_open', String(next));
       return next;
     });
   }, []);
@@ -340,7 +359,12 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
-      <div className="absolute inset-0 z-0">{children}</div>
+      <div
+        className="absolute inset-y-0 left-0 z-0 transition-[right] duration-200 ease-out"
+        style={{ right: isChatOpen ? AI_CHAT_PANEL_WIDTH : AI_CHAT_HANDLE_WIDTH }}
+      >
+        {children}
+      </div>
 
       {SHOW_TEMP_HIDDEN_UI && (
       <Sidebar
@@ -373,11 +397,9 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         onOpenArchive={() => setIsArchiveOpen(true)}
       />
 
-      <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setIsChatOpen(true)} />
+      <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setChatOpen(true)} />
 
-      {isChatOpen && (
-        <AiChatPanel onClose={() => setIsChatOpen(false)} sidebarWidth={sidebarWidth} />
-      )}
+      <AiChatPanel isOpen={isChatOpen} onToggle={handleToggleChat} />
 
       {isArchiveOpen && workspaceId && (
         <ArchiveModal

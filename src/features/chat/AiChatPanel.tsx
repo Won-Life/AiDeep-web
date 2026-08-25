@@ -1,220 +1,147 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { SUGGESTED_QUESTIONS } from './types';
+import { useChat } from './useChat';
 
-type Phase = 'input' | 'loading' | 'response';
+export const AI_CHAT_PANEL_WIDTH = 416;
+// 닫힌 상태에서는 패널 본문을 완전히 화면 밖으로 보내고, 탭만 살짝 남긴다.
+export const AI_CHAT_HANDLE_WIDTH = 0;
+
+const SUGGESTION_STYLES = [
+  'bg-sub-blue text-text-blue hover:opacity-85',
+  'bg-sub-yellow text-text-yellow hover:opacity-85',
+  'bg-sub-green text-text-green hover:opacity-85',
+  'bg-sub-purple text-text-purple hover:opacity-85',
+];
 
 interface AiChatPanelProps {
-  onClose: () => void;
-  sidebarWidth: number;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
-// 나중에 실제 파이프라인 API로 교체
-async function fetchAiResponse(_question: string): Promise<string> {
-  await new Promise((r) => setTimeout(r, 1200));
-  return `여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다. 여기까지 채우고 내려갑니다.`;
-}
-
-/** 피그마 "단어_icon": 20×20 frame, Hexagon 10×10 at (5,5) */
-function AiIcon() {
+function SendIcon() {
   return (
-    <div
-      style={{
-        width: 20,
-        height: 20,
-        borderRadius: '50%',
-        border: '1.5px solid #A8C8E8',
-        background: 'rgb(var(--background))',
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <div
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          background: '#A8C8E8',
-        }}
-      />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 12V3M8 3 4.5 6.5M8 3l3.5 3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ChatMessageBubble({ role, content }: { role: 'assistant' | 'user'; content: string }) {
+  const isUser = role === 'user';
+  return (
+    <div className={isUser ? 'flex justify-end' : 'flex justify-start'}>
+      <div className={isUser
+        ? 'max-w-[85%] rounded-2xl rounded-br-md bg-main px-3 py-2 text-[13px] leading-5 text-white'
+        : 'max-w-[85%] rounded-2xl rounded-bl-md border border-border bg-surface px-3 py-2 text-[13px] leading-5 text-foreground'}>
+        {content}
+      </div>
     </div>
   );
 }
 
-export default function AiChatPanel({ onClose, sidebarWidth }: AiChatPanelProps) {
-  const [phase, setPhase] = useState<Phase>('input');
-  const [question, setQuestion] = useState('');
-  const [response, setResponse] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
+  const [input, setInput] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messageEndRef = useRef<HTMLDivElement>(null);
+  const { messages, status, sendMessage, retry, reset } = useChat();
+  const isEmpty = messages.length === 0 && status !== 'sending';
 
-  // 닫힐 때 부모(layout)에서 언마운트되므로 열릴 때마다 state는 초기값으로 시작한다
   useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.focus(), 50);
-    return () => clearTimeout(t);
-  }, []);
+    if (isOpen) inputRef.current?.focus();
+  }, [isOpen]);
 
-  const handleSubmit = useCallback(async () => {
-    if (!question.trim() || phase !== 'input') return;
-    setPhase('loading');
-    try {
-      const result = await fetchAiResponse(question.trim());
-      setResponse(result);
-      setPhase('response');
-    } catch {
-      setPhase('input');
-    }
-  }, [question, phase]);
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, status]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') handleSubmit();
-      if (e.key === 'Escape') onClose();
-    },
-    [handleSubmit, onClose],
-  );
+  const submit = () => {
+    if (!input.trim() || status === 'sending') return;
+    void sendMessage(input);
+    setInput('');
+  };
 
   return (
-    <>
-      <style>{`
-        @keyframes aiDot {
-          0%, 60%, 100% { opacity: 0.25; }
-          30% { opacity: 1; }
-        }
-      `}</style>
-
-      <div
-        style={{
-          position: 'fixed',
-          left: sidebarWidth + 40,
-          top: '44%',
-          transform: 'translateY(-50%)',
-          zIndex: 40,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-          gap: 8,
-        }}
+    <aside
+      aria-label="AiDeep Chat"
+      className="fixed right-0 top-0 z-40 h-screen transition-transform duration-200 ease-out"
+      style={{
+        width: AI_CHAT_PANEL_WIDTH,
+        transform: isOpen ? 'translateX(0)' : `translateX(${AI_CHAT_PANEL_WIDTH}px)`,
+      }}
+    >
+      <button
+        type="button"
+        aria-label={isOpen ? 'AiDeep Chat 닫기' : 'AiDeep Chat 열기'}
+        onClick={onToggle}
+        className="absolute -left-5 top-1/2 z-10 flex h-20 w-10 -translate-y-1/2 items-center justify-center rounded-l-2xl rounded-r-none bg-surface text-muted shadow-md transition-colors hover:bg-surface-hover hover:text-foreground"
       >
-        {/* ── 질문 pill ── */}
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            height: 31,
-            padding: '0 12px',
-            border: '1px solid rgb(var(--border))',
-            borderRadius: 500,
-            boxShadow: '0px 0px 4px rgba(0,0,0,0.25)',
-            background: 'rgb(var(--background))',
-          }}
-        >
-          <span
-            style={{
-              fontFamily: 'Pretendard, -apple-system, sans-serif',
-              fontSize: 17,
-              color: 'rgb(var(--foreground))',
-              whiteSpace: 'pre',
-              lineHeight: '31px',
-            }}
-          >
-            {'>> '}
-          </span>
-          <input
-            ref={inputRef}
-            value={question}
-            onChange={(e) => phase === 'input' && setQuestion(e.target.value)}
-            onKeyDown={handleKeyDown}
-            readOnly={phase !== 'input'}
-            placeholder="질문 내용"
-            style={{
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              fontFamily: 'Pretendard, -apple-system, sans-serif',
-              fontSize: 17,
-              color: 'rgb(var(--foreground))',
-              lineHeight: '31px',
-              width: Math.max(72, question.length * 9.5),
-              minWidth: 72,
-              maxWidth: 460,
-            }}
-          />
+        <span className="text-xl leading-none">{isOpen ? '›' : '‹'}</span>
+      </button>
+
+      <div className="flex h-full min-w-0 flex-col overflow-hidden border-l border-border bg-background px-5 pb-4 pt-5 shadow-[-8px_0_20px_rgba(0,0,0,0.06)] dark:shadow-[-8px_0_20px_rgba(0,0,0,0.2)]" style={{ borderRadius: '16px 0 0 16px' }}>
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="typo-h1">AiDeep Chat</h2>
+            <p className="mt-1 typo-cap2 text-muted">프로젝트에 대해 무엇이든 물어보세요.</p>
+          </div>
+          <button type="button" onClick={onToggle} className="-mt-1 flex size-8 items-center justify-center rounded-md text-xl text-muted transition-colors hover:bg-surface hover:text-foreground" aria-label="AiDeep Chat 닫기">×</button>
+        </header>
+
+        <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1">
+          {isEmpty ? (
+            <section>
+              <p className="typo-sub1">추천 질문</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {SUGGESTED_QUESTIONS.map((question, index) => (
+                  <button key={question} type="button" onClick={() => void sendMessage(question)} className={`min-h-20 rounded-xl px-3 text-left text-[13px] leading-5 transition-opacity ${SUGGESTION_STYLES[index]}`}>
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <section className="flex flex-col gap-3">
+              {messages.map((message) => <ChatMessageBubble key={message.id} role={message.role} content={message.content} />)}
+              {status === 'sending' && (
+                <div className="flex justify-start"><div className="rounded-2xl rounded-bl-md border border-border bg-surface px-3 py-2 text-[13px] text-muted">AiDeep이 답변을 정리하고 있어요...</div></div>
+              )}
+              {status === 'error' && (
+                <div className="rounded-xl border border-border bg-surface px-3 py-3">
+                  <p className="typo-cap2 text-muted">답변을 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>
+                  <button type="button" onClick={retry} className="mt-2 rounded-md bg-surface-hover px-2 py-1 text-xs text-foreground transition-colors hover:bg-surface-active">다시 시도</button>
+                </div>
+              )}
+              <div ref={messageEndRef} />
+            </section>
+          )}
         </div>
 
-        {/* ── 로딩 (피그마 답변 frame 52×32) ── */}
-        {phase === 'loading' && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              height: 32,
-              padding: '0 14px',
-              gap: 10,
-              background: 'rgb(var(--background))',
-              border: '1px solid rgb(var(--border))',
-              borderRadius: 16,
-              boxShadow: '0px 0px 4px rgba(0,0,0,0.25)',
-            }}
-          >
-            <AiIcon />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  style={{
-                    display: 'block',
-                    width: 4,
-                    height: 4,
-                    borderRadius: '50%',
-                    background: 'rgb(var(--muted))',
-                    animation: 'aiDot 1.2s infinite',
-                    animationDelay: `${i * 0.3}s`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── 답변 카드 (피그마 537×243, 아이콘 at 12,12 / 텍스트 at 48,12) ── */}
-        {phase === 'response' && (
-          <div
-            style={{
-              width: 537,
-              background: 'rgb(var(--background))',
-              border: '1px solid rgb(var(--border))',
-              borderRadius: 16,
-              boxShadow: '0px 0px 4px rgba(0,0,0,0.25)',
-              position: 'relative',
-              boxSizing: 'border-box',
-            }}
-          >
-            {/* 아이콘: (12,12) */}
-            <div style={{ position: 'absolute', top: 12, left: 12 }}>
-              <AiIcon />
-            </div>
-            {/* 텍스트: x=48 (=12+20+16), y=12 */}
-            <p
-              style={{
-                margin: 0,
-                paddingTop: 12,
-                paddingRight: 16,
-                paddingBottom: 16,
-                paddingLeft: 48,
-                fontFamily: 'Pretendard, -apple-system, sans-serif',
-                fontSize: 17,
-                color: 'rgb(var(--foreground))',
-                lineHeight: 1.75,
-                wordBreak: 'break-word',
+        <div className="mt-4 border-t border-border pt-3">
+          <div className="flex items-end gap-2 rounded-xl border border-border bg-background p-2 focus-within:border-gray-500">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
               }}
-            >
-              {response}
-            </p>
+              disabled={status === 'sending'}
+              rows={1}
+              placeholder="메시지를 입력하세요..."
+              className="max-h-24 min-h-8 flex-1 resize-none bg-transparent px-1 py-1.5 text-sm text-foreground outline-none placeholder:text-muted disabled:cursor-not-allowed"
+            />
+            <button type="button" onClick={submit} disabled={!input.trim() || status === 'sending'} aria-label="메시지 보내기" className="flex size-9 shrink-0 items-center justify-center rounded-full bg-main text-white transition-colors hover:bg-main/90 disabled:cursor-not-allowed disabled:opacity-40">
+              <SendIcon />
+            </button>
           </div>
-        )}
+          <div className="mt-3 flex items-center justify-between">
+            <button type="button" onClick={reset} className="typo-cap2 inline-flex items-center gap-1 text-muted transition-colors hover:text-foreground">↻ 새 대화</button>
+            <span className="typo-cap3 text-muted">목업 답변을 표시 중입니다.</span>
+          </div>
+        </div>
       </div>
-    </>
+    </aside>
   );
 }
