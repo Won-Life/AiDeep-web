@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
+import FestivalPopup from "@/features/festival/components/FestivalPopup";
+import { useFestivalPopup } from "@/features/festival/useFestivalPopup";
 import WorkspaceLoading from "@/components/ui/WorkspaceLoading";
 import { useWorkspaceLayout } from "./context";
 
@@ -34,6 +36,7 @@ export default function WorkspacePage() {
 
   const currentUserId = userMe?.userId ?? "";
   const currentUserName = userMe?.username ?? "Anonymous";
+  const festivalPopup = useFestivalPopup(userMe?.username, userMe?.userId);
 
   const [canvasPainted, setCanvasPainted] = useState(false);
   const [overlayGone, setOverlayGone] = useState(false);
@@ -63,7 +66,9 @@ export default function WorkspacePage() {
         setNodes={setNodes}
         setEdges={setEdges}
         onFirstPaint={() => setCanvasPainted(true)}
+        onNodeVisited={festivalPopup.handleNodeVisited}
       />
+      <FestivalPopup isOpen={festivalPopup.isOpen} onClose={festivalPopup.close} />
       {!overlayGone && (
         <div
           className={`absolute inset-0 z-50 transition-opacity duration-300 ${
