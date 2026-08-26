@@ -1,10 +1,14 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { getMockChatReply } from './mockChat';
+import { requestDemoChat } from './api/demoChat';
 import type { ChatMessage, ChatStatus } from './types';
 
-export function useChat() {
+interface UseChatOptions {
+  workspaceId: string | null;
+}
+
+export function useChat({ workspaceId }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ChatStatus>('empty');
   const [retryQuestion, setRetryQuestion] = useState<string | null>(null);
@@ -16,14 +20,18 @@ export function useChat() {
     setStatus('sending');
     setRetryQuestion(question);
     try {
-      const reply = await getMockChatReply(question);
-      setMessages((current) => [...current, reply]);
+      if (!workspaceId) throw new Error('Workspace is unavailable');
+      const answer = await requestDemoChat(workspaceId, question);
+      setMessages((current) => [
+        ...current,
+        { id: `assistant-${Date.now()}`, role: 'assistant', content: answer },
+      ]);
       setStatus('ready');
       setRetryQuestion(null);
     } catch {
       setStatus('error');
     }
-  }, [status]);
+  }, [status, workspaceId]);
 
   const retry = useCallback(() => {
     if (!retryQuestion) return;
