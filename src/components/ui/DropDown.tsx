@@ -8,14 +8,10 @@ interface DropDownProps {
 }
 
 type ComingSoonFeature =
-  | 'AI_SUMMARY'
-  | 'AI_CHATBOT'
   | 'AI_AUTO_STRUCTURE'
   | 'WORD_DICTIONARY';
 
 const FEATURE_LABELS: Record<ComingSoonFeature, string> = {
-  AI_SUMMARY: 'AI 내용 요약',
-  AI_CHATBOT: 'AI 챗봇',
   AI_AUTO_STRUCTURE: 'AI 자동 구조화',
   WORD_DICTIONARY: '단어 정의 사전',
 };
@@ -131,9 +127,6 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
   const [comingSoonFeature, setComingSoonFeature] =
     useState<ComingSoonFeature | null>(null);
 
-  // onChatOpen: 챗봇 준비중 처리 이후 미사용. 패널 재활성화 시 openComingSoon 대신 연결.
-  void onChatOpen;
-
   const openComingSoon = (feature: ComingSoonFeature) => {
     setComingSoonFeature(feature);
   };
@@ -200,42 +193,23 @@ export default function DropDown({ sidebarWidth, onChatOpen }: DropDownProps) {
             {/* 항목 목록: column, gap 12px */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-              {/* AI 내용 요약 — 준비중 (icon opacity 0.6, text muted, 출시 예정 배지) */}
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                onClick={() => openComingSoon('AI_SUMMARY')}
+              {/* AI 챗봇 사용하기 — 행사 버전의 단일 AI 진입점 */}
+              <button
+                type="button"
+                style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 8, cursor: 'pointer', border: 'none', padding: 0, background: 'transparent', textAlign: 'left' }}
+                onClick={onChatOpen}
               >
-                <Icon bg="#FED7D9" opacity={0.6}>
-                  {/* 요약 아이콘: 텍스트 줄 3개 (8×8) */}
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                    <rect x="0.5" y="0.5" width="7" height="1" rx="0.5" fill="#2C2C2C" />
-                    <rect x="0.5" y="3" width="7" height="1" rx="0.5" fill="#2C2C2C" />
-                    <rect x="0.5" y="5.5" width="5" height="1" rx="0.5" fill="#2C2C2C" />
-                  </svg>
-                </Icon>
-                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--muted))' }}>
-                  AI 내용 요약
-                </span>
-                <ComingSoonBadge />
-              </div>
-
-              {/* AI 챗봇 사용하기 — 준비중 (패널 열기는 onChatOpen으로 복원 가능) */}
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                onClick={() => openComingSoon('AI_CHATBOT')}
-              >
-                <Icon bg="#D0EEFB" opacity={0.6}>
+                <Icon bg="#D0EEFB">
                   {/* 챗봇 아이콘: 원형 (7×8) */}
                   <svg width="7" height="8" viewBox="0 0 7 8" fill="none">
                     <circle cx="3.5" cy="4" r="2.5" stroke="#2C2C2C" strokeWidth="1" />
                     <circle cx="3.5" cy="4" r="1" fill="#2C2C2C" />
                   </svg>
                 </Icon>
-                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--muted))' }}>
+                <span style={{ fontFamily: 'Pretendard, -apple-system, sans-serif', fontSize: 15, color: 'rgb(var(--foreground))' }}>
                   AI 챗봇 사용하기
                 </span>
-                <ComingSoonBadge />
-              </div>
+              </button>
 
               {/* AI 자동 구조화 — 준비중 (icon opacity 0.6, text #A0A0A0) */}
               <div
