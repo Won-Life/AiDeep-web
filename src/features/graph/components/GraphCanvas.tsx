@@ -826,6 +826,7 @@ interface GraphCanvasInnerProps {
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
+  onNodeVisited?: (nodeId: string) => void;
 }
 
 // 첫 페인트 신호 — 로딩 오버레이 해제 시점을 "데이터 도착"이 아니라 "그래프가 실제로
@@ -899,6 +900,7 @@ function GraphCanvasInner({
   setNodes,
   setEdges,
   onFirstPaint,
+  onNodeVisited,
 }: GraphCanvasInnerProps) {
   const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
   const [workingOnEditorNodeId, setWorkingOnEditorNodeId] = useState<string | null>(
@@ -2093,7 +2095,8 @@ function GraphCanvasInner({
       return [...prev, node.id];
     });
     setWorkingOnEditorNodeId(node.id);
-  }, []);
+    onNodeVisited?.(node.id);
+  }, [onNodeVisited]);
 
   /* =========================
      Empty pane click → close context menu only
@@ -3434,6 +3437,7 @@ interface GraphCanvasProps {
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
+  onNodeVisited?: (nodeId: string) => void;
 }
 
 export default function GraphCanvas({
@@ -3448,6 +3452,7 @@ export default function GraphCanvas({
   setNodes,
   setEdges,
   onFirstPaint,
+  onNodeVisited,
 }: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -3463,6 +3468,7 @@ export default function GraphCanvas({
         setNodes={setNodes}
         setEdges={setEdges}
         onFirstPaint={onFirstPaint}
+        onNodeVisited={onNodeVisited}
       />
     </ReactFlowProvider>
   );
