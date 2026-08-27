@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useWorkspaceLayout } from '@/app/workspace/context';
 import { SUGGESTED_QUESTIONS } from './types';
 import { useChat } from './useChat';
 
@@ -45,7 +46,8 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
-  const { messages, status, sendMessage, retry, reset } = useChat();
+  const { workspaceId } = useWorkspaceLayout();
+  const { messages, status, sendMessage, retry, reset } = useChat({ workspaceId });
   const isEmpty = messages.length === 0 && status !== 'sending';
 
   useEffect(() => {
@@ -138,7 +140,7 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
           </div>
           <div className="mt-3 flex items-center justify-between">
             <button type="button" onClick={reset} className="typo-cap2 inline-flex items-center gap-1 text-muted transition-colors hover:text-foreground">↻ 새 대화</button>
-            <span className="typo-cap3 text-muted">목업 답변을 표시 중입니다.</span>
+            <span className="typo-cap3 text-muted">그래프 기록을 바탕으로 답변합니다.</span>
           </div>
         </div>
       </div>
