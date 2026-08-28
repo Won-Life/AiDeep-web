@@ -1,12 +1,14 @@
 'use client';
 
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useWorkspaceLayout } from '@/app/workspace/context';
-import AnswerContextMenu from './AnswerContextMenu';
+import AnswerPreviewModal from './AnswerPreviewModal';
 import ChatMessageBubble from './ChatMessageBubble';
-import FestivalAnswerCard from '@/features/festival/FestivalAnswerCard';
-import { ERROR_DISPLAY_MS, useAnswerImageExport } from './export/useAnswerImageExport';
+import {
+  ERROR_DISPLAY_MS,
+  SAVED_DISPLAY_MS,
+  useAnswerImageExport,
+} from './export/useAnswerImageExport';
 import { COPIED_DISPLAY_MS, useAnswerShareLink } from './export/useAnswerShareLink';
 import { PLAYLIST_PROMPT_CARET, PLAYLIST_PROMPT_TEMPLATE, SUGGESTED_QUESTIONS } from './types';
 import { useChat } from './useChat';
@@ -44,40 +46,40 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
   const { messages, status, sendMessage, retry, reset } = useChat({ workspaceId });
   const isEmpty = messages.length === 0 && status !== 'sending';
 
-  // 우클릭한 AI 답변과 메뉴가 뜰 좌표. null이면 메뉴가 닫힌 상태.
-  const [answerMenu, setAnswerMenu] = useState<{ content: string; x: number; y: number } | null>(null);
+  // 우클릭한 AI 답변. null이면 미리보기가 닫힌 상태.
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [exportedAt, setExportedAt] = useState<Date | null>(null);
   const { state: exportState, exportNode, resetState: resetExport } = useAnswerImageExport();
   const { state: shareState, copyLink, resetState: resetShare } = useAnswerShareLink();
 
-  const closeAnswerMenu = () => {
-    setAnswerMenu(null);
+  const closeAnswerPreview = () => {
+    setPreviewContent(null);
     setExportedAt(null);
     resetExport();
     resetShare();
   };
 
-  const openAnswerMenu = (content: string) => (event: ReactMouseEvent<HTMLDivElement>) => {
+  const openAnswerPreview = (content: string) => (event: ReactMouseEvent<HTMLDivElement>) => {
     if (status === 'sending') return;
     event.preventDefault();
-    // 카드는 우클릭 시점에 미리 마운트해둔다 — 저장을 누르자마자 바로 찍을 수 있도록.
+    // 카드에 찍히는 날짜는 우클릭 시점으로 고정한다 — 저장·복사 시각에 따라 달라지지 않도록.
     setExportedAt(new Date());
-    setAnswerMenu({ content, x: event.clientX, y: event.clientY });
+    setPreviewContent(content);
   };
 
+  // 저장·복사 후에도 미리보기는 열어둔다. 둘 다 하고 싶은 경우가 많고, 결과 문구를
+  // 그 자리에서 보여줄 수 있다.
   const runExport = async () => {
     const node = exportCardRef.current;
     if (!node || !exportedAt) return;
     const succeeded = await exportNode(node, exportedAt);
-    if (succeeded) closeAnswerMenu();
-    else window.setTimeout(closeAnswerMenu, ERROR_DISPLAY_MS);
+    window.setTimeout(resetExport, succeeded ? SAVED_DISPLAY_MS : ERROR_DISPLAY_MS);
   };
 
   const runShare = async () => {
-    if (!answerMenu || !exportedAt) return;
-    const succeeded = await copyLink(answerMenu.content, exportedAt);
-    // 성공해도 "복사했어요"를 잠깐 보여준 뒤 닫는다 — 즉시 닫으면 됐는지 알 수 없다.
-    window.setTimeout(closeAnswerMenu, succeeded ? COPIED_DISPLAY_MS : ERROR_DISPLAY_MS);
+    if (previewContent === null || !exportedAt) return;
+    const succeeded = await copyLink(previewContent, exportedAt);
+    window.setTimeout(resetShare, succeeded ? COPIED_DISPLAY_MS : ERROR_DISPLAY_MS);
   };
 
   useEffect(() => {
@@ -152,7 +154,7 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
                   key={message.id}
                   role={message.role}
                   content={message.content}
-                  onContextMenu={message.role === 'assistant' ? openAnswerMenu(message.content) : undefined}
+                  onContextMenu={message.role === 'assistant' ? openAnswerPreview(message.content) : undefined}
                 />
               ))}
               {status === 'sending' && (
@@ -204,29 +206,17 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
         </div>
       </div>
 
-      {answerMenu && (
-        <AnswerContextMenu
-          x={answerMenu.x}
-          y={answerMenu.y}
+      {previewContent !== null && exportedAt && (
+        <AnswerPreviewModal
+          content={previewContent}
+          exportedAt={exportedAt}
           exportState={exportState}
           shareState={shareState}
+          cardRef={exportCardRef}
           onExport={() => void runExport()}
           onShare={() => void runShare()}
-          onClose={closeAnswerMenu}
+          onClose={closeAnswerPreview}
         />
-      )}
-
-      {/* 캡처 전용 카드 — 화면 밖에 두고 사용자에게는 한 순간도 보이지 않는다. */}
-      {answerMenu && exportedAt && createPortal(
-        <div
-          aria-hidden
-          style={{ position: 'fixed', left: -99999, top: 0, pointerEvents: 'none', zIndex: -1 }}
-        >
-          <div ref={exportCardRef}>
-            <FestivalAnswerCard content={answerMenu.content} exportedAt={exportedAt} variant="image" />
-          </div>
-        </div>,
-        document.body,
       )}
     </aside>
   );

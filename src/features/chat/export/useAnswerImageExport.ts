@@ -20,10 +20,13 @@ import { useState } from 'react';
 import { buildExportFilename } from './exportFilename';
 import { buildFontEmbedCss } from './fontEmbedCss';
 
-export type ExportState = 'idle' | 'working' | 'error';
+export type ExportState = 'idle' | 'working' | 'saved' | 'error';
 
-/** 에러 문구를 잠깐 보여준 뒤 메뉴를 닫기까지의 시간. */
+/** 에러 문구를 잠깐 보여준 뒤 idle로 되돌리기까지의 시간. */
 export const ERROR_DISPLAY_MS = 1500;
+
+/** 저장 완료 문구를 보여준 뒤 idle로 되돌리기까지의 시간. */
+export const SAVED_DISPLAY_MS = 1500;
 
 /** 백그라운드 탭에서 rAF가 멈췄을 때 프레임 대기를 대신 풀어주는 시간. */
 const FRAME_FALLBACK_MS = 50;
@@ -86,7 +89,7 @@ export function useAnswerImageExport() {
     try {
       const dataUrl = await withTimeout(capture(node), EXPORT_TIMEOUT_MS);
       triggerDownload(dataUrl, buildExportFilename(exportedAt));
-      setState('idle');
+      setState('saved');
       return true;
     } catch (error) {
       console.error('[chat] 답변 이미지 내보내기 실패', error);

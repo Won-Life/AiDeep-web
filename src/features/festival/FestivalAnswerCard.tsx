@@ -131,6 +131,60 @@ function WaveRibbon({ top }: { top: number }) {
   );
 }
 
+/** 형광펜 강조 — 글자 뒤에 색 띠를 깔아 "회의"만 눈에 먼저 들어오게 한다. */
+function Highlight({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ position: 'relative', display: 'inline-block' }}>
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: -4,
+          right: -4,
+          bottom: 3,
+          height: 17,
+          borderRadius: 4,
+          background: 'linear-gradient(90deg, #8CF2D0 0%, #7EC8FF 100%)',
+        }}
+      />
+      <span style={{ position: 'relative' }}>{children}</span>
+    </span>
+  );
+}
+
+/**
+ * 카드 우측 상단 CTA. `page`는 실제 링크, `image`(PNG)는 클릭할 수 없으므로 같은 모양의 뱃지.
+ * PNG를 본 사람은 아래 aideep.ai.kr 주소를 보고 찾아온다.
+ */
+function TryAideepButton({ isPage }: { isPage: boolean }) {
+  const shape = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '9px 16px',
+    borderRadius: 999,
+    background: 'rgba(255,255,255,0.94)',
+    color: DEEP,
+    fontSize: 12.5,
+    fontWeight: 700,
+    whiteSpace: 'nowrap' as const,
+    boxShadow: '0 6px 16px rgba(4,32,66,0.28)',
+  };
+
+  if (isPage) {
+    return (
+      <a href={AIDEEP_URL} target="_blank" rel="noopener noreferrer" style={{ ...shape, textDecoration: 'none' }}>
+        AiDeep 사용해보기 <span aria-hidden>→</span>
+      </a>
+    );
+  }
+  return (
+    <span style={shape}>
+      AiDeep 사용해보기 <span aria-hidden>→</span>
+    </span>
+  );
+}
+
 interface FestivalAnswerCardProps {
   /** AI 답변 마크다운. 없으면 답변 블록 없이 축제 인사만 보인다(링크가 잘려 해시가 유실된 경우). */
   content?: string;
@@ -168,18 +222,24 @@ export default function FestivalAnswerCard({ content, exportedAt, variant = 'ima
     >
       <Clouds />
       {/* 좁은 폭에서 타이틀이 오른쪽으로 길어지므로, 버블은 글자 밴드를 피해 위·아래로 둔다. */}
-      <Bubble size={92} right="2%" top={44} opacity={0.85} />
+      {/* 우측 상단은 CTA 자리라 큰 버블은 그 아래 빈 영역으로 내린다. */}
+      <Bubble size={72} right="6%" top={112} opacity={0.8} />
       <Bubble size={44} right="24%" top={192} opacity={0.75} />
       <Bubble size={26} right="86%" top={205} opacity={0.65} />
       <WaveRibbon top={waveTop} />
 
       <div style={{ position: 'relative', padding: '34px 30px 30px' }}>
-        <p style={{ margin: 0, fontSize: 12.5, letterSpacing: '0.02em', color: 'rgba(255,255,255,0.82)' }}>
-          AiDeep과 함께 기억하는
-        </p>
-        <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 700, textShadow: '0 1px 3px rgba(4,32,66,0.35)' }}>
-          {formatCardDate(exportedAt)}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <p style={{ margin: 0, fontSize: 12.5, letterSpacing: '0.02em', color: 'rgba(255,255,255,0.82)' }}>
+              AiDeep과 함께 기억하는
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 700, textShadow: '0 1px 3px rgba(4,32,66,0.35)' }}>
+              {formatCardDate(exportedAt)}
+            </p>
+          </div>
+          <TryAideepButton isPage={isPage} />
+        </div>
 
         <div style={{ marginTop: 18 }}>
           <p style={{ margin: 0, fontSize: 22, fontWeight: 700, lineHeight: '29px', letterSpacing: '-0.01em', textShadow: '0 2px 6px rgba(4,32,66,0.35)' }}>
@@ -240,15 +300,14 @@ export default function FestivalAnswerCard({ content, exportedAt, variant = 'ima
           <p style={{ margin: 0, fontSize: 13, lineHeight: '21px', color: '#2E6C9E' }}>
             지치는 일상 속, 힐링되는 하루 즐거우셨나요?
           </p>
-          <p style={{ margin: '8px 0 0', fontSize: 21, fontWeight: 800, lineHeight: '30px', letterSpacing: '-0.02em', color: '#0B3E70' }}>
-            이제 그 일상의 지침도
-            <br />
-            저희가 덜어드릴게요
+          <p style={{ margin: '6px 0 0', fontSize: 14, lineHeight: '22px', color: '#2E6C9E' }}>
+            이제 그 일상의 지침도 저희가 덜어드릴게요.
           </p>
-          <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: '22px', color: '#1A4E7A' }}>
-            우리가 가장 많이 하는 대화, 회의.
-            <br />
-            AiDeep이 대신 정리해드립니다.
+          <p style={{ margin: '16px 0 0', fontSize: 15, lineHeight: '24px', color: '#1A4E7A' }}>
+            우리가 가장 많이 하는 대화,
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 30, fontWeight: 800, lineHeight: '40px', letterSpacing: '-0.02em', color: '#0B3E70' }}>
+            <Highlight>회의</Highlight>는 AiDeep이 정리합니다
           </p>
         </div>
 
@@ -260,44 +319,7 @@ export default function FestivalAnswerCard({ content, exportedAt, variant = 'ima
           </p>
         </div>
 
-        <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          {isPage ? (
-            <a
-              href={AIDEEP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '12px 20px',
-                borderRadius: 999,
-                background: `linear-gradient(135deg, ${DEEP} 0%, #1E8ACF 100%)`,
-                color: '#FFFFFF',
-                fontSize: 14,
-                fontWeight: 700,
-                textDecoration: 'none',
-                boxShadow: '0 8px 18px rgba(6,44,92,0.28)',
-              }}
-            >
-              AiDeep 사용해보기 <span aria-hidden>→</span>
-            </a>
-          ) : (
-            <span
-              style={{
-                display: 'inline-block',
-                padding: '10px 18px',
-                borderRadius: 999,
-                background: `linear-gradient(135deg, ${DEEP} 0%, #1E8ACF 100%)`,
-                color: '#FFFFFF',
-                fontSize: 13,
-                fontWeight: 700,
-                boxShadow: '0 8px 18px rgba(6,44,92,0.28)',
-              }}
-            >
-              ✦ AiDeep 사용해보기
-            </span>
-          )}
+        <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 11.5, fontWeight: 500, color: '#5B8FB9' }}>aideep.ai.kr</span>
         </div>
       </div>
