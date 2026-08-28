@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useWorkspaceLayout } from '@/app/workspace/context';
-import { SUGGESTED_QUESTIONS } from './types';
+import { PLAYLIST_PROMPT_CARET, PLAYLIST_PROMPT_TEMPLATE, SUGGESTED_QUESTIONS } from './types';
 import { useChat } from './useChat';
 
 // 채팅 버블 안에서만 쓰는 축소 스타일 — 문서 전체용 typography 프리셋 대신
@@ -92,6 +92,18 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, status]);
 
+  // 템플릿을 입력란에 채우고 첫 빈칸으로 커서를 옮긴다(전송은 사용자가 직접).
+  const fillPlaylistPrompt = () => {
+    if (status === 'sending') return;
+    setInput(PLAYLIST_PROMPT_TEMPLATE);
+    requestAnimationFrame(() => {
+      const textarea = inputRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(PLAYLIST_PROMPT_CARET, PLAYLIST_PROMPT_CARET);
+    });
+  };
+
   const submit = () => {
     if (!input.trim() || status === 'sending') return;
     void sendMessage(input);
@@ -155,6 +167,16 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
         </div>
 
         <div className="mt-4 border-t border-border pt-3">
+          <div className="mb-2 flex">
+            <button
+              type="button"
+              onClick={fillPlaylistPrompt}
+              disabled={status === 'sending'}
+              className="inline-flex items-center gap-1 rounded-full bg-sub-purple px-3 py-1.5 text-[12px] font-medium text-text-purple transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              🎧 플리 추천받기
+            </button>
+          </div>
           <div className="flex items-end gap-2 rounded-xl border border-border bg-background p-2 focus-within:border-gray-500">
             <textarea
               ref={inputRef}
