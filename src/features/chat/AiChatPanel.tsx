@@ -1,37 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useWorkspaceLayout } from '@/app/workspace/context';
+import AnswerContextMenu from './AnswerContextMenu';
+import ChatMessageBubble from './ChatMessageBubble';
+import FestivalAnswerCard from '@/features/festival/FestivalAnswerCard';
+import { ERROR_DISPLAY_MS, useAnswerImageExport } from './export/useAnswerImageExport';
+import { COPIED_DISPLAY_MS, useAnswerShareLink } from './export/useAnswerShareLink';
 import { PLAYLIST_PROMPT_CARET, PLAYLIST_PROMPT_TEMPLATE, SUGGESTED_QUESTIONS } from './types';
 import { useChat } from './useChat';
-
-// 채팅 버블 안에서만 쓰는 축소 스타일 — 문서 전체용 typography 프리셋 대신
-// 13px 버블 톤(margin 0, 좁은 gap)에 맞춘 최소 오버라이드.
-const MARKDOWN_COMPONENTS: Components = {
-  p: ({ children }) => <p className="[&:not(:first-child)]:mt-2">{children}</p>,
-  ul: ({ children }) => <ul className="my-1 list-disc space-y-0.5 pl-4">{children}</ul>,
-  ol: ({ children }) => <ol className="my-1 list-decimal space-y-0.5 pl-4">{children}</ol>,
-  li: ({ children }) => <li>{children}</li>,
-  a: ({ children, href }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-main underline underline-offset-2 hover:opacity-80">
-      {children}
-    </a>
-  ),
-  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-  blockquote: ({ children }) => <blockquote className="my-1 border-l-2 border-border pl-2 text-muted">{children}</blockquote>,
-  hr: () => <hr className="my-2 border-border" />,
-  pre: ({ children }) => <pre className="my-1 overflow-x-auto rounded-lg bg-surface-hover p-2 text-[12px] leading-4">{children}</pre>,
-  code: ({ className, children }) => {
-    const isBlock = /language-/.test(className ?? '');
-    if (isBlock) return <code className={`font-mono ${className ?? ''}`}>{children}</code>;
-    return <code className="rounded bg-surface-hover px-1 py-0.5 font-mono text-[12px]">{children}</code>;
-  },
-  table: ({ children }) => <div className="my-1 overflow-x-auto"><table className="border-collapse text-[12px]">{children}</table></div>,
-  th: ({ children }) => <th className="border border-border px-2 py-1 text-left">{children}</th>,
-  td: ({ children }) => <td className="border border-border px-2 py-1">{children}</td>,
-};
 
 export const AI_CHAT_PANEL_WIDTH = 416;
 // 닫힌 상태에서는 패널 본문을 완전히 화면 밖으로 보내고, 탭만 살짝 남긴다.
@@ -57,32 +35,50 @@ function SendIcon() {
   );
 }
 
-function ChatMessageBubble({ role, content }: { role: 'assistant' | 'user'; content: string }) {
-  const isUser = role === 'user';
-  return (
-    <div className={isUser ? 'flex justify-end' : 'flex justify-start'}>
-      <div className={`min-w-0 break-words ${isUser
-        ? 'max-w-[85%] rounded-2xl rounded-br-md bg-main px-3 py-2 text-[13px] leading-5 text-white'
-        : 'max-w-[85%] rounded-2xl rounded-bl-md border border-border bg-surface px-3 py-2 text-[13px] leading-5 text-foreground'}`}>
-        {isUser ? (
-          content
-        ) : (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
-            {content}
-          </ReactMarkdown>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const exportCardRef = useRef<HTMLDivElement>(null);
   const { workspaceId } = useWorkspaceLayout();
   const { messages, status, sendMessage, retry, reset } = useChat({ workspaceId });
   const isEmpty = messages.length === 0 && status !== 'sending';
+
+  // 우클릭한 AI 답변과 메뉴가 뜰 좌표. null이면 메뉴가 닫힌 상태.
+  const [answerMenu, setAnswerMenu] = useState<{ content: string; x: number; y: number } | null>(null);
+  const [exportedAt, setExportedAt] = useState<Date | null>(null);
+  const { state: exportState, exportNode, resetState: resetExport } = useAnswerImageExport();
+  const { state: shareState, copyLink, resetState: resetShare } = useAnswerShareLink();
+
+  const closeAnswerMenu = () => {
+    setAnswerMenu(null);
+    setExportedAt(null);
+    resetExport();
+    resetShare();
+  };
+
+  const openAnswerMenu = (content: string) => (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (status === 'sending') return;
+    event.preventDefault();
+    // 카드는 우클릭 시점에 미리 마운트해둔다 — 저장을 누르자마자 바로 찍을 수 있도록.
+    setExportedAt(new Date());
+    setAnswerMenu({ content, x: event.clientX, y: event.clientY });
+  };
+
+  const runExport = async () => {
+    const node = exportCardRef.current;
+    if (!node || !exportedAt) return;
+    const succeeded = await exportNode(node, exportedAt);
+    if (succeeded) closeAnswerMenu();
+    else window.setTimeout(closeAnswerMenu, ERROR_DISPLAY_MS);
+  };
+
+  const runShare = async () => {
+    if (!answerMenu || !exportedAt) return;
+    const succeeded = await copyLink(answerMenu.content, exportedAt);
+    // 성공해도 "복사했어요"를 잠깐 보여준 뒤 닫는다 — 즉시 닫으면 됐는지 알 수 없다.
+    window.setTimeout(closeAnswerMenu, succeeded ? COPIED_DISPLAY_MS : ERROR_DISPLAY_MS);
+  };
 
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
@@ -151,7 +147,14 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
             </section>
           ) : (
             <section className="flex flex-col gap-3">
-              {messages.map((message) => <ChatMessageBubble key={message.id} role={message.role} content={message.content} />)}
+              {messages.map((message) => (
+                <ChatMessageBubble
+                  key={message.id}
+                  role={message.role}
+                  content={message.content}
+                  onContextMenu={message.role === 'assistant' ? openAnswerMenu(message.content) : undefined}
+                />
+              ))}
               {status === 'sending' && (
                 <div className="flex justify-start"><div className="rounded-2xl rounded-bl-md border border-border bg-surface px-3 py-2 text-[13px] text-muted">AiDeep이 답변을 정리하고 있어요...</div></div>
               )}
@@ -200,6 +203,31 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
           </div>
         </div>
       </div>
+
+      {answerMenu && (
+        <AnswerContextMenu
+          x={answerMenu.x}
+          y={answerMenu.y}
+          exportState={exportState}
+          shareState={shareState}
+          onExport={() => void runExport()}
+          onShare={() => void runShare()}
+          onClose={closeAnswerMenu}
+        />
+      )}
+
+      {/* 캡처 전용 카드 — 화면 밖에 두고 사용자에게는 한 순간도 보이지 않는다. */}
+      {answerMenu && exportedAt && createPortal(
+        <div
+          aria-hidden
+          style={{ position: 'fixed', left: -99999, top: 0, pointerEvents: 'none', zIndex: -1 }}
+        >
+          <div ref={exportCardRef}>
+            <FestivalAnswerCard content={answerMenu.content} exportedAt={exportedAt} variant="image" />
+          </div>
+        </div>,
+        document.body,
+      )}
     </aside>
   );
 }
