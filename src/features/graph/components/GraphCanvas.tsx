@@ -23,6 +23,7 @@ import {
   useReactFlow,
   ReactFlowProvider,
   useNodesInitialized,
+  useStore,
   type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -851,6 +852,47 @@ function FirstPaintSignal({
   return null;
 }
 
+// 초기 뷰포트 — 저장된 viewport가 없을 때(새 탭·QR로 처음 들어온 방문자) 메인 노드(PROJECT)를
+// 화면 정중앙에 놓는다. fitView는 그래프 전체 bbox의 중심을 잡으므로 가지가 한쪽으로 치우친
+// 그래프에서는 메인 노드가 중앙에서 밀린다.
+// 실행 시점은 노드 측정 직후 1회 — 그때는 아직 로딩 오버레이가 덮고 있어(FirstPaintSignal이
+// rAF 2회 뒤 해제) 뷰포트가 잡히는 과정이 화면에 보이지 않는다.
+// 메인 노드가 없는 워크스페이스(단독 노드만 있거나 PROJECT 미생성)는 기존대로 fitView.
+function InitialViewport({ mainNodeId }: { mainNodeId: string | null }) {
+  const nodesInitialized = useNodesInitialized();
+  // 중앙 정렬에 필요한 건 메인 노드 하나의 측정값뿐이다. useNodesInitialized(전 노드 측정 완료)만
+  // 기다리면 측정이 끝나지 않는 노드가 하나라도 있는 워크스페이스에서 초기 뷰포트가 영영 안 잡힌다
+  // (FirstPaintSignal이 같은 이유로 로딩 오버레이를 못 걷는 워크스페이스가 실제로 있다).
+  const mainNodeMeasured = useStore((s) =>
+    mainNodeId
+      ? (s.nodeLookup.get(mainNodeId)?.measured?.width ?? 0) > 0
+      : false,
+  );
+  const { getNode, setCenter, fitView } = useReactFlow();
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (doneRef.current) return;
+    if (!mainNodeMeasured && !nodesInitialized) return;
+    doneRef.current = true;
+
+    const node = mainNodeId ? getNode(mainNodeId) : null;
+    if (!node) {
+      fitView();
+      return;
+    }
+
+    // 칩 버튼 포커스(setCenter, zoom 1)와 같은 기준 — 노드 중심을 화면 중심으로.
+    const width = node.measured?.width ?? node.width ?? NODE_WIDTH;
+    const height = node.measured?.height ?? node.height ?? NODE_HEIGHT;
+    setCenter(node.position.x + width / 2, node.position.y + height / 2, {
+      zoom: 1,
+    });
+  }, [nodesInitialized, mainNodeMeasured, mainNodeId, getNode, setCenter, fitView]);
+
+  return null;
+}
+
 export function convertToReactFlow(
   graphNodes: NodeDto[],
   graphEdges: EdgeDto[],
@@ -921,6 +963,12 @@ function GraphCanvasInner({
   );
 
   const { screenToFlowPosition, setCenter } = useReactFlow();
+
+  // 첫 진입 시 화면 중심이 될 메인 노드(PROJECT) — InitialViewport가 사용한다.
+  const mainNodeId = useMemo(
+    () => nodes.find((n) => n.data?.isMain)?.id ?? null,
+    [nodes],
+  );
 
   // ─── Workspace Awareness ─────────────────────────────────────────
   const cursorColor = getCursorColor(currentUserId);
@@ -3236,14 +3284,13 @@ function GraphCanvasInner({
         onDragLeave={onDragLeave}
         isValidConnection={isValidConnection}
         onViewportChange={handleViewportChange}
-        {...(savedViewport
-          ? { defaultViewport: savedViewport }
-          : { fitView: true })}
+        {...(savedViewport ? { defaultViewport: savedViewport } : {})}
         minZoom={0.25}
         zoomOnDoubleClick={false}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
       />
+      {!savedViewport && <InitialViewport mainNodeId={mainNodeId} />}
       {onFirstPaint && (
         <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
       )}

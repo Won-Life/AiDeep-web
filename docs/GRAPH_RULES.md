@@ -233,7 +233,8 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 - [x] 노드 클릭 → 에디터 패널 열기/포커스 이동, 여러 패널 동시 오픈 가능, "에디터 모두 닫기" 버튼
 - [x] 노드 우클릭 → 컨텍스트 메뉴 (노드 타입 토글 · 삭제) — 노드 타입(일반↔프로젝트) 토글은 송신·수신 모두 구현. **송신**: `handleToggleNodeType`이 낙관적으로 로컬 반영 후 `updateNodeContent(...{ nodeType })` PATCH로 저장하고, 실패 시 토글 전 값으로 롤백(`isMain`은 색·연결 방향 등 그래프 규칙의 입력이라 무롤백인 색/제목 PATCH와 달리 되돌린다). **수신**: 서버 `updateNodeMeta` PATCH가 nodeType을 WS `NODE_UPDATE(patch.nodeType)`로 broadcast하고, 클라 수신 핸들러(`useWorkspaceWS` `handleNodeUpdate`)가 `isMain`을 파생 반영
 - [x] 칩 버튼 클릭 → 해당 그래프가 화면 중심으로 오며 줌 (`setCenter`, zoom 1, 800ms)
-- [x] 뷰포트(위치·줌) sessionStorage 저장(300ms debounce) → 재방문 시 복원, 저장값 없으면 fitView
+- [x] 뷰포트(위치·줌) sessionStorage 저장(300ms debounce) → 재방문 시 복원
+- [x] 저장값이 없는 첫 진입(새 탭·QR 방문자)은 메인 노드(PROJECT)를 화면 정중앙에 배치 (`InitialViewport`, `setCenter` zoom 1, 애니메이션 없음). fitView는 그래프 전체 bbox 중심을 잡아 가지가 한쪽으로 치우치면 메인 노드가 밀리므로 쓰지 않는다. 메인 노드가 없는 워크스페이스만 fitView 폴백. `useNodesInitialized` 시점에 1회 실행 — 아직 로딩 오버레이가 덮고 있어 뷰포트가 잡히는 과정이 보이지 않는다
 - [x] 커서 공유: 본인 커서는 브라우저 기본, 상대 커서는 WS 수신 위치를 오버레이로 렌더링 (30ms throttle emit)
 - [x] 리소스 드래그 이동 중: 리소스 리스트에서 제거 + 흐려진 채 마우스 따라 이동
 - [x] Rich Text Editor: 이미지(pre-signed url)·파일 업로드, 마크다운 복사 지원, DB에 json/md 이중 저장
