@@ -1,13 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Handle,
-  Position,
-  type NodeProps,
-  useUpdateNodeInternals,
-} from '@xyflow/react';
+import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
 import { useWorkspaceLayout } from '@/app/workspace/context';
@@ -61,7 +56,6 @@ export type NodeView = {
 
 export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const router = useRouter();
-  const updateNodeInternals = useUpdateNodeInternals();
   const nodeData = data as NodeView;
   const isMain = nodeData.isMain ?? false;
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
@@ -92,13 +86,6 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
 
   const label = nodeData.title || '';
   const isEmpty = label === '';
-
-  // 핸들 구성이 바뀌면 React Flow 내부 핸들 bounds를 즉시 갱신
-  useEffect(() => {
-    if (id) {
-      updateNodeInternals(id);
-    }
-  }, [id, sideRelativeToParent, hasParent, updateNodeInternals]);
 
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
