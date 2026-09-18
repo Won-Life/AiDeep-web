@@ -21,6 +21,7 @@ import {
   ConnectionMode,
   ConnectionLineType,
   useReactFlow,
+  useUpdateNodeInternals,
   ReactFlowProvider,
   useNodesInitialized,
   useStore,
@@ -1033,6 +1034,26 @@ function GraphCanvasInner({
   useEffect(() => {
     nodesRef.current = nodes;
   }, [nodes]);
+
+  // 핸들 구성(handleSide·hasParent)이 바뀐 노드가 있으면 React Flow 내부 핸들 bounds를
+  // 갱신한다. 노드마다 개별 useEffect에서 updateNodeInternals(id)를 호출하던 예전 방식은
+  // 노드 하나당 requestAnimationFrame을 하나씩 예약해서(라이브러리 내부 구현), 노드 수만큼
+  // 렌더→커밋→이펙트 사이클이 애니메이션 프레임 단위로 직렬로 반복됐다 — 대형 워크스페이스
+  // 마운트 시 수십 초 메인 스레드 블로킹의 원인이었다. 시그니처가 바뀐 경우에만 전체 노드를
+  // 한 번에 배치 호출해 사이클을 1회로 줄인다.
+  const updateNodeInternals = useUpdateNodeInternals();
+  const handleSignatureRef = useRef<string>('');
+  useEffect(() => {
+    const signature = nodes
+      .map((n) => `${n.id}:${n.data?.handleSide}:${n.data?.hasParent}`)
+      .join('|');
+    if (signature === handleSignatureRef.current) return;
+    handleSignatureRef.current = signature;
+    if (nodes.length > 0) {
+      updateNodeInternals(nodes.map((n) => n.id));
+    }
+  }, [nodes, updateNodeInternals]);
+
   const contentSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
