@@ -1,0 +1,10 @@
+.meeting-bot-ui {
+  --meeting-primary: #5678f4;
+  --meeting-primary-light: #e9eeff;
+  --meeting-primary-border: #92aaff;
+  --meeting-accent: #f279c1;
+  --meeting-ink: #202637;
+  --meeting-muted: #737d91;
+  --meeting-surface: #ffffff;
+  --meeting-soft-surface: #f4f6fb;
+}

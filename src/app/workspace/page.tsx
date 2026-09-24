@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
 import FestivalPopup from "@/features/festival/components/FestivalPopup";
+import MeetingBotWidget from "@/features/meeting-bot/MeetingBotWidget";
 import { useFestivalPopup } from "@/features/festival/useFestivalPopup";
 import WorkspaceLoading from "@/components/ui/WorkspaceLoading";
 import { useWorkspaceLayout } from "./context";
@@ -69,6 +70,7 @@ export default function WorkspacePage() {
         onNodeVisited={festivalPopup.handleNodeVisited}
       />
       <FestivalPopup isOpen={festivalPopup.isOpen} onClose={festivalPopup.close} />
+      <MeetingBotWidget />
       {!overlayGone && (
         <div
           className={`absolute inset-0 z-50 transition-opacity duration-300 ${
