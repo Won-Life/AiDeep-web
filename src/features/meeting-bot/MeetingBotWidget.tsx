@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { createPortal } from "react-dom";
 import MeetingBotStatusBadge, { type MeetingBotStatus } from "./MeetingBotStatusBadge";
 import MeetingBotToast, { type MeetingBotToastKind } from "./MeetingBotToast";
+import { createMeetingBotRequest, getMeetingPlatformFromUrl, type MeetingBotRequest } from "./meetingBotRequest";
 import "./meeting-bot.css";
 
 /*
@@ -17,15 +18,6 @@ import "./meeting-bot.css";
  */
 
 const LOGO_SRC = "/images/meeting-bot/onnode-logo-black.svg";
-
-function isMeetingUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && Boolean(url.hostname);
-  } catch {
-    return false;
-  }
-}
 
 function keepTabInsideDialog(event: KeyboardEvent, dialog: HTMLElement | null) {
   if (event.key !== "Tab" || !dialog) return;
@@ -81,8 +73,8 @@ function MeetingBotAddModal({ onClose, onRequest }: {
     event.preventDefault();
     if (isSubmitting) return;
     const value = meetingUrl.trim();
-    if (!isMeetingUrl(value)) {
-      setError("https://로 시작하는 회의 링크를 입력해주세요.");
+    if (!getMeetingPlatformFromUrl(value)) {
+      setError("Zoom 또는 Google Meet의 https:// 회의 링크를 입력해주세요.");
       inputRef.current?.focus();
       return;
     }
@@ -148,9 +140,10 @@ function MeetingBotAddModal({ onClose, onRequest }: {
   );
 }
 
-export default function MeetingBotWidget({ status = null, requestMeetingBot }: {
+export default function MeetingBotWidget({ workspaceId, status = null, requestMeetingBot }: {
+  workspaceId: string;
   status?: MeetingBotStatus | null;
-  requestMeetingBot?: (meetingUrl: string) => Promise<void>;
+  requestMeetingBot?: (request: MeetingBotRequest) => Promise<void>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [toast, setToast] = useState<MeetingBotToastKind | null>(null);
@@ -164,14 +157,15 @@ export default function MeetingBotWidget({ status = null, requestMeetingBot }: {
   const closeModal = useCallback(() => setIsOpen(false), []);
   const handleRequest = useCallback(async (meetingUrl: string) => {
     try {
-      await requestMeetingBot?.(meetingUrl);
+      const request = createMeetingBotRequest(meetingUrl, workspaceId);
+      await requestMeetingBot?.(request);
       setToast("success");
       return true;
     } catch {
       setToast("error");
       return false;
     }
-  }, [requestMeetingBot]);
+  }, [requestMeetingBot, workspaceId]);
 
   return (
     <div className="meeting-bot-ui">

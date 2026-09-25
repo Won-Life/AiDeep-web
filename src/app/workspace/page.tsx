@@ -70,7 +70,7 @@ export default function WorkspacePage() {
         onNodeVisited={festivalPopup.handleNodeVisited}
       />
       <FestivalPopup isOpen={festivalPopup.isOpen} onClose={festivalPopup.close} />
-      <MeetingBotWidget />
+      <MeetingBotWidget workspaceId={workspaceId} />
       {!overlayGone && (
         <div
           className={`absolute inset-0 z-50 transition-opacity duration-300 ${
