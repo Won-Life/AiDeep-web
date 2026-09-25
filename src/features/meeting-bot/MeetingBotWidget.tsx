@@ -1,8 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import MeetingBotStatusBadge, { type MeetingBotStatus } from "./MeetingBotStatusBadge";
+import MeetingBotToast, { type MeetingBotToastKind } from "./MeetingBotToast";
 import "./meeting-bot.css";
 
 /*
@@ -10,7 +12,7 @@ import "./meeting-bot.css";
  * - Problem      : 주력 기능인 회의 봇을 그래프에서 바로 발견하고 회의 링크 하나로 요청하는 화면이 필요하다.
  * - Why          : 그래프 위 버튼과 집중형 모달을 도메인 컴포넌트로 묶는다.
  * - Alternatives : 도구 메뉴 안에만 두면 주 진입점이 숨고, 별도 페이지는 그래프 맥락을 잃는다.
- * - Trade-offs   : 버튼·모달·토스트의 표시 상태는 이 도메인 컴포넌트 안에서 관리한다.
+ * - Trade-offs   : 요청 알림은 내부 상태로 관리하고, 지속되는 봇 상태는 외부에서 전달받는다.
  * - Edge Case    : 무효한 URL, Escape/배경 닫기, 다른 모달 위 겹침, 화면이 좁은 경우를 처리한다.
  */
 
@@ -48,10 +50,11 @@ function keepTabInsideDialog(event: KeyboardEvent, dialog: HTMLElement | null) {
 
 function MeetingBotAddModal({ onClose, onRequest }: {
   onClose: () => void;
-  onRequest: (meetingUrl: string) => void;
+  onRequest: (meetingUrl: string) => Promise<boolean>;
 }) {
   const [meetingUrl, setMeetingUrl] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
 
@@ -74,15 +77,19 @@ function MeetingBotAddModal({ onClose, onRequest }: {
     };
   }, [onClose]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
     const value = meetingUrl.trim();
     if (!isMeetingUrl(value)) {
       setError("https://로 시작하는 회의 링크를 입력해주세요.");
       inputRef.current?.focus();
       return;
     }
-    onRequest(value);
+    setIsSubmitting(true);
+    const accepted = await onRequest(value);
+    setIsSubmitting(false);
+    if (accepted) onClose();
   }
 
   return createPortal(
@@ -118,6 +125,7 @@ function MeetingBotAddModal({ onClose, onRequest }: {
             type="url"
             inputMode="url"
             autoComplete="url"
+            disabled={isSubmitting}
             value={meetingUrl}
             onChange={(event) => { setMeetingUrl(event.target.value); setError(""); }}
             aria-invalid={Boolean(error)}
@@ -128,9 +136,10 @@ function MeetingBotAddModal({ onClose, onRequest }: {
           {error ? <p id="meeting-bot-url-error" role="alert" className="mt-2 text-sm text-red-600">{error}</p> : null}
           <button
             type="submit"
-            className="mt-6 h-14 w-full rounded-xl bg-[var(--meeting-primary)] text-base font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)]"
+            disabled={isSubmitting}
+            className="mt-6 h-14 w-full rounded-xl bg-[var(--meeting-primary)] text-base font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)] disabled:cursor-wait disabled:opacity-60"
           >
-            봇 참여 요청
+            {isSubmitting ? "요청 중..." : "봇 참여 요청"}
           </button>
         </form>
       </section>
@@ -139,48 +148,48 @@ function MeetingBotAddModal({ onClose, onRequest }: {
   );
 }
 
-export default function MeetingBotWidget() {
+export default function MeetingBotWidget({ status = null, requestMeetingBot }: {
+  status?: MeetingBotStatus | null;
+  requestMeetingBot?: (meetingUrl: string) => Promise<void>;
+}) {
   const [isOpen, setIsOpen] = useState(false);
-  const [requestedUrl, setRequestedUrl] = useState<string | null>(null);
+  const [toast, setToast] = useState<MeetingBotToastKind | null>(null);
 
   useEffect(() => {
-    if (!requestedUrl) return;
-    const timer = window.setTimeout(() => setRequestedUrl(null), 4000);
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 4000);
     return () => window.clearTimeout(timer);
-  }, [requestedUrl]);
+  }, [toast]);
+
+  const closeModal = useCallback(() => setIsOpen(false), []);
+  const handleRequest = useCallback(async (meetingUrl: string) => {
+    try {
+      await requestMeetingBot?.(meetingUrl);
+      setToast("success");
+      return true;
+    } catch {
+      setToast("error");
+      return false;
+    }
+  }, [requestMeetingBot]);
 
   return (
     <div className="meeting-bot-ui">
       <div className="pointer-events-none absolute bottom-20 right-5 z-30 flex flex-col items-end gap-3 sm:right-8">
+        {status ? <MeetingBotStatusBadge status={status} /> : null}
         <button
           type="button"
-          onClick={() => { setRequestedUrl(null); setIsOpen(true); }}
+          onClick={() => { setToast(null); setIsOpen(true); }}
           className="pointer-events-auto rounded-[13px] bg-[var(--meeting-primary)] px-5 py-3 text-sm font-bold text-white shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)] sm:text-base"
         >
           회의 봇 추가
         </button>
       </div>
-      {requestedUrl ? (
-        <div
-          role="status"
-          className="fixed bottom-36 right-5 z-[70] flex max-w-[min(360px,calc(100vw-40px))] items-center gap-3 rounded-xl border border-[#d5e9dc] bg-white px-4 py-3 text-sm text-[var(--meeting-ink)] shadow-lg sm:right-8"
-        >
-          <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#e7f5eb] text-[#21804a]">✓</span>
-          <span>회의 봇 참여 요청을 접수했어요.</span>
-          <button
-            type="button"
-            onClick={() => setRequestedUrl(null)}
-            aria-label="알림 닫기"
-            className="ml-auto shrink-0 rounded p-1 text-[var(--meeting-muted)] hover:bg-[var(--meeting-soft-surface)]"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
+      {toast ? <MeetingBotToast kind={toast} onClose={() => setToast(null)} /> : null}
       {isOpen ? (
         <MeetingBotAddModal
-          onClose={() => setIsOpen(false)}
-          onRequest={(meetingUrl) => { setIsOpen(false); setRequestedUrl(meetingUrl); }}
+          onClose={closeModal}
+          onRequest={handleRequest}
         />
       ) : null}
     </div>
