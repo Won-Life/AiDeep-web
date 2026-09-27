@@ -33,7 +33,6 @@ export function isOverlapping(a: Node, b: Node): boolean {
   );
 }
 
-
 // AABB 테두리 간 최단 거리 기반으로 가장 가까운 유효한 노드 찾기
 export function findClosestNodeInRange(
   draggedNode: Node,

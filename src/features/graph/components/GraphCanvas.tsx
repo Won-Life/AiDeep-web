@@ -46,7 +46,6 @@ import {
 } from '../api/nodes';
 import { emitLivePosition, emitCursorMove } from '@/api/ws';
 import { createEdge, deleteEdge, updateEdge } from '../api/edges';
-import type { EdgeDto, NodeDto } from '../types';
 import { rectCollide } from '../layout/rectCollide';
 import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
 import {
@@ -89,14 +88,12 @@ import {
   resolveHandleId,
   buildEdgePresentation,
   mirrorSubtree,
-  initializeHandleSides,
 } from '../logic/placement';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
 import { getCursorColor } from '@/utils/cursorColor';
 import CursorOverlay from './CursorOverlay';
 import { MdBody, type WorkspaceRole } from '@/api/types';
-
 
 /*
  * CONTEXT
@@ -236,7 +233,6 @@ async function saveDragPositions(
   }
 }
 
-
 // D3 force simulation용 노드 타입
 interface D3Node extends d3.SimulationNodeDatum {
   id: string;
@@ -325,43 +321,6 @@ function InitialViewport({ mainNodeId }: { mainNodeId: string | null }) {
   }, [nodesInitialized, mainNodeMeasured, mainNodeId, getNode, setCenter, fitView]);
 
   return null;
-}
-
-export function convertToReactFlow(
-  graphNodes: NodeDto[],
-  graphEdges: EdgeDto[],
-): { nodes: Node[]; edges: Edge[] } {
-  const nodes: Node[] = graphNodes.map((n) => ({
-    id: n.node_id,
-    type: 'textUpdater',
-    position: { x: n.position_x, y: n.position_y },
-    data: {
-      title: n.title,
-      color: n.content?.color ?? DEFAULT_NODE_COLOR.bg,
-      textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
-      isMain: n.node_type === 'PROJECT',
-      nodeType: n.node_type,
-      depth: n.depth ?? 0,
-    },
-  }));
-
-  const rawEdges: Edge[] = graphEdges.map((e) => ({
-    id: e.edge_id,
-    source: e.source_id,
-    target: e.target_id,
-    type: 'branch',
-    sourceHandle: e.source_handle,
-    targetHandle: e.target_handle,
-    data: {},
-  }));
-
-  const nodesWithHandleSide = initializeHandleSides(nodes, rawEdges);
-
-  const edges: Edge[] = rawEdges.map((edge) =>
-    buildEdgePresentation(edge, nodesWithHandleSide, rawEdges),
-  );
-
-  return { nodes: nodesWithHandleSide, edges };
 }
 
 function GraphCanvasInner({
