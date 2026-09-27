@@ -30,8 +30,8 @@ src/
 │   │   ├── components/          # GraphCanvas, CursorOverlay
 │   │   ├── constants/colors.ts  # 노드 파스텔 팔레트 9색 + 랜덤 색상 유틸
 │   │   ├── layout/rectCollide.ts # D3 AABB 충돌 감지 커스텀 force
-│   │   ├── types.ts             # NodeDto, EdgeDto
-│   │   └── utils/graphUtils.ts  # getDescendantIds 등 그래프 순회 유틸
+│   │   ├── logic/               # 순수 그래프 로직 — traversal(순회), colors(색 전파), connection(연결 규칙), placement(배치·핸들 방향)
+│   │   └── types.ts             # NodeDto, EdgeDto
 │   ├── editor/
 │   │   ├── editor.tsx           # Lexical 에디터 설정 (플러그인 조합)
 │   │   ├── NotionEditor.tsx     # 에디터 컴포넌트 + CollaborationPlugin + ToolbarPlugin

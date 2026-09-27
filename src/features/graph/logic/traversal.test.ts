@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Edge } from '@xyflow/react'
-import { getDescendantIds, getSameColorDescendantIds } from './graphUtils'
+import { getDescendantIds, getSameColorDescendantIds } from './traversal'
 
 function e(source: string, target: string): Edge {
   return { id: `${source}->${target}`, source, target } as Edge

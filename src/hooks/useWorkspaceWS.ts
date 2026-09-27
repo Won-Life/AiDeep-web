@@ -14,7 +14,7 @@ import type {
 import type { Node, Edge } from '@xyflow/react';
 import type { Dispatch, SetStateAction, RefObject } from 'react';
 import { DEFAULT_NODE_COLOR } from '@/features/graph/constants/colors';
-import { getDescendantIds } from '@/features/graph/utils/graphUtils';
+import { getDescendantIds } from '@/features/graph/logic/traversal';
 
 const TRANSITION_DURATION = 300;
 const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;

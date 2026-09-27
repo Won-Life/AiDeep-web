@@ -1,4 +1,4 @@
-import type { Edge } from "@xyflow/react";
+import type { Node, Edge } from "@xyflow/react";
 
 export function getDescendantIds(
   nodeId: string,
@@ -62,4 +62,36 @@ export function getSameColorDescendantIds(
   }
 
   return descendants;
+}
+
+export function getParentId(nodeId: string, edges: Edge[]): string | null {
+  const incoming = edges.find((edge) => edge.target === nodeId);
+  return incoming?.source ?? null;
+}
+
+export function getAncestorIds(nodeId: string, edges: Edge[]): Set<string> {
+  const ancestors = new Set<string>();
+  let current = getParentId(nodeId, edges);
+  while (current) {
+    ancestors.add(current);
+    current = getParentId(current, edges);
+  }
+  return ancestors;
+}
+
+export function getMainNodeForSubtree(
+  nodeId: string,
+  nodes: Node[],
+  edges: Edge[],
+): Node | undefined {
+  const currentNode = nodes.find((n) => n.id === nodeId);
+  if (currentNode?.data?.isMain) return currentNode;
+
+  const ancestors = getAncestorIds(nodeId, edges);
+  for (const ancestorId of ancestors) {
+    const ancestor = nodes.find((n) => n.id === ancestorId);
+    if (ancestor?.data?.isMain) return ancestor;
+  }
+
+  return undefined;
 }
