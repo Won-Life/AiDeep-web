@@ -10,7 +10,7 @@ import {
   computeCollapseState,
   buildCollapseButtons,
   type CollapsedSides,
-} from './graphUtils'
+} from './traversal'
 
 function e(source: string, target: string): Edge {
   return { id: `${source}->${target}`, source, target } as Edge
@@ -104,7 +104,7 @@ describe('getSameColorDescendantIds', () => {
 })
 
 // 서버 규칙 고정 테스트 — ../server/src/node/node.service.ts propagateDepth와 동일해야 한다.
-// 서버 규칙이 바뀌면 이 테스트와 graphUtils의 구현을 함께 바꾼다 (Aideep_backend#63 참고).
+// 서버 규칙이 바뀌면 이 테스트와 traversal의 구현을 함께 바꾼다 (Aideep_backend#63 참고).
 describe('applyDepthOnEdgeCreate', () => {
   it('target과 그 자손 전체에 source.depth + 1을 더한다', () => {
     // A(0)-B(1), C(0)-D(1) 상태에서 B → C 연결
