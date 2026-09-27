@@ -26,7 +26,7 @@ src/
 │   └── README.md                # 이 폴더의 역할 + 데이터 페칭 전략
 ├── features/
 │   ├── graph/
-│   │   ├── api/                 # 그래프 전용 HTTP 유틸 (getNodes, createMdNode, moveNode 등)
+│   │   ├── api/                 # 그래프 전용 HTTP 유틸 + DTO→ReactFlow 매퍼 (mappers.ts의 convertToReactFlow)
 │   │   ├── components/          # GraphCanvas, CursorOverlay
 │   │   ├── constants/colors.ts  # 노드 파스텔 팔레트 9색 + 랜덤 색상 유틸
 │   │   ├── layout/rectCollide.ts # D3 AABB 충돌 감지 커스텀 force

@@ -17,7 +17,7 @@ import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
 import { getWorkspaces, getWorkspaceMembers } from '@/api/workspace';
 import { getNodes } from '@/features/graph/api/getNodes';
-import { convertToReactFlow } from '@/features/graph/components/GraphCanvas';
+import { convertToReactFlow } from '@/features/graph/api/mappers';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
 import { onPresenceState } from '@/api/ws';
 import { getCursorColor } from '@/utils/cursorColor';
