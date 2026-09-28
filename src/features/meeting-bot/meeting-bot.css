@@ -1,0 +1,9 @@
+.meeting-bot-ui {
+  --meeting-primary: #4a67d8;
+  --meeting-primary-light: #e9eeff;
+  --meeting-input-border: #8792a5;
+  --meeting-ink: #202637;
+  --meeting-muted: #5f6879;
+  --meeting-surface: #ffffff;
+  --meeting-soft-surface: #f4f6fb;
+}
