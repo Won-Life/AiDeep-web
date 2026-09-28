@@ -58,6 +58,7 @@ import {
   computeCollapseState,
   buildChildrenMap,
   buildCollapseButtons,
+  subtreeInternalEdgeFilter,
   type CollapseSide,
   type CollapsedSides,
 } from '../logic/traversal';
@@ -88,38 +89,13 @@ import {
   resolveHandleId,
   buildEdgePresentation,
   mirrorSubtree,
+  simulateSubtreePositionPropagation,
 } from '../logic/placement';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
 import { getCursorColor } from '@/utils/cursorColor';
 import CursorOverlay from './CursorOverlay';
 import { MdBody, type WorkspaceRole } from '@/api/types';
-
-/*
- * CONTEXT
- * - Problem      : 비-root 노드는 source-{handleSide} 핸들 하나만 렌더링하므로, 서브트리
- *                  방향이 바뀌는 지점(재부모화·트리 병합)에서 자손 handleSide·내부 엣지
- *                  핸들을 함께 갱신하지 않으면 엣지가 존재하지 않는 핸들을 가리켜
- *                  React Flow 에러 #008로 렌더링에서 탈락한다.
- * - Why          : D3 대칭이동 경로(방향 반전 시 서브트리 전체 handleSide + 엣지 핸들
- *                  동시 갱신)와 동일한 규칙을 나머지 두 경로에도 적용한다. 서버는 노드
- *                  handleSide 개념이 없고 엣지 핸들만 저장하므로, 로컬 갱신분을 PATCH
- *                  /edge/:edgeId로 동반 저장해야 새로고침 후에도 일관된다.
- * - Alternatives : buildEdgePresentation에서 렌더링 시점 보정 — 데이터 모순을 화면에서만
- *                  가리고 서버엔 그대로 남아 다른 클라이언트·재접속에서 재발, 기각.
- * - Trade-offs   : 서브트리 내부 엣지 수만큼 PATCH 요청 발생 (엣지별 실패는 로그만,
- *                  로컬 상태는 이미 일관 — 실패분은 새로고침 시 다시 어긋날 수 있음).
- * - Edge Case    : 크로스 색 엣지는 같은 그래프 자손 집합에 포함되지 않아 정규화 대상에서
- *                  자연 제외된다 (대칭이동 절단 로직이 별도 처리).
- */
-function subtreeInternalEdgeFilter(
-  rootId: string,
-  subtreeIds: Set<string>,
-): (edge: Edge) => boolean {
-  return (edge) =>
-    (edge.source === rootId || subtreeIds.has(edge.source)) &&
-    subtreeIds.has(edge.target);
-}
 
 // 서브트리 내부 엣지 핸들의 서버 저장분 갱신 — 이미 새 방향인 엣지는 건너뛴다
 function persistSubtreeEdgeHandles(
@@ -185,22 +161,9 @@ async function saveDragPositions(
       continue; // root 실패 = 서버 전파도 없음 — 자손 보정 스킵
     }
 
-    // 서버 전파 시뮬레이션: 자손 = 드래그 시작 위치 + root delta (색 경계 무시 — 서버 selectAllDescendantIds와 동일)
-    const descendantIds = getDescendantIds(root.id, edges);
-    const serverPos = new Map<string, { x: number; y: number }>();
-    descendantIds.forEach((id) => {
-      const start = startPositions.get(id);
-      if (start) serverPos.set(id, { ...start });
-    });
-    const rootStart = startPositions.get(root.id);
-    if (rootStart) {
-      const dx = rootFinal.x - rootStart.x;
-      const dy = rootFinal.y - rootStart.y;
-      serverPos.forEach((p) => {
-        p.x += dx;
-        p.y += dy;
-      });
-    }
+    // 서버 전파 시뮬레이션 (색 경계 무시 — 서버 selectAllDescendantIds와 동일 범위)
+    const { descendantIds, expected: serverPos } =
+      simulateSubtreePositionPropagation(root.id, rootFinal, edges, startPositions);
 
     // BFS 순서(조상 → 자손)로 어긋난 자손만 보정 — 보정 자체의 자손 전파도 누적 반영
     for (const childId of descendantIds) {
