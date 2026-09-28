@@ -89,6 +89,7 @@ import {
   resolveHandleId,
   buildEdgePresentation,
   mirrorSubtree,
+  simulateSubtreePositionPropagation,
 } from '../logic/placement';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
@@ -160,22 +161,9 @@ async function saveDragPositions(
       continue; // root 실패 = 서버 전파도 없음 — 자손 보정 스킵
     }
 
-    // 서버 전파 시뮬레이션: 자손 = 드래그 시작 위치 + root delta (색 경계 무시 — 서버 selectAllDescendantIds와 동일)
-    const descendantIds = getDescendantIds(root.id, edges);
-    const serverPos = new Map<string, { x: number; y: number }>();
-    descendantIds.forEach((id) => {
-      const start = startPositions.get(id);
-      if (start) serverPos.set(id, { ...start });
-    });
-    const rootStart = startPositions.get(root.id);
-    if (rootStart) {
-      const dx = rootFinal.x - rootStart.x;
-      const dy = rootFinal.y - rootStart.y;
-      serverPos.forEach((p) => {
-        p.x += dx;
-        p.y += dy;
-      });
-    }
+    // 서버 전파 시뮬레이션 (색 경계 무시 — 서버 selectAllDescendantIds와 동일 범위)
+    const { descendantIds, expected: serverPos } =
+      simulateSubtreePositionPropagation(root.id, rootFinal, edges, startPositions);
 
     // BFS 순서(조상 → 자손)로 어긋난 자손만 보정 — 보정 자체의 자손 전파도 누적 반영
     for (const childId of descendantIds) {

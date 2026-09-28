@@ -1,5 +1,10 @@
 import type { Node, Edge } from "@xyflow/react";
-import { isRootNode, getParentId, getRootNodeForSubtree } from "./traversal";
+import {
+  isRootNode,
+  getParentId,
+  getRootNodeForSubtree,
+  getDescendantIds,
+} from "./traversal";
 import { isInvalidConnection } from "./connection";
 
 // TODO: 실제 노드 너비로 변경
@@ -340,4 +345,47 @@ export function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
     // Case 2: 부모 없는 non-main 노드
     return { ...node, data: { ...node.data, hasParent } };
   });
+}
+
+/*
+ * CONTEXT
+ * - Problem      : 서버 PATCH /node/:id/move는 root의 DB 기준 delta를 모든 자손에게
+ *                  전파한다(node.service.updateNodePosition). 클라이언트는 root PATCH
+ *                  이후 실제 로컬 최종 위치와 서버가 전파했을 위치가 어긋나는 자손만
+ *                  골라 보정 PATCH를 보내야 하므로(saveDragPositions), "서버가 전파했을
+ *                  위치"를 로컬에서 먼저 계산해야 한다.
+ * - Why          : root의 시작/최종 위치 차이(delta)를 자손의 드래그 시작 위치에 그대로
+ *                  더하면 서버가 DB에서 계산할 값과 같다 — 색 경계·존재 여부와 무관하게
+ *                  전체 자손에 적용(서버 selectAllDescendantIds와 동일 범위).
+ * - Alternatives : saveDragPositions 안에 인라인 유지 — PATCH 성공/실패에 따른 후속 보정
+ *                  루프와 섞여 있어 이 계산만 단위 테스트할 수 없었다.
+ * - Trade-offs   : 순수 계산이므로 원 함수와 분리해도 안전. 자손별 보정 성공 후 누적
+ *                  반영(cascade)은 PATCH 성공 여부에 의존하므로 saveDragPositions에 남긴다.
+ * - Edge Case    : rootStart가 없으면(시작 위치 미기록) delta 없이 시작 위치 그대로 반환.
+ */
+export function simulateSubtreePositionPropagation(
+  rootId: string,
+  rootFinal: { x: number; y: number },
+  edges: Edge[],
+  startPositions: Map<string, { x: number; y: number }>,
+): {
+  descendantIds: Set<string>;
+  expected: Map<string, { x: number; y: number }>;
+} {
+  const descendantIds = getDescendantIds(rootId, edges);
+  const expected = new Map<string, { x: number; y: number }>();
+  descendantIds.forEach((id) => {
+    const start = startPositions.get(id);
+    if (start) expected.set(id, { ...start });
+  });
+  const rootStart = startPositions.get(rootId);
+  if (rootStart) {
+    const dx = rootFinal.x - rootStart.x;
+    const dy = rootFinal.y - rootStart.y;
+    expected.forEach((p) => {
+      p.x += dx;
+      p.y += dy;
+    });
+  }
+  return { descendantIds, expected };
 }
