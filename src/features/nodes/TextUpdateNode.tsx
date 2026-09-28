@@ -14,7 +14,7 @@ import NodeContextMenu from '@/components/ui/NodeContextMenu';
 import type {
   CollapseButtonView,
   CollapseSide,
-} from '@/features/graph/utils/graphUtils';
+} from '@/features/graph/logic/traversal';
 
 // 같은 userId는 항상 같은 커서 색상을 갖도록 보장 (협업 시 사용자 식별용)
 function getUserCursorColor(userId: string): string {

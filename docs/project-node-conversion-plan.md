@@ -24,7 +24,7 @@
 5. **엣지 방향을 바꾸는 API가 없다.** 엣지 PATCH는 `sourceHandle`/`targetHandle`(핸들 위치)만 수정한다. 방향(source↔target) 변경은 **삭제 후 재생성**뿐이다(`edge.service.ts:192-226`).
 6. **PROJECT 노드는 엣지의 target이 될 수 없다.** 서버가 `target.node_type === 'PROJECT'`이면 연결을 거부한다(`edge.service.ts:93`). 즉 중심 노드는 부모를 가질 수 없고 항상 부모(source)로만 존재한다.
 7. **단일 부모 불변식도 서버가 강제하지 않는다.** 한 노드가 서로 다른 두 부모의 자식이 되는 것을 막지 않는다. 클라이언트 UI 레벨에서만 유지한다(#92).
-8. **클라이언트는 depth를 로컬로 미러링한다.** 서버가 갱신한 depth를 WS·REST 응답에 싣지 않으므로, 엣지가 바뀌는 모든 지점에서 `applyDepthOnEdgeCreate/Delete`(`graphUtils.ts`)로 서버와 동일 규칙을 다시 계산한다.
+8. **클라이언트는 depth를 로컬로 미러링한다.** 서버가 갱신한 depth를 WS·REST 응답에 싣지 않으므로, 엣지가 바뀌는 모든 지점에서 `applyDepthOnEdgeCreate/Delete`(`logic/traversal.ts`)로 서버와 동일 규칙을 다시 계산한다.
 
 ## 현재 동작과 관찰 가능한 증상
 

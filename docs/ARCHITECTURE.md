@@ -26,12 +26,12 @@ src/
 │   └── README.md                # 이 폴더의 역할 + 데이터 페칭 전략
 ├── features/
 │   ├── graph/
-│   │   ├── api/                 # 그래프 전용 HTTP 유틸 (getNodes, createMdNode, moveNode 등)
+│   │   ├── api/                 # 그래프 전용 HTTP 유틸 + DTO→ReactFlow 매퍼 (mappers.ts의 convertToReactFlow)
 │   │   ├── components/          # GraphCanvas, CursorOverlay
 │   │   ├── constants/colors.ts  # 노드 파스텔 팔레트 9색 + 랜덤 색상 유틸
 │   │   ├── layout/rectCollide.ts # D3 AABB 충돌 감지 커스텀 force
-│   │   ├── types.ts             # NodeDto, EdgeDto
-│   │   └── utils/graphUtils.ts  # getDescendantIds 등 그래프 순회 유틸
+│   │   ├── logic/               # 순수 그래프 로직 — traversal(순회·depth·접기), colors(색 전파), connection(연결 규칙), placement(배치·핸들 방향)
+│   │   └── types.ts             # NodeDto, EdgeDto
 │   ├── editor/
 │   │   ├── editor.tsx           # Lexical 에디터 설정 (플러그인 조합)
 │   │   ├── NotionEditor.tsx     # 에디터 컴포넌트 + CollaborationPlugin + ToolbarPlugin
