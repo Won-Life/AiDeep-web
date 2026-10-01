@@ -63,6 +63,7 @@ import {
 } from '../logic/traversal';
 import {
   getGraphColor,
+  getUncoloredGraphAnchorIds,
   colorOfNodeIn,
   getSameGraphDescendantIds,
   getRecolorTargetIds,
@@ -1010,7 +1011,7 @@ function GraphCanvasInner({
                       ? updatedNodes.find((n) => n.id === remainingParentId)
                       : null;
                     const color = remainingParent
-                      ? getGraphColor(remainingParentId!, updatedNodes)
+                      ? getGraphColor(remainingParentId!, updatedNodes, updatedEdges)
                       : DEFAULT_NODE_COLOR;
                     // 페인트가 색을 바꾸기 전에 저장 대상 집합을 확정해 둔다
                     const recolorIds = getRecolorTargetIds(
@@ -1114,16 +1115,9 @@ function GraphCanvasInner({
         }
       }
 
-      // 단일 부모 불변식 (#92): swap 이후의 실제 자식이 이미 부모를 가지면 차단
-      const { targetId } = resolveConnectionDirection(
-        connection.source,
-        connection.target,
-        nodes,
-        edges,
-      );
-      if (getParentId(targetId, edges) !== null) {
-        return false;
-      }
+      // 단일 부모 불변식 (#92)은 차단이 아니라 재부모화로 보장한다 —
+      // 실제 자식(swap 이후 targetId)이 이미 부모를 가져도 연결을 허용하고,
+      // onConnect가 기존 부모 엣지를 전부 끊은 뒤 새 연결을 만든다.
 
       // 부모가 있는 노드의 부모 방향(target-*) 핸들로는 연결 불가 —
       // 연결은 부모 반대 방향으로만 가능 (docs/GRAPH_RULES.md §3-2).
@@ -1163,16 +1157,29 @@ function GraphCanvasInner({
       const { sourceId, targetId, shouldSwap, bothInGraphs } =
         resolveConnectionDirection(params.source, params.target, nodes, edges);
 
-      // 단일 부모 불변식 (#92): 실제 자식이 이미 부모를 가지면 연결하지 않는다.
-      // isValidConnection이 드래그 중에 걸러주지만, 프로그래매틱 연결 대비 이중 방어.
-      if (getParentId(targetId, edges) !== null) return;
-
       // 부모 있는 노드의 부모 방향(target-*) 핸들 연결 차단 — isValidConnection과 동일 규칙
       if (
         params.targetHandle?.startsWith('target-') &&
         getParentId(params.target, edges) !== null
       )
         return;
+
+      // 단일 부모 불변식 (#92): 실제 자식이 이미 부모를 가지면 기존 부모 엣지를
+      // 전부 끊고 새 연결로 재부모화한다 (차단 → 재부모화로 변경).
+      // filter(전부)인 이유: legacy 데이터에 부모가 2개인 노드가 존재하므로
+      // (과거 incoming 2개 허용 시절 산물), 재연결이 그 데이터의 복구 경로가 된다.
+      const oldParentEdges = edges.filter((e) => e.target === targetId);
+      if (oldParentEdges.length > 0) {
+        const oldIds = new Set(oldParentEdges.map((e) => e.id));
+        setEdges((prev) => prev.filter((e) => !oldIds.has(e.id)));
+        // 서버가 엣지 삭제 시 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+        setNodes((prev) => applyDepthOnEdgeDelete(prev, edges, targetId));
+        oldParentEdges.forEach((e) =>
+          deleteEdge(workspaceId, e.id).catch((err) =>
+            console.error(`[deleteEdge reparent-connect ${e.id}] failed`, err),
+          ),
+        );
+      }
 
       const srcNode = nodes.find((n) => n.id === sourceId);
       const tgtNode = nodes.find((n) => n.id === targetId);
@@ -1201,7 +1208,14 @@ function GraphCanvasInner({
       const resolvedSourceHandle = `source-${computedSide}`;
       const resolvedTargetHandle = resolveHandleId('target', computedSide);
 
-      const colorToPropagate = getGraphColor(sourceId, nodes);
+      const colorToPropagate = getGraphColor(sourceId, nodes, edges);
+      // 무색 그래프(legacy)에 랜덤 색이 확정된 경우, 소스 노드·루트에도 저장해
+      // 다음 연결부터 같은 색을 읽게 한다 (연결마다 색이 달라지는 혼색 버그 방지)
+      const sourceColorAnchorIds = getUncoloredGraphAnchorIds(
+        sourceId,
+        nodes,
+        edges,
+      );
 
       // target이 트리째 병합될 때 서브트리 방향 정규화 대상 (subtreeInternalEdgeFilter CONTEXT 참고)
       const mergedSubtreeIds = tgtNode
@@ -1289,12 +1303,27 @@ function GraphCanvasInner({
           }
         }
 
-        return updateSubtreeColors(
+        const painted = updateSubtreeColors(
           targetId,
           positionedNodes,
           edges,
           colorToPropagate,
         );
+        // 무색 앵커(소스·루트)도 같은 색으로 로컬 페인트 — main은 표시만 흰색 유지
+        return sourceColorAnchorIds.length === 0
+          ? painted
+          : painted.map((node) =>
+              sourceColorAnchorIds.includes(node.id)
+                ? {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      color: colorToPropagate.bg,
+                      textColor: colorToPropagate.text,
+                    },
+                  }
+                : node,
+            );
       });
 
       // 서브트리 내부 엣지 핸들도 새 방향으로 — 로컬 상태와 서버 저장분 동시 갱신
@@ -1345,7 +1374,10 @@ function GraphCanvasInner({
           ]);
           // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
           setNodes((prev) => applyDepthOnEdgeCreate(prev, edges, sourceId, targetId));
-          getRecolorTargetIds(targetId, nodes, edges).forEach((id) =>
+          new Set([
+            ...getRecolorTargetIds(targetId, nodes, edges),
+            ...sourceColorAnchorIds,
+          ]).forEach((id) =>
             updateNodeContent(workspaceId, id, {
               color: colorToPropagate.bg,
               textColor: colorToPropagate.text,
@@ -1456,8 +1488,21 @@ function GraphCanvasInner({
           return;
         }
 
-        // source 노드의 색상 가져오기
-        const colorPair = getGraphColor(fromNode.id, nodes);
+        // source 노드의 색상 가져오기 — 무색 그래프면 랜덤 확정 후 앵커에도 저장
+        const colorPair = getGraphColor(fromNode.id, nodes, edges);
+        const colorAnchorIds = getUncoloredGraphAnchorIds(
+          fromNode.id,
+          nodes,
+          edges,
+        );
+        colorAnchorIds.forEach((id) =>
+          updateNodeContent(workspaceId, id, {
+            color: colorPair.bg,
+            textColor: colorPair.text,
+          }).catch((err) =>
+            console.error('[updateNodeColor anchor] failed', err),
+          ),
+        );
 
         try {
           const { nodeId } = await createMdNode(
@@ -1475,7 +1520,18 @@ function GraphCanvasInner({
           // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
           // 본인 생성 노드의 WS 이벤트는 무시되므로 REST 응답이 항상 최초 삽입.
           setNodes((prev) => [
-            ...prev,
+            ...prev.map((node) =>
+              colorAnchorIds.includes(node.id)
+                ? {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      color: colorPair.bg,
+                      textColor: colorPair.text,
+                    },
+                  }
+                : node,
+            ),
             {
               id: nodeId,
               type: 'textUpdater',
@@ -1780,7 +1836,7 @@ function GraphCanvasInner({
           : findNonOverlappingPosition(basePosition, nodes);
 
       const colorPair = shouldConnect
-        ? getGraphColor(targetParent.id, nodes)
+        ? getGraphColor(targetParent.id, nodes, edges)
         : DEFAULT_NODE_COLOR;
 
       try {
@@ -2262,8 +2318,10 @@ function GraphCanvasInner({
           const parentNode = draggedIsMain ? draggedNode : newParent;
           const childNode = draggedIsMain ? newParent : draggedNode;
 
-          // 1. 기존 부모와의 연결 끊기 (childNode 기준)
-          const existingParentEdge = edges.find(
+          // 1. 기존 부모와의 연결 끊기 (childNode 기준) — filter(전부)인 이유:
+          // legacy 데이터에 부모 2개인 노드가 존재해, find(첫 번째)만 끊으면
+          // 재부모화 후에도 두 번째 부모가 남는다
+          const existingParentEdges = edges.filter(
             (edge) => edge.target === childNode.id,
           );
 
@@ -2475,25 +2533,30 @@ function GraphCanvasInner({
 
           // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
           // 기존 부모 연결 먼저 제거 — 로컬 state와 서버 모두 삭제해야 재접속 시 복원되지 않음
-          setEdges((prev) =>
-            existingParentEdge
-              ? prev.filter((edge) => edge.id !== existingParentEdge.id)
-              : prev,
-          );
-          if (existingParentEdge) {
+          if (existingParentEdges.length > 0) {
+            const oldIds = new Set(existingParentEdges.map((e) => e.id));
+            setEdges((prev) => prev.filter((edge) => !oldIds.has(edge.id)));
             // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
             setNodes((prev) =>
-              applyDepthOnEdgeDelete(prev, edges, existingParentEdge.target),
+              applyDepthOnEdgeDelete(prev, edges, childNode.id),
             );
-            deleteEdge(workspaceId, existingParentEdge.id).catch((err) =>
-              console.error('[deleteEdge re-parent] failed', err),
+            existingParentEdges.forEach((e) =>
+              deleteEdge(workspaceId, e.id).catch((err) =>
+                console.error(`[deleteEdge re-parent ${e.id}] failed`, err),
+              ),
             );
           }
 
           // API: 새 부모 연결 — REST 응답으로 edgeId 취득 후 state 추가
           const dragStopSourceHandle = `source-${sideRelativeToParent}`;
           const dragStopTargetHandle = `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`;
-          const dragStopColor = getGraphColor(parentNode.id, nodes);
+          const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
+          // 무색 그래프면 확정 색을 앵커(부모·루트)에도 저장 (onConnect와 동일 규칙)
+          const dragStopAnchorIds = getUncoloredGraphAnchorIds(
+            parentNode.id,
+            nodes,
+            edges,
+          );
           createEdge(
             workspaceId,
             parentNode.id,
@@ -2517,7 +2580,10 @@ function GraphCanvasInner({
               setNodes((prev) =>
                 applyDepthOnEdgeCreate(prev, edges, parentNode.id, childNode.id),
               );
-              getRecolorTargetIds(childNode.id, nodes, edges).forEach((id) =>
+              new Set([
+                ...getRecolorTargetIds(childNode.id, nodes, edges),
+                ...dragStopAnchorIds,
+              ]).forEach((id) =>
                 updateNodeContent(workspaceId, id, {
                   color: dragStopColor.bg,
                   textColor: dragStopColor.text,
@@ -2532,14 +2598,28 @@ function GraphCanvasInner({
 
           // 7. childNode 서브트리 색상을 parentNode 색상으로 업데이트
           // dragStopColor 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
-          setNodes((currentNodes) =>
-            updateSubtreeColors(
+          setNodes((currentNodes) => {
+            const painted = updateSubtreeColors(
               childNode.id,
               currentNodes,
               edges,
               dragStopColor,
-            ),
-          );
+            );
+            return dragStopAnchorIds.length === 0
+              ? painted
+              : painted.map((node) =>
+                  dragStopAnchorIds.includes(node.id)
+                    ? {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          color: dragStopColor.bg,
+                          textColor: dragStopColor.text,
+                        },
+                      }
+                    : node,
+                );
+          });
         }
       }
 

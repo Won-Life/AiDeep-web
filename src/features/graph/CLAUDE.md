@@ -60,8 +60,10 @@ WS 핸들러·이벤트 리스너는 마운트 시점의 클로저를 사용한�
 
 색상 전파: 엣지 생성 성공 후 `updateSubtreeColors`로 로컬 페인트하고, 같은 집합(`getRecolorTargetIds`)에 **노드별** REST PATCH로 저장한다. 서버의 `propagateToChildren` 전파는 그래프 색 경계를 모르고 크로스 그래프 엣지(legacy) 너머까지 덮어쓰므로(Aideep_backend#51) 사용하지 않는다. PATCH 실패해도 로컬 색상은 이미 변경 (롤백 없음).
 
+색 결정·통일 규칙 (혼색 버그 수정): `getGraphColor(nodeId, nodes, edges)`는 노드 → 그래프 루트 순으로 색을 찾고, 그래프 전체가 무색일 때만 랜덤 1회를 뽑는다. 랜덤이 확정된 경우 `getUncoloredGraphAnchorIds`가 반환하는 무색 앵커(소스 노드·루트, main 포함)에도 같은 색을 로컬 페인트 + PATCH 저장해, 연결마다 색이 달라지는 혼색(한 그래프 2색)을 막는다. `getRecolorTargetIds`는 과거 "같은 색 자손"에서 멈췄지만 지금은 **전체 자손**(main 제외)을 칠한다 — 혼색 legacy 서브트리도 재연결·재부모화 한 번으로 통일된다. 테스트는 `logic/colors.test.ts`가 고정.
+
 source/target 정규화: `resolveConnectionDirection` 헬퍼가 결정 — ① isMain 노드 → source, ② 단독 노드(엣지 0개)가 그래프에 연결되면 그래프 쪽 → source. `onConnect`와 `isValidConnection`이 같은 헬퍼를 공유한다.
 
-단일 부모 불변식 (#92): 정규화 이후의 실제 자식(target)이 이미 부모(incoming 엣지)를 가지면 연결을 차단한다. 노드 드래그로 붙이는 경로(`onNodeDragStop`)는 기존 부모 엣지를 끊고 재부모화하므로 별도 처리 불필요.
+단일 부모 불변식 (#92, 차단 → 재부모화로 변경): 정규화 이후의 실제 자식(target)이 이미 부모(incoming 엣지)를 가지면 **기존 부모 엣지를 전부(filter) 끊고 새 연결을 만든다** — 핸들 드래그(`onConnect`)·노드 드래그(`onNodeDragStop`) 두 경로 모두. "전부"인 이유: 과거 incoming 2개 허용 시절의 legacy 데이터에 부모 2개인 노드가 남아 있어, find(첫 번째)만 끊으면 두 번째 부모가 살아남는다. 재연결이 그 데이터의 복구 경로다. 같은 그래프(같은 루트) 내 핸들 드래그 연결은 여전히 #146이 차단하므로, 같은 그래프 안에서의 재부모화는 노드 드래그로만 가능하다.
 
 부모 방향 핸들 차단: 부모가 있는 노드의 `target-*` 핸들로 들어오는 연결은 차단 — 연결은 부모 반대 방향으로만. swap으로 그 노드가 부모(source)가 되는 케이스도 드롭 지점이 부모 방향이면 막는다 (부모 방향엔 source 핸들이 렌더링되지 않아 React Flow #008 유발 경로이기도 함, #105 관련).
