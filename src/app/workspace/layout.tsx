@@ -3,12 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { type Node } from '@xyflow/react';
-import Sidebar, {
-  type Project,
-  type Resource,
-  SIDEBAR_WIDTH,
-  VISIBLE_BUTTON_WIDTH,
-} from '@/components/layout/Sidebar';
+import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
 import ChipHeader from '@/components/layout/ChipHeader';
 import DropDown from '@/components/ui/DropDown';
 import AiChatPanel, {
@@ -19,57 +14,14 @@ import ArchiveModal from '@/components/layout/ArchiveModal';
 import OnboardingPopup from '@/components/layout/OnboardingPopup';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
-import { getWorkspaces, getWorkspaceMembers } from '@/api/workspace';
+import { getWorkspaces } from '@/api/workspace';
 import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/api/mappers';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
 import { onPresenceState } from '@/api/ws';
 import { getCursorColor } from '@/utils/cursorColor';
-import { SHOW_TEMP_HIDDEN_UI } from '@/lib/uiFlags';
 import { type NodeView } from '@/features/nodes/TextUpdateNode';
 import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
-
-const INITIAL_PROJECTS: Project[] = [
-  { id: 'w1', name: 'Workspaces 1' },
-  { id: 'w2', name: 'Workspaces 2' },
-  { id: 'w3', name: 'Workspaces 3' },
-  { id: 'w4', name: 'Workspaces 4' },
-];
-
-const INITIAL_RESOURCES: Resource[] = [
-  {
-    id: 'r1',
-    name: 'Resource n',
-    subItems: [
-      { id: 'r1-1', name: 'Resource n-1' },
-      { id: 'r1-2', name: 'Resource n-2' },
-      { id: 'r1-3', name: 'Resource n-3' },
-    ],
-  },
-  { id: 'r2', name: 'Resource n', subItems: [] },
-  {
-    id: 'r3',
-    name: 'Resource n',
-    subItems: [
-      { id: 'r3-1', name: 'Resource n-1' },
-      { id: 'r3-2', name: 'Resource n-2' },
-      { id: 'r3-3', name: 'Resource n-3' },
-    ],
-  },
-  {
-    id: 'r4',
-    name: 'Resource n',
-    subItems: [
-      { id: 'r4-1', name: 'Resource n-1' },
-      { id: 'r4-2', name: 'Resource n-2' },
-      { id: 'r4-3', name: 'Resource n-3' },
-    ],
-  },
-];
-
-function makeId() {
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-}
 
 function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -102,19 +54,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     return sessionStorage.getItem('aideep_chat_open') === 'true';
   });
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
-  const [expanded, setExpanded] = useState<Set<string>>(
-    new Set(
-      INITIAL_RESOURCES.filter((r) => r.subItems.length > 0).map((r) => r.id),
-    ),
-  );
 
-  const sidebarWidth = !SHOW_TEMP_HIDDEN_UI
-    ? 0
-    : isSidebarOpen
-      ? SIDEBAR_WIDTH
-      : VISIBLE_BUTTON_WIDTH;
+  const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : RAIL_WIDTH;
 
   useEffect(() => {
     setSidebarWidth(sidebarWidth);
@@ -154,31 +95,12 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     getWorkspaces()
       .then((list) => {
         if (!list.length) return Promise.reject('no workspace');
-        const ws = list[0];
+        // 사이드바 스위처로 전환한 경우 현재 workspaceId를 존중한다 — 없으면 첫 번째
+        const ws =
+          (workspaceId && list.find((w) => w.workspaceId === workspaceId)) ||
+          list[0];
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
-
-        // 사이드바 Workspaces 목록: 서버 워크스페이스 전체를 매핑
-        setProjects(list.map((w) => ({ id: w.workspaceId, name: w.title })));
-        // 자물쇠(개인 워크스페이스) 판정 — 멤버 수 1명 이하 == 개인.
-        // 부가 정보이므로 조회 실패 시 팀 취급(자물쇠 없음), 메인 로딩을 막지 않음.
-        Promise.all(
-          list.map((w) =>
-            getWorkspaceMembers(w.workspaceId)
-              .then((members) => members.length <= 1)
-              .catch(() => false),
-          ),
-        ).then((personalFlags) => {
-          // 함수형 업데이트 + id 매칭: 조회 동안 사용자가 추가/수정한 로컬 항목을 덮어쓰지 않는다
-          const flagById = new Map(
-            list.map((w, i) => [w.workspaceId, personalFlags[i]]),
-          );
-          setProjects((prev) =>
-            prev.map((p) =>
-              flagById.has(p.id) ? { ...p, isPersonal: flagById.get(p.id) } : p,
-            ),
-          );
-        });
 
         return Promise.all([
           getNodes(ws.workspaceId),
@@ -203,7 +125,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         }
         setSynced(true);
       });
-  }, [synced, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced]);
+  }, [synced, workspaceId, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced]);
 
   // 주기적 재sync: 같은 계정의 다른 세션(예: Meet Scribe 익스텐션)이 만든 노드는
   // WS로 안 온다 — 서버가 발신자 유저룸을 broadcast에서 제외하고(ws.gateway .except),
@@ -278,85 +200,6 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     router.replace('/login');
   }, [router]);
 
-  const addProject = () =>
-    setProjects((prev) => [
-      ...prev,
-      { id: makeId(), name: '', isEditing: true },
-    ]);
-  const saveProjectName = (id: string, name: string) =>
-    setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, name, isEditing: false } : p)),
-    );
-  const startEditProject = (id: string) =>
-    setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, isEditing: true } : p)),
-    );
-  const addResource = () =>
-    setResources((prev) => [
-      ...prev,
-      { id: makeId(), name: '', subItems: [], isEditing: true },
-    ]);
-  const saveResourceName = (id: string, name: string) =>
-    setResources((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, name, isEditing: false } : r)),
-    );
-  const addSubItem = (resourceId: string) => {
-    setResources((prev) =>
-      prev.map((r) =>
-        r.id === resourceId
-          ? {
-              ...r,
-              subItems: [
-                ...r.subItems,
-                { id: makeId(), name: '', isEditing: true },
-              ],
-            }
-          : r,
-      ),
-    );
-    setExpanded((prev) => new Set([...prev, resourceId]));
-  };
-  const startEditResource = (id: string) =>
-    setResources((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, isEditing: true } : r)),
-    );
-  const startEditSubItem = (resourceId: string, subItemId: string) =>
-    setResources((prev) =>
-      prev.map((r) =>
-        r.id === resourceId
-          ? {
-              ...r,
-              subItems: r.subItems.map((s) =>
-                s.id === subItemId ? { ...s, isEditing: true } : s,
-              ),
-            }
-          : r,
-      ),
-    );
-  const saveSubItemName = (
-    resourceId: string,
-    subItemId: string,
-    name: string,
-  ) =>
-    setResources((prev) =>
-      prev.map((r) =>
-        r.id === resourceId
-          ? {
-              ...r,
-              subItems: r.subItems.map((s) =>
-                s.id === subItemId ? { ...s, name, isEditing: false } : s,
-              ),
-            }
-          : r,
-      ),
-    );
-  const toggleExpand = (id: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-
   return (
     <div className="relative w-full h-screen overflow-hidden">
       <div
@@ -366,25 +209,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         {children}
       </div>
 
-      {SHOW_TEMP_HIDDEN_UI && (
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onToggle={handleToggleSidebar}
-        projects={projects}
-        resources={resources}
-        expanded={expanded}
-        onAddProject={addProject}
-        onSaveProjectName={saveProjectName}
-        onStartEditProject={startEditProject}
-        onAddResource={addResource}
-        onSaveResourceName={saveResourceName}
-        onAddSubItem={addSubItem}
-        onSaveSubItemName={saveSubItemName}
-        onStartEditResource={startEditResource}
-        onStartEditSubItem={startEditSubItem}
-        onToggleExpand={toggleExpand}
-      />
-      )}
+      <Sidebar isOpen={isSidebarOpen} onToggle={handleToggleSidebar} />
 
       <ChipHeader
         sidebarWidth={sidebarWidth}

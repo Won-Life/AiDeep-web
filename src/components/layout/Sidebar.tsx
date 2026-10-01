@@ -1,730 +1,761 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
+import type { Node } from '@xyflow/react';
 import { useWorkspaceLayout } from '@/app/workspace/context';
-import { useYjsProvider } from '@/hooks/useYjsProvider';
-import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
-import { getCursorColor } from '@/utils/cursorColor';
+import { getWorkspaces, createWorkspace } from '@/api/workspace';
+import { logout } from '@/api/auth';
+import { createProjectNode } from '@/features/graph/api/nodes';
+import { getRandomColorPair } from '@/features/graph/constants/colors';
+import type { WorkspaceListItem } from '@/api/types';
 
-export const SIDEBAR_WIDTH = 260;
-export const VISIBLE_BUTTON_WIDTH = 40;
+/*
+ * CONTEXT
+ * - Problem      : 기존 사이드바는 워크스페이스 목록 + 더미 Resource 트리 구조였고
+ *                  SHOW_TEMP_HIDDEN_UI=false로 제품에서 숨겨져 있었다. Figma 08
+ *                  X1~X7 시안은 "단일 워크스페이스 안에서 작업" 구조로 전면 재편됐다:
+ *                  헤더(스위처) + 노드 검색(⌘K) + 프로젝트→타이틀 트리 + 프로필,
+ *                  접으면 아이콘 레일.
+ * - Why          : 트리는 WorkspaceLayoutContext의 nodes·edges(WS 단일 진실 소스의
+ *                  로컬 사본)에서 유도하는 읽기 전용 뷰다 — 별도 REST 조회를 하면
+ *                  같은 데이터의 두 사본이 생겨 어긋난다. 행 클릭은 setFocusedNodeId로
+ *                  GraphCanvas의 기존 카메라 이동 effect를 재사용한다.
+ * - Alternatives : 사이드바 자체 getNodes 조회 — 단일 진실 소스 규칙 위반, 기각.
+ *                  워크스페이스 전환을 페이지 리로드로 처리 — 상태는 간단해지나
+ *                  로그인 세션·캔버스 복귀 비용이 커서 setSynced(false) 재동기화 채택.
+ * - Trade-offs   : 회의 진행 중 배너(X5)는 회의 기능(별도 담당)이 상태를 주기 전까지
+ *                  meeting=null 스텁으로 숨김. 타이틀 옆 빨간 점도 같은 이유로 보류.
+ * - Edge Case    : 검색어가 프로젝트명에 맞으면 자식 전체 노출, 타이틀에만 맞으면
+ *                  해당 타이틀만 남긴다. 트리 정렬은 캔버스 y좌표 순 — 시안의
+ *                  위→아래 배치와 일치.
+ */
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+export const SIDEBAR_WIDTH = 240;
+export const RAIL_WIDTH = 48;
 
-export interface Project {
-  id: string;
-  name: string;
-  isEditing?: boolean;
-  isPersonal?: boolean; // 멤버 1명 == 개인 워크스페이스 → 자물쇠 표시
+// ─── 공통 소품 ────────────────────────────────────────────────────────────────
+
+/** 워크스페이스 아이콘 — 이름 첫 글자를 어두운 사각형에 표시 */
+function WorkspaceIcon({ name, size = 24 }: { name: string; size?: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-[6px] bg-foreground font-semibold text-background"
+      style={{ width: size, height: size, fontSize: size * 0.5 }}
+    >
+      {name.trim().charAt(0) || 'W'}
+    </span>
+  );
 }
 
-export interface ResourceSubItem {
-  id: string;
-  name: string;
-  isEditing?: boolean;
+function Avatar({ name, size = 28 }: { name: string; size?: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full bg-surface-hover font-semibold text-foreground"
+      style={{ width: size, height: size, fontSize: size * 0.45 }}
+    >
+      {name.trim().charAt(0) || '?'}
+    </span>
+  );
 }
 
-export interface Resource {
-  id: string;
-  name: string;
-  subItems: ResourceSubItem[];
-  isEditing?: boolean;
-}
-
-// ─── ProjectList ──────────────────────────────────────────────────────────────
-
-function ProjectList({
-  projects,
-  onSaveName,
-  onStartEdit,
+function MenuItem({
+  children,
+  onClick,
+  disabled,
+  title,
 }: {
-  projects: Project[];
-  onSaveName: (id: string, name: string) => void;
-  onStartEdit: (id: string) => void;
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
-    <ul className="space-y-1">
-      {projects.map((project) => (
-        <li
-          key={project.id}
-          className="flex items-center gap-2.5 px-1 py-1 rounded-md"
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-surface disabled:opacity-50 disabled:hover:bg-transparent"
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── 트리 유도 ────────────────────────────────────────────────────────────────
+
+type NodeData = { title?: string; isMain?: boolean };
+
+interface TreeTitle {
+  id: string;
+  title: string;
+}
+
+interface TreeProject {
+  id: string;
+  title: string;
+  titles: TreeTitle[];
+}
+
+function nodeTitle(n: Node): string {
+  return ((n.data as NodeData)?.title ?? '').trim();
+}
+
+/** context의 nodes·edges에서 프로젝트 → 타이틀(직계 자식) 2단 트리를 유도 */
+function useProjectTree(query: string): TreeProject[] {
+  const { nodes, edges } = useWorkspaceLayout();
+
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const projects = nodes
+    .filter((n) => (n.data as NodeData)?.isMain)
+    .sort((a, b) => a.position.y - b.position.y)
+    .map((p) => {
+      const titles = edges
+        .filter((e) => e.source === p.id)
+        .map((e) => byId.get(e.target))
+        .filter((n): n is Node => Boolean(n))
+        .sort((a, b) => a.position.y - b.position.y)
+        .map((n) => ({ id: n.id, title: nodeTitle(n) || '제목 없음' }));
+      return { id: p.id, title: nodeTitle(p) || '제목 없음', titles };
+    });
+
+  const q = query.trim().toLowerCase();
+  if (!q) return projects;
+  return projects
+    .map((p) => {
+      if (p.title.toLowerCase().includes(q)) return p; // 프로젝트 매칭 → 자식 전체 유지
+      const titles = p.titles.filter((t) => t.title.toLowerCase().includes(q));
+      return { ...p, titles };
+    })
+    .filter((p) => p.title.toLowerCase().includes(q) || p.titles.length > 0);
+}
+
+// ─── 회의 진행 중 배너 (X5) ───────────────────────────────────────────────────
+
+/** 회의 기능(별도 담당)이 제공할 상태 계약 — 확정 전까지 호출부에서 null 고정 */
+export interface ActiveMeeting {
+  titleNodeId: string;
+  titleName: string;
+  source: string; // 예: 'Zoom'
+  elapsedLabel: string; // 예: '03:12'
+}
+
+function MeetingBanner({
+  meeting,
+  onClick,
+}: {
+  meeting: ActiveMeeting | null;
+  onClick: (titleNodeId: string) => void;
+}) {
+  if (!meeting) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(meeting.titleNodeId)}
+      className="flex w-full items-center justify-between rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-left"
+    >
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-red-500">
+          <span className="text-[9px]">●</span> 회의 진행 중
+        </span>
+        <span className="mt-0.5 block truncate text-[11.5px] text-muted">
+          {meeting.titleName} · {meeting.source} · {meeting.elapsedLabel}
+        </span>
+      </span>
+      <span className="text-[12px] text-muted">›</span>
+    </button>
+  );
+}
+
+// ─── 워크스페이스 스위처 (X6) + 새 워크스페이스 모달 (X7) ────────────────────
+
+function WorkspaceSwitcher({
+  open,
+  currentId,
+  onClose,
+  onSwitch,
+  onNewWorkspace,
+}: {
+  open: boolean;
+  currentId: string | null;
+  onClose: () => void;
+  onSwitch: (ws: WorkspaceListItem) => void;
+  onNewWorkspace: () => void;
+}) {
+  const [list, setList] = useState<WorkspaceListItem[] | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    getWorkspaces()
+      .then(setList)
+      .catch((err) => {
+        console.error('[WorkspaceSwitcher] getWorkspaces failed', err);
+        setList([]);
+      });
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="absolute top-11 left-3 z-50 w-[200px] rounded-[10px] border border-gray-700 bg-background py-1.5 shadow-md">
+        <p className="px-3 pt-1 pb-1.5 text-[11px] text-gray-500">워크스페이스</p>
+        {list === null ? (
+          <p className="px-3 py-2 text-[12px] text-muted">불러오는 중…</p>
+        ) : (
+          list.map((ws) => (
+            <MenuItem
+              key={ws.workspaceId}
+              onClick={() => {
+                onClose();
+                if (ws.workspaceId !== currentId) onSwitch(ws);
+              }}
+            >
+              <WorkspaceIcon name={ws.title} size={18} />
+              <span className="min-w-0 flex-1 truncate">{ws.title}</span>
+              {ws.workspaceId === currentId && (
+                <span className="text-[12px]">✓</span>
+              )}
+            </MenuItem>
+          ))
+        )}
+        <div className="my-1 border-t border-border" />
+        <MenuItem
+          onClick={() => {
+            onClose();
+            onNewWorkspace();
+          }}
         >
-          <span
-            className="shrink-0 rounded-sm"
-            style={{
-              width: 18,
-              height: 18,
-              background: 'rgb(var(--ds-gray-700))',
-            }}
-          />
-          {project.isEditing ? (
+          + 새 워크스페이스
+        </MenuItem>
+        <MenuItem disabled title="워크스페이스 설정 화면은 준비 중이에요">
+          워크스페이스 설정
+        </MenuItem>
+      </div>
+    </>
+  );
+}
+
+function NewWorkspaceModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (workspaceId: string, title: string) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  if (!open) return null;
+
+  const submit = async () => {
+    const name = title.trim();
+    if (!name || submitting) return;
+    setSubmitting(true);
+    try {
+      const { workspaceId } = await createWorkspace({ title: name, role: 'OWNER' });
+      setTitle('');
+      onCreated(workspaceId, name);
+    } catch (err) {
+      console.error('[NewWorkspaceModal] createWorkspace failed', err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-[360px] max-w-[90vw] flex-col gap-[14px] rounded-[16px] border border-gray-700 bg-background p-[20px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <h2 className="text-[16px] font-bold text-foreground">새 워크스페이스</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="text-muted hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-[12.5px] text-muted">
+          과목 묶음이나 팀 단위로 워크스페이스를 나눠 쓸 수 있어요.
+        </p>
+        <div>
+          <p className="mb-1.5 text-[12px] font-semibold text-foreground">이름</p>
+          <div className="flex items-center gap-2">
+            <WorkspaceIcon name={title || '새'} size={32} />
             <input
               autoFocus
-              placeholder="이름 입력..."
-              defaultValue={project.name}
-              className="sidebar-new-input bg-transparent border-none outline-none"
-              style={{
-                fontSize: 15,
-                color: 'rgb(var(--foreground))',
-                flex: 1,
-                minWidth: 0,
-              }}
-              onBlur={(e) => onSaveName(project.id, e.target.value.trim())}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Enter') submit();
               }}
+              placeholder="새 워크스페이스"
+              className="h-[36px] min-w-0 flex-1 rounded-[8px] border border-gray-700 bg-background px-3 text-[13px] text-foreground outline-none placeholder:text-gray-500"
             />
-          ) : (
-            <span
-              style={{
-                fontSize: 15,
-                color: 'rgb(var(--foreground))',
-                cursor: 'text',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                minWidth: 0,
-              }}
-              onClick={() => onStartEdit(project.id)}
-            >
-              {project.name || (
-                <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
-                  이름 입력...
-                </span>
-              )}
+          </div>
+          <p className="mt-1.5 text-[11px] text-gray-500">
+            아이콘은 이름 첫 글자로 자동 생성돼요.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-[38px] flex-1 rounded-[8px] border border-border bg-background text-[13px] font-semibold text-muted transition-colors hover:bg-surface"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!title.trim() || submitting}
+            className="h-[38px] flex-1 rounded-[8px] bg-foreground text-[13px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            만들기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 프로필 (X2·X3) ──────────────────────────────────────────────────────────
+
+function ProfileRow({ collapsed }: { collapsed?: boolean }) {
+  const router = useRouter();
+  const { userMe } = useWorkspaceLayout();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const name = userMe?.username ?? '';
+  const email = userMe?.email ?? '';
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {}
+    router.replace('/login');
+  };
+
+  return (
+    <div className="relative shrink-0 border-t border-border p-2.5">
+      <button
+        type="button"
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-expanded={menuOpen}
+        className="flex w-full items-center gap-2.5 rounded-[8px] px-1.5 py-1.5 transition-colors hover:bg-surface"
+      >
+        <Avatar name={name} />
+        {!collapsed && (
+          <>
+            <span className="min-w-0 flex-1 text-left">
+              <span className="block truncate text-[13px] font-semibold text-foreground">
+                {name}
+              </span>
+              <span className="block truncate text-[11px] text-muted">
+                {email}
+              </span>
             </span>
-          )}
-          {project.isPersonal && (
-            <svg
-              width={13}
-              height={13}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="rgb(var(--ds-gray-400))"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0"
+            <span className="text-[11px] text-muted">⌄</span>
+          </>
+        )}
+      </button>
+
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+          <div className="absolute bottom-[56px] left-2.5 z-50 w-[180px] rounded-[10px] border border-gray-700 bg-background py-1.5 shadow-md">
+            <MenuItem disabled title="계정 설정 화면은 준비 중이에요">
+              계정 설정
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setMenuOpen(false);
+                handleLogout();
+              }}
             >
-              <rect x="3" y="11" width="18" height="11" rx="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// ─── ResourceTree ─────────────────────────────────────────────────────────────
-
-function ResourceTree({
-  subItems,
-  selectedSubItemId,
-  onSelectSubItem,
-  onSaveName,
-  onStartEdit,
-  collabProvider,
-  userName,
-  cursorColor,
-  onContentChange,
-  onDragStart,
-  onExpandSubItem,
-  selectedUpdatedAt,
-}: {
-  subItems: ResourceSubItem[];
-  selectedSubItemId: string | null;
-  onSelectSubItem: (id: string | null) => void;
-  onSaveName: (id: string, name: string) => void;
-  onStartEdit: (id: string) => void;
-  collabProvider: import('@/lib/SocketIoYjsProvider').SocketIoYjsProvider | null;
-  userName: string;
-  cursorColor: string;
-  onContentChange: (content: { markdownBody: string; jsonBody: string }) => void;
-  onDragStart: (event: React.DragEvent<HTMLSpanElement>, item: ResourceSubItem) => void;
-  onExpandSubItem: (id: string) => void;
-  selectedUpdatedAt?: string;
-}) {
-  if (subItems.length === 0) return null;
-
-  const ITEM_H = 38;
-  const VX = 8;
-  const R = 6;
-
-  return (
-    <div className="ml-3">
-      {subItems.map((item, idx) => {
-        const isLast = idx === subItems.length - 1;
-        const isFirst = idx === 0;
-        const topExtend = isFirst ? BRIDGE_H : 0;
-        const isSelected = selectedSubItemId === item.id;
-
-        return (
-          <div key={item.id} style={{ position: 'relative' }}>
-            {/* 수직 스파인: wrapper 높이(행 + 인라인 에디터)를 자동으로 채워
-                에디터 오픈 시에도 선이 끊기지 않는다 */}
-            {!isLast && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: VX,
-                  top: isFirst ? -BRIDGE_H : 0,
-                  bottom: 0,
-                  width: 1,
-                  background: 'rgb(var(--ds-black))',
-                }}
-              />
-            )}
-
-            <div
-              className="flex items-center"
-              style={{ height: ITEM_H }}
-            >
-              <div
-                style={{
-                  width: 20,
-                  height: ITEM_H,
-                  position: 'relative',
-                  flexShrink: 0,
-                }}
-              >
-                {isLast ? (
-                  /* L커브: 스파인·수평선과 같은 CSS 프리미티브로 그려야
-                     서브픽셀이 정확히 맞는다 (SVG stroke는 중심선 기준이라 0.5px 어긋남) */
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: VX,
-                      right: 0,
-                      top: -topExtend,
-                      height: ITEM_H / 2 + 1 + topExtend,
-                      borderLeft: '1px solid rgb(var(--ds-black))',
-                      borderBottom: '1px solid rgb(var(--ds-black))',
-                      borderBottomLeftRadius: R,
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: VX,
-                      right: 0,
-                      top: ITEM_H / 2,
-                      height: 1,
-                      background: 'rgb(var(--ds-black))',
-                    }}
-                  />
-                )}
-              </div>
-
-              {item.isEditing ? (
-                <input
-                  autoFocus
-                  placeholder="내용을 입력하세요"
-                  defaultValue={item.name}
-                  className="sidebar-new-input rounded-full px-3 py-1 border-none outline-none"
-                  style={{
-                    fontSize: 14,
-                    background: 'rgb(var(--ds-gray-800))',
-                    color: 'rgb(var(--foreground))',
-                    width: '90%',
-                    display: 'inline-block',
-                  }}
-                  onBlur={(e) => onSaveName(item.id, e.target.value.trim())}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') e.currentTarget.blur();
-                  }}
-                />
-              ) : (
-                <span
-                  className="rounded-full px-3 py-1"
-                  draggable
-                  style={{
-                    fontSize: 14,
-                    background: isSelected ? 'rgb(var(--foreground))' : 'rgb(var(--ds-gray-800))',
-                    color: isSelected ? 'rgb(var(--background))' : 'rgb(var(--foreground))',
-                    cursor: 'pointer',
-                    maxWidth: '90%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    display: 'inline-block',
-                  }}
-                  onClick={() =>
-                    onSelectSubItem(isSelected ? null : item.id)
-                  }
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    onSelectSubItem(null);
-                    onStartEdit(item.id);
-                  }}
-                  onDragStart={(e) => onDragStart(e, item)}
-                >
-                  {item.name || (
-                    <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
-                      내용을 입력하세요
-                    </span>
-                  )}
-                </span>
-              )}
-            </div>
-
-            {/* 선택된 서브 아이템 아래 인라인 에디터.
-                아래 간격은 margin이 아니라 padding이어야 함 — margin은 wrapper
-                밖으로 빠져나가 스파인(top:0~bottom:0)이 그 구간을 못 덮는다 */}
-            {isSelected && (
-              <div style={{ marginLeft: 20, paddingBottom: 8 }}>
-                <NodeEditorPanel
-                  nodeId={item.id}
-                  inline
-                  collabProvider={collabProvider}
-                  username={userName}
-                  cursorColor={cursorColor}
-                  onContentChange={onContentChange}
-                  onExpandClick={() => onExpandSubItem(item.id)}
-                  updatedAt={selectedUpdatedAt}
-                />
-              </div>
-            )}
+              로그아웃
+            </MenuItem>
           </div>
-        );
-      })}
+        </>
+      )}
     </div>
   );
 }
 
-// ─── ResourceList ─────────────────────────────────────────────────────────────
+// ─── 프로젝트 트리 (X1) ──────────────────────────────────────────────────────
 
-const BRIDGE_H = 8; // 첫 번째 트리 아이템 수직선 위쪽 연장 길이
-
-function ResourceList({
-  resources,
-  expanded,
-  selectedSubItemId,
-  onSelectSubItem,
-  onToggleExpand,
-  onAddSubItem,
-  onSaveResourceName,
-  onSaveSubItemName,
-  onStartEditResource,
-  onStartEditSubItem,
-  collabProvider,
-  userName,
-  cursorColor,
-  onContentChange,
-  onSubItemDragStart,
-  onExpandSubItem,
-  selectedUpdatedAt,
+function ProjectTreeSection({
+  query,
+  onAddProject,
+  onFocusNode,
 }: {
-  resources: Resource[];
-  expanded: Set<string>;
-  selectedSubItemId: string | null;
-  onSelectSubItem: (id: string | null) => void;
-  onToggleExpand: (id: string) => void;
-  onAddSubItem: (resourceId: string) => void;
-  onSaveResourceName: (id: string, name: string) => void;
-  onSaveSubItemName: (
-    resourceId: string,
-    subItemId: string,
-    name: string,
-  ) => void;
-  onStartEditResource: (id: string) => void;
-  onStartEditSubItem: (resourceId: string, subItemId: string) => void;
-  collabProvider: import('@/lib/SocketIoYjsProvider').SocketIoYjsProvider | null;
-  userName: string;
-  cursorColor: string;
-  onContentChange: (content: { markdownBody: string; jsonBody: string }) => void;
-  onSubItemDragStart: (event: React.DragEvent<HTMLSpanElement>, item: ResourceSubItem) => void;
-  onExpandSubItem: (id: string) => void;
-  selectedUpdatedAt?: string;
-}) {
-  return (
-    <div className="space-y-3">
-      {resources.map((resource) => {
-        const isExpanded = expanded.has(resource.id);
-        const hasSubItems = resource.subItems.length > 0;
-
-        return (
-          <div key={resource.id}>
-            <div className="flex items-center gap-2">
-              {/* Resource 토글 버튼 */}
-              <button
-                onClick={() =>
-                  !resource.isEditing &&
-                  hasSubItems &&
-                  onToggleExpand(resource.id)
-                }
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer"
-                style={{
-                  fontSize: 14,
-                  color: 'rgb(var(--foreground))',
-                  borderColor: 'rgb(var(--ds-black))',
-                  background: 'transparent',
-                  maxWidth: '90%',
-                  minWidth: 0,
-                  width: resource.isEditing ? '90%' : undefined,
-                }}
-              >
-                {resource.isEditing ? (
-                  <input
-                    autoFocus
-                    placeholder="이름 입력..."
-                    defaultValue={resource.name}
-                    className="sidebar-new-input bg-transparent border-none outline-none"
-                    style={{
-                      fontSize: 14,
-                      color: 'rgb(var(--foreground))',
-                      flex: 1,
-                      minWidth: 0,
-                    }}
-                    onBlur={(e) =>
-                      onSaveResourceName(resource.id, e.target.value.trim())
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') e.currentTarget.blur();
-                    }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      cursor: 'text',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStartEditResource(resource.id);
-                    }}
-                  >
-                    {resource.name || (
-                      <span style={{ color: 'rgb(var(--ds-gray-500))' }}>
-                        이름 입력...
-                      </span>
-                    )}
-                  </span>
-                )}
-                {hasSubItems && (
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1"
-                    strokeLinecap="round"
-                    style={{ flexShrink: 0 }}
-                  >
-                    {isExpanded ? (
-                      <path d="M2 6.5L5 3.5L8 6.5" />
-                    ) : (
-                      <path d="M2 3.5L5 6.5L8 3.5" />
-                    )}
-                  </svg>
-                )}
-              </button>
-
-              {/* Resource n 옆 + 버튼 (서브 아이템 추가) */}
-              <button
-                onClick={() => onAddSubItem(resource.id)}
-                className="flex items-center justify-center cursor-pointer"
-                style={{
-                  fontSize: 19,
-                  color: 'rgb(var(--ds-gray-400))',
-                  background: 'transparent',
-                  flexShrink: 0,
-                }}
-              >
-                +
-              </button>
-            </div>
-
-            {/* 서브 아이템 트리 */}
-            {isExpanded && (
-              <div style={{ marginTop: BRIDGE_H }}>
-                <ResourceTree
-                  subItems={resource.subItems}
-                  selectedSubItemId={selectedSubItemId}
-                  onSelectSubItem={onSelectSubItem}
-                  onSaveName={(subItemId, name) =>
-                    onSaveSubItemName(resource.id, subItemId, name)
-                  }
-                  onStartEdit={(subItemId) =>
-                    onStartEditSubItem(resource.id, subItemId)
-                  }
-                  collabProvider={collabProvider}
-                  userName={userName}
-                  cursorColor={cursorColor}
-                  onContentChange={onContentChange}
-                  onDragStart={onSubItemDragStart}
-                  onExpandSubItem={onExpandSubItem}
-                  selectedUpdatedAt={selectedUpdatedAt}
-                />
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-
-interface SidebarProps {
-  isOpen: boolean;
-  onToggle: () => void;
-  projects: Project[];
-  resources: Resource[];
-  expanded: Set<string>;
+  query: string;
   onAddProject: () => void;
-  onSaveProjectName: (id: string, name: string) => void;
-  onStartEditProject: (id: string) => void;
-  onAddResource: () => void;
-  onSaveResourceName: (id: string, name: string) => void;
-  onAddSubItem: (resourceId: string) => void;
-  onSaveSubItemName: (
-    resourceId: string,
-    subItemId: string,
-    name: string,
-  ) => void;
-  onStartEditResource: (id: string) => void;
-  onStartEditSubItem: (resourceId: string, subItemId: string) => void;
-  onToggleExpand: (id: string) => void;
+  onFocusNode: (id: string) => void;
+}) {
+  const tree = useProjectTree(query);
+  // 기본 전부 펼침 — 접은 프로젝트만 기억한다 (노드가 비동기 로드라 "펼침 집합" 초기화 불가)
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) =>
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+      <div className="flex items-center justify-between px-1 pt-3 pb-1.5">
+        <span className="text-[11px] font-medium text-gray-500">프로젝트</span>
+        <button
+          type="button"
+          onClick={onAddProject}
+          aria-label="새 프로젝트 노드"
+          className="px-1 text-[15px] leading-none text-muted hover:text-foreground"
+        >
+          +
+        </button>
+      </div>
+
+      {tree.length === 0 && (
+        <p className="px-1 py-2 text-[12px] text-gray-500">
+          {query.trim() ? '검색 결과가 없어요' : '아직 프로젝트가 없어요'}
+        </p>
+      )}
+
+      {tree.map((project) => {
+        const collapsed = collapsedIds.has(project.id);
+        return (
+          <div key={project.id} className="mb-0.5">
+            <div className="group flex items-center rounded-[6px] transition-colors hover:bg-surface">
+              <button
+                type="button"
+                onClick={() => toggle(project.id)}
+                aria-label={collapsed ? '펼치기' : '접기'}
+                className="w-5 shrink-0 py-1.5 text-center text-[9px] text-gray-500"
+              >
+                {collapsed ? '▸' : '▾'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onFocusNode(project.id)}
+                className="min-w-0 flex-1 truncate py-1.5 pr-2 text-left text-[13px] font-medium text-foreground"
+              >
+                {project.title}
+              </button>
+            </div>
+            {!collapsed &&
+              project.titles.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onFocusNode(t.id)}
+                  className="flex w-full items-center rounded-[6px] py-1.5 pr-2 pl-8 text-left transition-colors hover:bg-surface"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
+                    {t.title}
+                  </span>
+                  {/* 타이틀 옆 빨간 점(회의 녹음 보유)은 회의 기능 데이터 계약 확정 후 */}
+                </button>
+              ))}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
+
+// ─── 접힘 레일 (X4) ──────────────────────────────────────────────────────────
+
+function CollapsedRail({
+  workspaceName,
+  onExpand,
+  onExpandToSearch,
+}: {
+  workspaceName: string;
+  onExpand: () => void;
+  onExpandToSearch: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      className="flex h-full flex-col items-center"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        type="button"
+        onClick={onExpand}
+        title="사이드바 펼치기 ⌘\"
+        className="mt-3"
+      >
+        <WorkspaceIcon name={workspaceName} />
+      </button>
+      <button
+        type="button"
+        onClick={onExpandToSearch}
+        aria-label="노드 검색"
+        title="노드 검색 ⌘K"
+        className="mt-4 flex h-8 w-8 items-center justify-center rounded-[8px] text-muted transition-colors hover:bg-surface hover:text-foreground"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+      </button>
+
+      <div className="flex-1" />
+
+      {/* hover 시 펼치기 핸들 (X4) */}
+      {hovered && (
+        <button
+          type="button"
+          onClick={onExpand}
+          className="absolute top-1/2 -right-3 z-50 flex h-10 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-gray-700 bg-background text-[11px] text-muted shadow-md hover:text-foreground"
+          title="사이드바 펼치기 ⌘\"
+        >
+          ›
+        </button>
+      )}
+
+      <ProfileRow collapsed />
+    </div>
+  );
+}
+
+// ─── Sidebar 본체 ────────────────────────────────────────────────────────────
 
 export default function Sidebar({
   isOpen,
   onToggle,
-  projects,
-  resources,
-  expanded,
-  onAddProject,
-  onSaveProjectName,
-  onStartEditProject,
-  onAddResource,
-  onSaveResourceName,
-  onAddSubItem,
-  onSaveSubItemName,
-  onStartEditResource,
-  onStartEditSubItem,
-  onToggleExpand,
-}: SidebarProps) {
-  const [selectedSubItemId, setSelectedSubItemId] = useState<string | null>(null);
-  const [selectedUpdatedAt, setSelectedUpdatedAt] = useState<string | undefined>(undefined);
-  const editorContentRef = useRef<{ markdownBody: string; jsonBody: string } | null>(null);
+}: {
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const {
+    workspaceId,
+    setWorkspaceId,
+    setWorkspaceRole,
+    setNodes,
+    setEdges,
+    setSynced,
+    setFocusedNodeId,
+    nodes,
+  } = useWorkspaceLayout();
 
-  const router = useRouter();
-  const { userMe, workspaceId } = useWorkspaceLayout();
-  const userName = userMe?.username ?? 'Anonymous';
-  const cursorColor = getCursorColor(userMe?.userId ?? '');
+  const [query, setQuery] = useState('');
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [newWsOpen, setNewWsOpen] = useState(false);
+  const [workspaceTitle, setWorkspaceTitle] = useState('워크스페이스');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingSearchFocusRef = useRef(false);
 
-  const { provider: collabProvider } = useYjsProvider({
-    nodeId: selectedSubItemId,
-    userName,
-    userColor: cursorColor,
-  });
+  // 현재 워크스페이스 이름 — 목록 조회 결과에서 1회 확보
+  useEffect(() => {
+    if (!workspaceId) return;
+    getWorkspaces()
+      .then((list) => {
+        const ws = list.find((w) => w.workspaceId === workspaceId);
+        if (ws) setWorkspaceTitle(ws.title);
+      })
+      .catch(() => {});
+  }, [workspaceId]);
 
-  const handleSelectSubItem = useCallback((id: string | null) => {
-    setSelectedSubItemId(id);
-    setSelectedUpdatedAt(id ? new Date().toISOString() : undefined);
-    editorContentRef.current = null;
-  }, []);
+  // ⌘K 검색 포커스 · ⌘\ 토글 — 전역 단축키 훅(#243) 도입 시 그쪽으로 이관
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key === 'k') {
+        e.preventDefault();
+        if (!isOpen) {
+          pendingSearchFocusRef.current = true;
+          onToggle();
+        } else {
+          searchInputRef.current?.focus();
+        }
+      } else if (e.key === '\\') {
+        e.preventDefault();
+        onToggle();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, onToggle]);
 
-  const handleContentChange = useCallback(
-    (content: { markdownBody: string; jsonBody: string }) => {
-      editorContentRef.current = content;
-      setSelectedUpdatedAt(new Date().toISOString());
+  // 접힘 → ⌘K/검색 아이콘으로 펼친 직후 검색 인풋 포커스
+  useEffect(() => {
+    if (isOpen && pendingSearchFocusRef.current) {
+      pendingSearchFocusRef.current = false;
+      searchInputRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  const switchWorkspace = useCallback(
+    (ws: Pick<WorkspaceListItem, 'workspaceId' | 'title' | 'role'>) => {
+      // 그래프 상태를 비우고 재동기화 — layout의 sync effect가 새 workspaceId로 다시 fetch
+      setNodes([]);
+      setEdges([]);
+      setFocusedNodeId(null);
+      setWorkspaceId(ws.workspaceId);
+      setWorkspaceRole(ws.role);
+      setWorkspaceTitle(ws.title);
+      setSynced(false);
     },
-    [],
+    [setNodes, setEdges, setFocusedNodeId, setWorkspaceId, setWorkspaceRole, setSynced],
   );
 
-  const handleExpandSubItem = useCallback(
-    (id: string) => {
-      router.push(`/workspace/node/${id}${workspaceId ? `?workspaceId=${workspaceId}` : ''}`);
-    },
-    [router, workspaceId],
-  );
-
-  const handleSubItemDragStart = useCallback(
-    (event: React.DragEvent<HTMLSpanElement>, item: ResourceSubItem) => {
-      const isSelected = selectedSubItemId === item.id;
-      const content = isSelected ? editorContentRef.current : null;
-
-      const dragPreview = document.createElement('div');
-      dragPreview.textContent = item.name || ' ';
-      dragPreview.style.padding = '4px 12px';
-      dragPreview.style.fontSize = '14px';
-      dragPreview.style.borderRadius = '9999px';
-      dragPreview.style.background = 'rgb(var(--ds-gray-800))';
-      dragPreview.style.color = 'rgb(var(--foreground))';
-      dragPreview.style.position = 'absolute';
-      dragPreview.style.top = '-9999px';
-      dragPreview.style.left = '-9999px';
-      document.body.appendChild(dragPreview);
-
-      event.dataTransfer.setData(
-        'application/resource-subitem',
-        JSON.stringify({
-          id: item.id,
-          name: item.name,
-          markdownBody: content?.markdownBody ?? '',
-          jsonBody: content?.jsonBody ?? '',
-        }),
-      );
-      event.dataTransfer.effectAllowed = 'copy';
-      event.dataTransfer.setDragImage(dragPreview, 10, 10);
-
-      requestAnimationFrame(() => {
-        document.body.removeChild(dragPreview);
+  const addProjectNode = useCallback(async () => {
+    if (!workspaceId) return;
+    // 기존 프로젝트들 아래쪽 빈 공간에 배치 후 카메라 이동(focus)
+    const projectYs = nodes
+      .filter((n) => (n.data as NodeData)?.isMain)
+      .map((n) => n.position.y);
+    const position = {
+      x: 0,
+      y: projectYs.length ? Math.max(...projectYs) + 240 : 0,
+    };
+    try {
+      const colorPair = getRandomColorPair();
+      const { nodeId } = await createProjectNode(workspaceId, '', position, {
+        color: colorPair.bg,
+        textColor: colorPair.text,
       });
-    },
-    [selectedSubItemId],
+      setNodes((prev) => [
+        ...prev,
+        {
+          id: nodeId,
+          type: 'textUpdater',
+          position,
+          data: {
+            title: '',
+            isMain: true,
+            color: colorPair.bg,
+            textColor: colorPair.text,
+          },
+        },
+      ]);
+      setFocusedNodeId(nodeId);
+    } catch (err) {
+      console.error('[Sidebar] createProjectNode failed', err);
+    }
+  }, [workspaceId, nodes, setNodes, setFocusedNodeId]);
+
+  const focusNode = useCallback(
+    (id: string) => setFocusedNodeId(id),
+    [setFocusedNodeId],
   );
 
   return (
     <aside
-      className="fixed left-0 top-0 h-full flex flex-col z-50"
-      style={{
-        width: SIDEBAR_WIDTH,
-        background: 'rgb(var(--surface))',
-        transform: isOpen
-          ? 'translateX(0)'
-          : `translateX(calc(-100% + ${VISIBLE_BUTTON_WIDTH}px))`,
-        transition: 'transform 300ms ease',
-        overflow: 'visible',
-      }}
+      className="fixed top-0 left-0 z-50 flex h-full flex-col border-r border-border bg-background transition-[width] duration-200 ease-out"
+      style={{ width: isOpen ? SIDEBAR_WIDTH : RAIL_WIDTH }}
     >
-      {/* ── 스크롤 영역 ── */}
-      <div
-        className="scrollbar-hide flex-1 overflow-y-auto px-4 pt-5 pb-4"
-        style={{ overflow: isOpen ? undefined : 'hidden' }}
-      >
-        {/* Workspaces 섹션 */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span
-                style={{
-                  fontSize: 19,
-                  fontWeight: 700,
-                  color: 'rgb(var(--foreground))',
-                }}
-              >
-                Workspaces
+      {isOpen ? (
+        <>
+          {/* 헤더 (X1·X6) */}
+          <div className="relative flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
+            <button
+              type="button"
+              onClick={() => setSwitcherOpen((v) => !v)}
+              aria-expanded={switcherOpen}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-[8px] px-1 py-1 text-left transition-colors hover:bg-surface"
+            >
+              <WorkspaceIcon name={workspaceTitle} />
+              <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
+                {workspaceTitle}
               </span>
-              <button
-                onClick={onAddProject}
-                style={{
-                  fontSize: 23,
-                  color: 'rgb(var(--ds-black))',
-                  lineHeight: 1,
-                }}
-                className="cursor-pointer"
-              >
-                +
-              </button>
-            </div>
+              <span className="text-[10px] text-muted">⌄</span>
+            </button>
             <button
+              type="button"
               onClick={onToggle}
-              className="cursor-pointer"
-              style={{
-                fontSize: 21,
-                color: 'rgb(var(--ds-gray-500))',
-                fontWeight: 600,
-              }}
+              aria-label="사이드바 접기"
+              title="사이드바 접기 ⌘\"
+              className="shrink-0 px-1 text-[14px] text-gray-500 hover:text-foreground"
             >
-              {isOpen ? '«' : '»'}
+              «
             </button>
+            <WorkspaceSwitcher
+              open={switcherOpen}
+              currentId={workspaceId}
+              onClose={() => setSwitcherOpen(false)}
+              onSwitch={switchWorkspace}
+              onNewWorkspace={() => setNewWsOpen(true)}
+            />
           </div>
 
-          <ProjectList
-            projects={projects}
-            onSaveName={onSaveProjectName}
-            onStartEdit={onStartEditProject}
-          />
-        </div>
-
-        {/* Resource 섹션 */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <span
-              style={{
-                fontSize: 19,
-                fontWeight: 700,
-                color: 'rgb(var(--foreground))',
-              }}
-            >
-              Resource
-            </span>
-            <button
-              onClick={onAddResource}
-              style={{
-                fontSize: 23,
-                color: 'rgb(var(--ds-black))',
-                lineHeight: 1,
-              }}
-              className="cursor-pointer"
-            >
-              +
-            </button>
+          {/* 회의 진행 중 배너 (X5) — 회의 기능이 상태를 주기 전까지 숨김(null) */}
+          <div className="shrink-0 px-3 empty:hidden">
+            <MeetingBanner meeting={null} onClick={focusNode} />
           </div>
 
-          <ResourceList
-            resources={resources}
-            expanded={expanded}
-            selectedSubItemId={selectedSubItemId}
-            onSelectSubItem={handleSelectSubItem}
-            onToggleExpand={onToggleExpand}
-            onAddSubItem={onAddSubItem}
-            onSaveResourceName={onSaveResourceName}
-            onSaveSubItemName={onSaveSubItemName}
-            onStartEditResource={onStartEditResource}
-            onStartEditSubItem={onStartEditSubItem}
-            collabProvider={collabProvider}
-            userName={userName}
-            cursorColor={cursorColor}
-            onContentChange={handleContentChange}
-            onSubItemDragStart={handleSubItemDragStart}
-            onExpandSubItem={handleExpandSubItem}
-            selectedUpdatedAt={selectedUpdatedAt}
-          />
-        </div>
-      </div>
+          {/* 노드 검색 (⌘K) */}
+          <div className="shrink-0 px-3 pt-1">
+            <div className="flex h-[32px] items-center gap-2 rounded-[8px] border border-border bg-surface px-2.5 focus-within:border-gray-700">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-gray-500" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="노드 검색"
+                className="min-w-0 flex-1 bg-transparent text-[12.5px] text-foreground outline-none placeholder:text-gray-500"
+              />
+              <span className="shrink-0 rounded border border-border bg-background px-1 text-[10px] text-gray-500">
+                ⌘K
+              </span>
+            </div>
+          </div>
 
-      {/* ── 하단 아이콘 바 ── */}
-      <div
-        className="shrink-0 flex items-center gap-3 px-4 py-3"
-        style={{ borderTop: '1px solid rgb(var(--border))' }}
-      >
-        <button
-          className="flex items-center justify-center rounded-full cursor-pointer"
-          style={{
-            width: 24,
-            height: 24,
-            fontSize: 14,
-            color: 'rgb(var(--ds-gray-500))',
-            border: '1.5px solid rgb(var(--ds-gray-600))',
+          <ProjectTreeSection
+            query={query}
+            onAddProject={addProjectNode}
+            onFocusNode={focusNode}
+          />
+
+          <ProfileRow />
+        </>
+      ) : (
+        <CollapsedRail
+          workspaceName={workspaceTitle}
+          onExpand={onToggle}
+          onExpandToSearch={() => {
+            pendingSearchFocusRef.current = true;
+            onToggle();
           }}
-        >
-          ?
-        </button>
-        <button
-          className="flex items-center justify-center cursor-pointer"
-          style={{ color: 'rgb(var(--ds-gray-500))' }}
-          title="레이아웃"
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <rect x="1" y="1" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="1" y="7" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="1" y="13" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="10" y="1" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="10" y="7" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-            <rect x="10" y="13" width="7" height="4" rx="1" stroke="currentColor" strokeWidth="1" />
-          </svg>
-        </button>
-      </div>
+        />
+      )}
+
+      <NewWorkspaceModal
+        open={newWsOpen}
+        onClose={() => setNewWsOpen(false)}
+        onCreated={(id, title) => {
+          setNewWsOpen(false);
+          switchWorkspace({ workspaceId: id, title, role: 'OWNER' });
+        }}
+      />
     </aside>
   );
 }
