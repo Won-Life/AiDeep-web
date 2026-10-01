@@ -23,6 +23,9 @@ import { getCursorColor } from '@/utils/cursorColor';
 import { type NodeView } from '@/features/nodes/TextUpdateNode';
 import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
 
+// 마지막으로 보던 워크스페이스 — 새로고침 후에도 유지 (sync effect가 읽고/쓴다)
+const LAST_WORKSPACE_KEY = 'aideep_last_workspace_id';
+
 function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const {
@@ -95,10 +98,15 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     getWorkspaces()
       .then((list) => {
         if (!list.length) return Promise.reject('no workspace');
-        // 사이드바 스위처로 전환한 경우 현재 workspaceId를 존중한다 — 없으면 첫 번째
+        // 우선순위: ① 사이드바 스위처로 전환한 현재 workspaceId ② 마지막으로 보던
+        // 워크스페이스(localStorage — 새로고침 시 첫 번째로 돌아가는 문제 방지) ③ 첫 번째
+        const lastViewedId = localStorage.getItem(LAST_WORKSPACE_KEY);
         const ws =
           (workspaceId && list.find((w) => w.workspaceId === workspaceId)) ||
+          (lastViewedId &&
+            list.find((w) => w.workspaceId === lastViewedId)) ||
           list[0];
+        localStorage.setItem(LAST_WORKSPACE_KEY, ws.workspaceId);
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
 
