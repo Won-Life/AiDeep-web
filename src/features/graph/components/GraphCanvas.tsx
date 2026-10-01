@@ -29,10 +29,11 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import ZoomControl from '@/components/ui/ZoomControl';
-import GraphUsageGuide, {
-  type GraphUsageGuideHandle,
-} from '@/components/ui/GraphUsageGuide';
-import MouseIcon, { ConnectDragIcon } from '@/components/ui/MouseIcon';
+import HelpMenu from '@/components/ui/HelpMenu';
+import GraphOnboardingModal, {
+  useGraphOnboardingSeen,
+} from '@/components/ui/GraphOnboardingModal';
+import { useOnboardingSeen } from '@/components/layout/OnboardingPopup';
 import * as d3 from 'd3';
 import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
@@ -462,8 +463,19 @@ function GraphCanvasInner({
   const isMultiDragRef = useRef(false);
   // 뷰포트 중앙 좌표 계산용 캔버스 래퍼 (#204 보이는 생성 버튼)
   const wrapperRef = useRef<HTMLDivElement>(null);
-  // 빈 캔버스 안내의 인라인 "사용법" 버튼으로 사용법 창을 여는 핸들
-  const usageGuideRef = useRef<GraphUsageGuideHandle>(null);
+  // 그래프 구조 온보딩(G3) — Meet 온보딩 팝업(layout, z-50)과 겹치지 않게
+  // Meet 온보딩 확인 이후 첫 렌더에서 1회만 자동 오픈한다
+  const meetOnboardingSeen = useOnboardingSeen();
+  const graphOnboardingSeen = useGraphOnboardingSeen();
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const onboardingAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (onboardingAutoOpenedRef.current) return;
+    if (meetOnboardingSeen && !graphOnboardingSeen) {
+      onboardingAutoOpenedRef.current = true;
+      setOnboardingOpen(true);
+    }
+  }, [meetOnboardingSeen, graphOnboardingSeen]);
   const lastLiveEmitRef = useRef(0);
   const LIVE_EMIT_INTERVAL = 50; // ms
 
@@ -2659,107 +2671,60 @@ function GraphCanvasInner({
       )}
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
-      {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출.
-          실제 노드 모양 안에 용어를 그대로 써서(중심 주제/하위 주제/연결점) 사용법 창과 같은
-          어휘를 미리 학습시킨다. 노드 표면색은 UI 가이드의 고정 팔레트라 하드코딩 허용 */}
+      {/* 빈 캔버스 empty state (G2) — 프로젝트 노드부터 만들도록 첫 행동을 안내하고,
+          프로젝트 → 타이틀 → 회의 녹음으로 이어지는 핵심 흐름을 단계로 보여준다 */}
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
-          {/* 미니 그래프: 중심 주제 노드 → 연결점 → 같은 색(같은 그래프) 하위 주제 노드 2개 */}
-          <div className="flex items-center" aria-hidden="true">
-            <div
-              className="relative rounded-lg border px-5 py-3 text-sm font-medium"
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderColor: '#D9D9D9',
-                color: '#2C2C2C',
-              }}
-            >
-              중심 주제
-              {/* 연결점 — 노드 가장자리의 작은 점 */}
-              <span
-                className="absolute top-1/2 -right-[5px] h-2.5 w-2.5 -translate-y-1/2 rounded-full"
-                style={{ backgroundColor: '#2C2C2C' }}
-              />
-              {/* 연결점 라벨 — 점 바로 위, 연결선과 겹치지 않는 노드 우상단 바깥.
-                  연결점(검정)과 같은 색으로 맞춤 */}
-              <span className="absolute -top-5 right-0 translate-x-1/2 whitespace-nowrap text-[11px] text-foreground">
-                연결점
-              </span>
-            </div>
-            <svg width="48" height="104" viewBox="0 0 48 104" fill="none">
-              <path
-                d="M0 52 H20 V26 H48"
-                stroke="#D9D9D9"
-                strokeWidth="1.5"
-                fill="none"
-              />
-              <path
-                d="M0 52 H20 V78 H48"
-                stroke="#D9D9D9"
-                strokeWidth="1.5"
-                fill="none"
-              />
-            </svg>
-            {/* 같은 그래프의 서브 노드는 같은 색 (색상 = 그래프 구분) */}
-            <div className="flex flex-col gap-5">
-              <span
-                className="rounded-full px-4 py-1.5 text-[13px]"
-                style={{ backgroundColor: '#D0EEFB', color: '#254756' }}
-              >
-                하위 주제
-              </span>
-              <span
-                className="rounded-full px-4 py-1.5 text-[13px]"
-                style={{ backgroundColor: '#D0EEFB', color: '#254756' }}
-              >
-                하위 주제
-              </span>
-            </div>
-          </div>
-          <p className="mt-6 text-xl font-bold text-foreground">
-            머릿속 생각을 하나 꺼내볼까요?
+          {/* 점선 프로젝트 노드 모형 */}
+          <span
+            className="rounded-full border-[1.5px] border-dashed border-gray-700 px-7 py-2.5 text-[13px] text-gray-500"
+            aria-hidden="true"
+          >
+            프로젝트
+          </span>
+          <p className="mt-5 text-xl font-bold text-foreground">
+            첫 프로젝트 노드를 만들어보세요
+          </p>
+          <p className="mt-2 text-[13.5px] text-muted">
+            과목이나 팀 프로젝트 이름으로 시작하면 좋아요. 예: 운영체제, 캡스톤
           </p>
           <button
             type="button"
             onClick={createProjectAtViewportCenter}
             disabled={isCreatingProject}
-            className="pointer-events-auto mt-5 rounded-lg bg-main px-6 py-2.5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="pointer-events-auto mt-6 rounded-[8px] bg-foreground px-6 py-2.5 text-[14px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            첫 주제 만들기
+            + 프로젝트 노드 만들기
           </button>
-          <div className="mt-7 flex flex-col gap-2.5">
+          {/* 핵심 흐름 3단계 */}
+          <div className="mt-8 flex items-center gap-2 text-[12.5px] text-muted">
             {(
               [
-                ['우클릭', '중심 주제 만들기', <MouseIcon key="r" button="right" />],
-                [
-                  '더블 클릭',
-                  '하위 주제 만들기',
-                  <MouseIcon key="d" button="double" />,
-                ],
-                ['연결점 끌기', '이어진 주제 만들기', <ConnectDragIcon key="c" />],
+                ['1', '프로젝트 만들기'],
+                ['2', '타이틀 추가'],
               ] as const
-            ).map(([action, desc, icon]) => (
-              <div key={action} className="flex items-center gap-2.5 text-sm">
-                <span className="flex w-[108px] shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-foreground">
-                  {icon}
-                  {action}
+            ).map(([step, label]) => (
+              <span key={step} className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-700 text-[11px]">
+                    {step}
+                  </span>
+                  {label}
                 </span>
-                <span className="text-muted">{desc}</span>
-              </div>
+                <span aria-hidden="true">→</span>
+              </span>
             ))}
+            <span className="flex items-center gap-1.5">
+              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-700 text-[11px]">
+                3
+              </span>
+              타이틀 위{' '}
+              <span className="font-semibold text-foreground whitespace-nowrap">
+                <span className="text-red-500">●</span> 회의 녹음
+              </span>{' '}
+              으로 회의 시작
+            </span>
           </div>
-          <p className="mt-6 flex items-center gap-1.5 text-[13px] text-muted">
-            자세한 방법은 우측 상단{' '}
-            {/* 실제 사용법 버튼과 동일한 디자인·동작 — 클릭 시 사용법 창 열림 */}
-            <button
-              type="button"
-              onClick={() => usageGuideRef.current?.open()}
-              className="pointer-events-auto rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
-            >
-              사용법
-            </button>{' '}
-            버튼에 있어요.
-          </p>
         </div>
       )}
       {/* 노드 생성 진입점을 항상 보이는 버튼으로 제공 (#204) — 뷰포트 중앙에 중심 노드 생성 */}
@@ -2789,7 +2754,7 @@ function GraphCanvasInner({
       {/* top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
           top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치. */}
       <div className="absolute top-20 right-4 z-40 flex items-start gap-2">
-        <GraphUsageGuide ref={usageGuideRef} highlight={nodes.length === 0} />
+        <HelpMenu onOpenGuide={() => setOnboardingOpen(true)} />
         {myOpenEditorNodeIds.length > 0 && (
           <button
             type="button"
@@ -2800,6 +2765,10 @@ function GraphCanvasInner({
           </button>
         )}
       </div>
+      <GraphOnboardingModal
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+      />
       {isArchiveModalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[360px] rounded-xl border border-border bg-background p-5 shadow-xl">
