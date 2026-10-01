@@ -581,11 +581,13 @@ export default function Sidebar({
       .catch(() => {});
   }, [workspaceId]);
 
-  // ⌘K 검색 포커스 · ⌘\ 토글 — 전역 단축키 훅(#243) 도입 시 그쪽으로 이관
+  // ⌘K 검색 포커스 · ⌘\ 토글 — 전역 단축키 훅(#243) 도입 시 그쪽으로 이관.
+  // e.key가 아니라 e.code(물리 키 위치) 비교인 이유: 한글 자판에서는 K 자리의
+  // e.key가 'ㅏ'로 들어와 'k' 비교가 실패한다. IME 조합 중에는 'Process'가 되기도 함.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.key === 'k') {
+      if (e.code === 'KeyK') {
         e.preventDefault();
         if (!isOpen) {
           pendingSearchFocusRef.current = true;
@@ -593,7 +595,7 @@ export default function Sidebar({
         } else {
           searchInputRef.current?.focus();
         }
-      } else if (e.key === '\\') {
+      } else if (e.code === 'Backslash') {
         e.preventDefault();
         onToggle();
       }
