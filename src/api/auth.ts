@@ -1,6 +1,7 @@
 import axios from 'axios';
 import client, { setTokens, clearTokens } from './client';
 import { ApiError } from './types';
+import { consumeOAuthPersistence, type TokenPersistence } from './tokenStorage';
 import type {
   ApiResponse,
   LoginRequest,
@@ -14,29 +15,29 @@ import type {
   OAuthSignupCompleteRequest,
 } from './types';
 
-export async function login(data: LoginRequest): Promise<LoginResponse> {
-  const { data: result } = await client.post<LoginResponse>('/auth/login', data);
-  setTokens(result.accessToken, result.refreshToken);
+export async function login(data: LoginRequest, persistence: TokenPersistence = 'local'): Promise<LoginResponse> {
+  const { data: result } = await client.post<LoginResponse>('/auth/login', data, { skipAuthRefresh: true });
+  setTokens(result.accessToken, result.refreshToken, persistence);
   return result;
 }
 
 export async function signup(data: SignupRequest): Promise<string> {
-  const { data: result } = await client.post<string>('/auth/signup', data);
+  const { data: result } = await client.post<string>('/auth/signup', data, { skipAuthRefresh: true });
   return result;
 }
 
 export async function sendEmailCode(data: EmailSendRequest): Promise<EmailSendResponse> {
-  const { data: result } = await client.post<EmailSendResponse>('/auth/email/send', data);
+  const { data: result } = await client.post<EmailSendResponse>('/auth/email/send', data, { skipAuthRefresh: true });
   return result;
 }
 
 export async function verifyEmailCode(data: EmailVerifyRequest): Promise<string> {
-  const { data: result } = await client.post<string>('/auth/email/verify', data);
+  const { data: result } = await client.post<string>('/auth/email/verify', data, { skipAuthRefresh: true });
   return result;
 }
 
 export async function refresh(data: RefreshRequest): Promise<LoginResponse> {
-  const { data: result } = await client.post<LoginResponse>('/auth/refresh', data);
+  const { data: result } = await client.post<LoginResponse>('/auth/refresh', data, { skipAuthRefresh: true });
   setTokens(result.accessToken, result.refreshToken);
   return result;
 }
@@ -85,7 +86,7 @@ export async function completeOAuthSignup(
     );
   }
 
-  setTokens(body.success.accessToken, body.success.refreshToken);
+  setTokens(body.success.accessToken, body.success.refreshToken, consumeOAuthPersistence());
   return body.success;
 }
 

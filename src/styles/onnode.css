@@ -1,0 +1,35 @@
+/* OnNode: new tokens are additive; legacy graph/editor tokens stay intact. */
+:root {
+  --onnode-primary-100: #e9eeff; --onnode-primary-200: #c0ceff;
+  --onnode-primary-300: #92aaff; --onnode-primary-400: #748dfd;
+  --onnode-primary-500: #5679f4; --onnode-primary-600: #3f62e0; --onnode-primary-700: #3458bf;
+  --onnode-secondary-100: #fff8fb; --onnode-secondary-200: #ffebf3;
+  --onnode-secondary-300: #ffcfe3; --onnode-secondary-400: #feaece;
+  --onnode-secondary-500: #f297c1; --onnode-secondary-600: #e279ae; --onnode-secondary-700: #c45f91;
+  --onnode-neutral-white: #fff; --onnode-neutral-100: #fafafa;
+  --onnode-neutral-200: #f0f0f0; --onnode-neutral-300: #e6e6e6;
+  --onnode-neutral-400: #ccc; --onnode-neutral-500: #a6a6a6;
+  --onnode-neutral-600: #727272; --onnode-neutral-700: #4d4d4d;
+  --onnode-neutral-800: #383838; --onnode-neutral-900: #111;
+  --onnode-primary: var(--onnode-primary-400);
+  --onnode-secondary: var(--onnode-secondary-500);
+  --onnode-surface: var(--onnode-neutral-white);
+  --onnode-surface-subtle: var(--onnode-neutral-100);
+  --onnode-text: var(--onnode-neutral-900);
+  --onnode-text-secondary: var(--onnode-neutral-600);
+  --onnode-text-tertiary: var(--onnode-neutral-500);
+  --onnode-border: var(--onnode-neutral-400);
+  --onnode-danger: #d14040; --onnode-danger-surface: #fceded;
+  --onnode-overlay: rgb(17 17 17 / 40%);
+  --onnode-input-shadow: 0 2px 2px rgb(0 0 0 / 5%);
+  --onnode-card-shadow: 0 3px 6px rgb(0 0 0 / 25%);
+  --onnode-auth-gradient: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 800' preserveAspectRatio='none'><g transform='matrix(36.05 53 -75.399 51.285 708 387.5)'><foreignObject x='-204.3' y='-204.3' width='408.6' height='408.6'><div xmlns='http://www.w3.org/1999/xhtml' style='background-image: conic-gradient(from 90deg, rgb(255, 246, 250) -6.7262%, rgb(232, 237, 254) 9.4477%, rgb(255, 254, 254) 35.44%, rgb(244, 246, 255) 45.879%, rgb(255, 254, 254) 70.371%, rgb(255, 246, 250) 93.274%, rgb(232, 237, 254) 109.45%); opacity:1; height: 100%; width: 100%;'></div></foreignObject></g></svg>");
+}
+
+.onnode-auth { color-scheme: light; font-family: var(--font-onnode), var(--font-noto-sans-kr), sans-serif; color: var(--onnode-text-secondary); font-size: 13px; letter-spacing: .02em; }
+
+.onnode-auth input:-webkit-autofill {
+  -webkit-text-fill-color: var(--onnode-text-secondary);
+  caret-color: var(--onnode-text-secondary);
+  box-shadow: 0 0 0 1000px var(--onnode-surface) inset, var(--onnode-input-shadow);
+}

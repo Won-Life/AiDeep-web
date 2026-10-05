@@ -1,8 +1,9 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setTokens } from '@/api/client';
+import { consumeOAuthPersistence } from '@/api/tokenStorage';
 import { completeOAuthSignup } from '@/api/auth';
 import { createWorkspace } from '@/api/workspace';
 import { ApiError } from '@/api/types';
@@ -52,6 +53,8 @@ function OAuthCallback() {
 
   // 지연 초기화 — 마운트 시점 쿼리로 분기를 확정하고, 이후 주소가 바뀌어도 유지한다
   const [phase] = useState(() => resolveCallbackPhase(searchParams));
+  // StrictMode effect replay must not consume the storage preference twice.
+  const loginHandled = useRef(false);
 
   const [username, setUsername] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -62,7 +65,9 @@ function OAuthCallback() {
     window.history.replaceState(null, '', window.location.pathname);
 
     if (phase.status === 'login') {
-      setTokens(phase.accessToken, phase.refreshToken);
+      if (loginHandled.current) return;
+      setTokens(phase.accessToken, phase.refreshToken, consumeOAuthPersistence());
+      loginHandled.current = true;
       router.replace('/workspace');
       return;
     }
