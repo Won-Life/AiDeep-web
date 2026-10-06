@@ -37,6 +37,7 @@ export type NodeView = {
   color?: string;
   textColor?: string; // 텍스트 색상
   isMain?: boolean; // 중심 노드인지 서브 노드인지 구분
+  isContentNode?: boolean; // 콘텐츠 노드(부모가 프로젝트가 아님) — GraphCanvas에서 계산해 주입
   handleSide?: 'left' | 'right';
   hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
@@ -58,6 +59,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const router = useRouter();
   const nodeData = data as NodeView;
   const isMain = nodeData.isMain ?? false;
+  // 프로젝트 → 타이틀 → 콘텐츠. 타이틀=프로젝트 직계(pill), 콘텐츠=그 이하(연한 사각형) (Figma 08 G1).
+  // depth는 서버 미전파로 stale할 수 있어 GraphCanvas가 부모-main 여부로 계산해 넘긴 값을 쓴다.
+  const isContent = !isMain && (nodeData.isContentNode ?? false);
+  const isTitle = !isMain && !isContent; // 타이틀/단독 노드
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
   const showInputBox = nodeData.showInputBox ?? false;
   const isContextMenuOpen = nodeData.isContextMenuOpen ?? false;
@@ -90,8 +95,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
   const containerClasses = isMain
-    ? 'text-updater-node rounded-lg border'
-    : 'text-updater-node rounded-full';
+    ? 'text-updater-node rounded-[16px]'
+    : isContent
+      ? 'text-updater-node rounded-[10px]'
+      : 'text-updater-node rounded-full';
 
   // React Flow 기본 엣지 색상과 동일한 회색 (#b1b1b7)
   const EDGE_COLOR = '#D9D9D9';
@@ -132,28 +139,43 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
 
   const containerStyle = isMain
     ? {
-        // 프로젝트(main) 노드는 그래프 색을 데이터로 보유하더라도 항상 흰 배경으로 표시 (도메인 규칙)
+        // 프로젝트(main) 노드는 그래프 색을 데이터로 보유해도 항상 흰 배경 (도메인 규칙).
+        // Figma 08(G1): 흰 카드 + 소프트 섀도 + 좌상단 폴더 탭(탭 색 = 그래프 색)으로
+        // 소속 그래프를 드러낸다 → 기존 '색 테두리'를 폴더 탭(mainOwnBorderColor)으로 대체,
+        // 기본 테두리 없음. hover/selected/viewer만 테두리로 표시.
         backgroundColor: MAIN_NODE_COLOR.bg,
-        borderColor: isHovered
-          ? '#93C5FD'
-          : selected
-            ? 'rgb(var(--ds-main))'
-            : (viewerBorderColor ?? mainOwnBorderColor ?? EDGE_COLOR),
-        borderWidth:
-          isHovered || selected || viewerBorderColor || mainOwnBorderColor
-            ? '2px'
-            : '1px',
-      }
-    : {
-        backgroundColor: nodeData.color || '#ffffff',
+        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
         border: isHovered
-          ? '3px solid #93C5FD'
+          ? '2px solid #93C5FD'
           : selected
             ? '2px solid rgb(var(--ds-main))'
             : viewerBorderColor
               ? `2px solid ${viewerBorderColor}`
               : 'none',
-      };
+      }
+    : isContent
+      ? {
+          // 콘텐츠 노드(depth 2+): 그래프 색을 흰색과 블렌드한 연한 태그 + 1px 그래프색 테두리 (Figma 08 G1)
+          backgroundColor: `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, white)`,
+          border: isHovered
+            ? '2px solid #93C5FD'
+            : selected
+              ? '2px solid rgb(var(--ds-main))'
+              : viewerBorderColor
+                ? `2px solid ${viewerBorderColor}`
+                : `1px solid ${nodeData.color || EDGE_COLOR}`,
+        }
+      : {
+          // 타이틀 노드(depth 0~1): 그래프 색을 텍스트 색과 섞은 '진한' 버전 + 흰 텍스트 (Figma 08 G1)
+          backgroundColor: `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
+          border: isHovered
+            ? '3px solid #93C5FD'
+            : selected
+              ? '2px solid rgb(var(--ds-main))'
+              : viewerBorderColor
+                ? `2px solid ${viewerBorderColor}`
+                : 'none',
+        };
 
   // 최대 3명 표시, 이후 +N
   const visibleViewers = viewers.slice(0, 3);
@@ -259,12 +281,31 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         onMouseEnter={() => setIsNodeHovered(true)}
         onMouseLeave={() => setIsNodeHovered(false)}
       >
+        {/* Figma 08(G1) 프로젝트 노드 좌상단 폴더 탭 — 탭 색이 소속 그래프 색 */}
+        {isMain && (
+          <div
+            aria-hidden
+            className="absolute"
+            style={{
+              top: -22,
+              left: 20,
+              width: 56,
+              height: 22,
+              backgroundColor: mainOwnBorderColor ?? EDGE_COLOR,
+              borderRadius: '8px 8px 0 0',
+            }}
+          />
+        )}
         <div
-          className="text-center select-none"
+          className={`${isContent ? 'text-left' : 'text-center'} select-none`}
           style={{
             color: isEmpty
               ? 'rgb(var(--ds-gray-500))'
-              : nodeData.textColor || 'rgb(var(--foreground))',
+              : isTitle
+                ? '#ffffff'
+                : nodeData.textColor || 'rgb(var(--foreground))',
+            fontWeight: isMain ? 700 : undefined,
+            fontSize: isMain ? '20px' : undefined,
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',

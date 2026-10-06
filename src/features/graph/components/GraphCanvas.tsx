@@ -745,9 +745,21 @@ function GraphCanvasInner({
   const collapseChildrenMap = buildChildrenMap(edges);
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
+  // 타이틀/콘텐츠 판정은 depth가 아니라 '부모가 프로젝트(main)인가'로 한다. depth는 서버가
+  // WS·REST 응답에 안 실어 stale할 수 있어(graph/CLAUDE.md) 깊은 콘텐츠가 타이틀로 오분류됨.
+  // 단일 부모 불변식이라 incoming 엣지(target=자식)의 source가 곧 부모다.
+  const isMainById = new Map(
+    nodes.map((n) => [n.id, !!(n.data as { isMain?: boolean })?.isMain]),
+  );
+  const parentIdByChildId = new Map<string, string>();
+  edges.forEach((e) => parentIdByChildId.set(e.target, e.source));
+
   const nodesWithCallbacks = nodes.map((node) => {
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
     const hasParent = !isRootNode(node);
+    // 콘텐츠 노드 = 부모가 있고 그 부모가 프로젝트가 아님 (프로젝트 직계 = 타이틀)
+    const parentId = parentIdByChildId.get(node.id);
+    const isContentNode = parentId != null && !isMainById.get(parentId);
 
     const isContextMenuOpen = contextMenuNodeId === node.id;
     const isEditorOpen = myOpenEditorNodeIds.includes(node.id);
@@ -760,6 +772,7 @@ function GraphCanvasInner({
         ...node.data,
         handleSide: node.data?.isMain ? undefined : node.data?.handleSide,
         hasParent, // 부모 노드 존재 여부 전달
+        isContentNode, // 타이틀(프로젝트 직계) vs 콘텐츠(그 이하) 구분 — Figma 08 G1 노드 스타일
         showInputBox: myOpenEditorNodeIds.includes(node.id), // 열린 노드에 입력박스 표시 (내 탭 기준)
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
