@@ -7,18 +7,15 @@ import AuthField from './AuthField';
 import SignupAgreements from './SignupAgreements';
 import SignupEmailFields from './SignupEmailFields';
 import { useSignupForm } from './useSignupForm';
-import type { SignupFormValues } from './signupRules';
 
 export default function SignupScreen({
   onBack,
   checking,
-  onSignup,
 }: {
   onBack: () => void;
   checking: boolean;
-  onSignup?: (values: SignupFormValues) => Promise<void>;
 }) {
-  const form = useSignupForm(onSignup);
+  const form = useSignupForm();
   const busy = checking || form.busy;
   return (
     <AuthLayout signup>
@@ -28,6 +25,7 @@ export default function SignupScreen({
       </p>
       <form onSubmit={form.submit} aria-busy={form.busy} className="mt-[17px]">
         <fieldset disabled={busy} className="flex flex-col gap-[22px]">
+          <fieldset disabled={form.accountCreated} className="flex flex-col gap-[22px]">
           <SignupEmailFields verification={form.verification} busy={busy} />
           <AuthField
             label="비밀번호"
@@ -62,6 +60,7 @@ export default function SignupScreen({
             value={form.agreements}
             onChange={form.setAgreements}
           />
+          </fieldset>
           {form.message && (
             <p role="alert" className="text-[11px] text-[var(--onnode-danger)]">
               {form.message}
@@ -73,7 +72,7 @@ export default function SignupScreen({
             loading={form.submitting}
             className="w-full"
           >
-            가입하기
+            {form.accountCreated ? '계속하기' : '가입하기'}
           </Button>
         </fieldset>
         <div className="my-[9px] flex items-center gap-[13px] text-[10px] leading-[11px] text-[var(--onnode-border)]">
@@ -83,7 +82,7 @@ export default function SignupScreen({
         </div>
         <Button
           variant="secondary"
-          disabled={busy}
+          disabled={busy || form.accountCreated}
           onClick={form.startGoogleLogin}
           className="w-full"
         >
@@ -102,7 +101,7 @@ export default function SignupScreen({
         이미 계정이 있으신가요?{' '}
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || form.accountCreated}
           onClick={onBack}
           className="text-[var(--onnode-text)] underline"
         >

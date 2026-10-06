@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { login } from '@/api/auth';
 import { rememberOAuthPersistence } from '@/api/tokenStorage';
 import { getLoginErrorMessage } from './loginError';
+import { getMe } from '@/api/user';
+import { getAuthDestination } from '@/features/onboarding/onboardingEntry';
 
 type LoginState = { status: 'idle' | 'submitting' | 'error'; message: string };
 
@@ -31,7 +33,7 @@ export function useLoginForm() {
     setState({ status: 'submitting', message: '' });
     try {
       await login({ email: email.trim(), password }, remember ? 'local' : 'session');
-      router.replace('/workspace');
+      router.replace(getAuthDestination(await getMe()));
     } catch (error) {
       setState({ status: 'error', message: getLoginErrorMessage(error) });
       submitting.current = false;
