@@ -1,8 +1,10 @@
 'use client';
 
 import Image from 'next/image';
+import { useState } from 'react';
+import AgreementModal from './AgreementModal';
+import { agreeToDocument, type Agreements, type AgreementKey } from './legal/agreements';
 
-type Agreements = { terms: boolean; privacy: boolean; marketing: boolean };
 const items = [
   { key: 'terms', label: '(필수) 이용약관 동의' },
   { key: 'privacy', label: '(필수) 개인정보 수집 및 이용 동의' },
@@ -12,9 +14,9 @@ const items = [
 /*
  * CONTEXT
  * - Problem      : 동의 선택과 약관 본문 연결을 분리한다.
- * - Why          : 이번 범위의 보기 버튼은 클릭 가능하게만 제공한다.
- * - Alternatives : 임의 본문·URL 연결 → 승인하지 않은 약관을 보여준다.
- * - Trade-offs   : 보기 동작은 후속 연결한다.
+ * - Why          : 승인된 본문은 모달로 읽고 명시적인 동의 버튼으로만 체크한다.
+ * - Alternatives : 보기 즉시 동의 → 본문 확인과 동의가 구분되지 않는다.
+ * - Trade-offs   : 이메일/구글 가입에 같은 본문과 선택 상태를 적용한다.
  * - Edge Case    : 선택 동의는 가입 필수 조건에 포함하지 않는다.
  */
 function AgreementCheckbox({
@@ -56,6 +58,7 @@ export default function SignupAgreements({
   value: Agreements;
   onChange: (value: Agreements) => void;
 }) {
+  const [activeAgreement, setActiveAgreement] = useState<AgreementKey | null>(null);
   const allChecked = value.terms && value.privacy && value.marketing;
   return (
     <div className="text-[11px] leading-[14px]">
@@ -88,6 +91,7 @@ export default function SignupAgreements({
             <button
               type="button"
               aria-label={`${item.label} 보기`}
+              onClick={() => setActiveAgreement(item.key)}
               className="shrink-0 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               보기 &gt;
@@ -95,6 +99,13 @@ export default function SignupAgreements({
           </div>
         ))}
       </div>
+      {activeAgreement && (
+        <AgreementModal agreement={activeAgreement} onClose={() => setActiveAgreement(null)}
+          onAgree={(key) => {
+            onChange(agreeToDocument(value, key));
+            setActiveAgreement(null);
+          }} />
+      )}
     </div>
   );
 }
