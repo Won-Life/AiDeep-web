@@ -2871,7 +2871,8 @@ function GraphCanvasInner({
             type="button"
             onClick={createProjectAtViewportCenter}
             disabled={isCreatingProject}
-            className="pointer-events-auto mt-6 rounded-[8px] bg-foreground px-6 py-2.5 text-[14px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
+            className="pointer-events-auto mt-6 rounded-[20px] px-6 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             + 프로젝트 노드 만들기
           </button>

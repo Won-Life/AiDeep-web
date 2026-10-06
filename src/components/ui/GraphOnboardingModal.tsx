@@ -203,7 +203,8 @@ export default function GraphOnboardingModal({
           <button
             type="button"
             onClick={close}
-            className="rounded-[8px] bg-foreground px-6 py-2.5 text-[14px] font-semibold text-background transition-opacity hover:opacity-90"
+            className="rounded-[20px] px-6 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
           >
             시작하기
           </button>
