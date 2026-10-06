@@ -5,9 +5,9 @@ import {
   type useAnimationControls,
   type TargetAndTransition,
   type Variants,
+  type Transition,
 } from 'motion/react';
 import type { ReactNode } from 'react';
-import { loginMotion, errorMotion } from './authMotion';
 
 /*
  * CONTEXT
@@ -24,9 +24,7 @@ export default function AuthMotionPiece({
   nodeId,
   restRotate = 0,
 }: {
-  config:
-    | (typeof loginMotion)[keyof typeof loginMotion]
-    | (typeof errorMotion)[keyof typeof errorMotion];
+  config: { initial: TargetAndTransition; animate: TargetAndTransition; transition: Transition };
   controls: ReturnType<typeof useAnimationControls>;
   children: ReactNode;
   nodeId: string;

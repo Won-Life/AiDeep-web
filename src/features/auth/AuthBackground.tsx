@@ -9,9 +9,11 @@ import { loginMotion, errorMotion } from './authMotion';
 export default function AuthBackground({
   recovery,
   error = false,
+  assets = {},
 }: {
   recovery: boolean;
   error?: boolean;
+  assets?: Partial<Record<'top' | 'landscape' | 'hill' | 'line' | 'blue' | 'pink' | 'organize' | 'record' | 'summarize', string>>;
 }) {
   const controls = useAnimationControls();
   const reducedMotion = useReducedMotion();
@@ -37,7 +39,7 @@ export default function AuthBackground({
       <div className="absolute left-[59.92%] top-[-35.13%] flex h-[64.32%] w-[49.72%] items-center justify-center">
         <div className="shrink-0 rotate-[31.3deg]">
           <Image
-            src="/onnode/auth/imgVector4.svg"
+            src={assets.top ?? '/onnode/auth/imgVector4.svg'}
             width={600.735}
             height={236.868}
             alt=""
@@ -60,7 +62,7 @@ export default function AuthBackground({
         <>
           <div className="absolute left-[-0.47%] top-[49%]">
             <Image
-              src="/onnode/auth/imgVector2.svg"
+              src={assets.landscape ?? '/onnode/auth/imgVector2.svg'}
               width={260.916}
               height={274.315}
               alt=""
@@ -69,7 +71,7 @@ export default function AuthBackground({
           </div>
           <div className="absolute left-[0.08%] top-[68%]">
             <Image
-              src="/onnode/auth/imgVector3.svg"
+              src={assets.hill ?? '/onnode/auth/imgVector3.svg'}
               width={553}
               height={263.613}
               alt=""
@@ -80,7 +82,7 @@ export default function AuthBackground({
       )}
       <div className="absolute left-[-0.47%] top-[72.89%]">
         <Image
-          src="/onnode/auth/imgVector6.svg"
+          src={assets.line ?? '/onnode/auth/imgVector6.svg'}
           width={386.766}
           height={242.524}
           alt=""
@@ -121,7 +123,7 @@ export default function AuthBackground({
               nodeId={ids[0]}
             >
               <Image
-                src="/onnode/auth/imgGroup320.svg"
+                src={assets.blue ?? '/onnode/auth/imgGroup320.svg'}
                 width={149.915}
                 height={131.48}
                 alt=""
@@ -138,7 +140,7 @@ export default function AuthBackground({
             >
               <div className="skew-x-[0.53deg]">
                 <Image
-                  src="/onnode/auth/imgGroup29.svg"
+                  src={assets.pink ?? '/onnode/auth/imgGroup29.svg'}
                   width={102.683}
                   height={87.1845}
                   alt=""
@@ -155,7 +157,7 @@ export default function AuthBackground({
               nodeId={ids[2]}
             >
               <Image
-                src="/onnode/auth/imgVector5.svg"
+                src={assets.organize ?? '/onnode/auth/imgVector5.svg'}
                 width={97.3888}
                 height={54.4}
                 alt=""
@@ -174,7 +176,7 @@ export default function AuthBackground({
               nodeId={ids[3]}
             >
               <Image
-                src="/onnode/auth/imgVector.svg"
+                src={assets.record ?? '/onnode/auth/imgVector.svg'}
                 width={77.718}
                 height={41.6026}
                 alt=""
@@ -192,7 +194,7 @@ export default function AuthBackground({
               nodeId={ids[4]}
             >
               <Image
-                src="/onnode/auth/imgVector1.svg"
+                src={assets.summarize ?? '/onnode/auth/imgVector1.svg'}
                 width={96.1236}
                 height={41.6026}
                 alt=""
