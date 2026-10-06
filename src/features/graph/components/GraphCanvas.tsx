@@ -2778,10 +2778,11 @@ function GraphCanvasInner({
     <div
       ref={wrapperRef}
       className="relative w-full h-full bg-background"
-      // Figma 08(G1) 그래프뷰 배경: 흰색에서 아주 옅은 쿨톤으로 번지는 방사형 그라데이션
+      // Figma 08 '그래프뷰 배경' 스타일 실측값: 각지형(conic) 그라데이션, 아주 옅은 라벤더/핑크 5색.
+      // 앱 토큰에 대응 값이 없어 Figma 디자인 hex를 그대로 사용.
       style={{
         background:
-          'radial-gradient(130% 130% at 25% 12%, rgb(var(--ds-white)) 45%, rgb(var(--ds-sub-blue) / 0.22) 100%)',
+          'conic-gradient(from 90deg at 50% 50%, #E5EBFF, #FFF7FB, #F1F4FE, #EDF2FF, #FAF4F8, #E5EBFF)',
       }}
       onDoubleClick={onPaneDoubleClick}
     >
