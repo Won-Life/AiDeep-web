@@ -9,6 +9,7 @@ import { useWorkspaceLayout } from '@/app/workspace/context';
 import {
   COLOR_PALETTE,
   MAIN_NODE_COLOR,
+  figmaNodeColorOf,
 } from '@/features/graph/constants/colors';
 import NodeContextMenu from '@/components/ui/NodeContextMenu';
 import type {
@@ -63,6 +64,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   // depth는 서버 미전파로 stale할 수 있어 GraphCanvas가 부모-main 여부로 계산해 넘긴 값을 쓴다.
   const isContent = !isMain && (nodeData.isContentNode ?? false);
   const isTitle = !isMain && !isContent; // 타이틀/단독 노드
+  // 저장된 색(rgb(var(--ds-sub-blue)) 등)에서 Figma 08 팔레트 매칭 — 기존 그래프도 자동 적용
+  const fig = figmaNodeColorOf(nodeData.color as string | undefined);
   const hasParent = nodeData.hasParent ?? true; // 기본값은 부모가 있다고 가정
   const showInputBox = nodeData.showInputBox ?? false;
   const isContextMenuOpen = nodeData.isContextMenuOpen ?? false;
@@ -155,19 +158,23 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
       }
     : isContent
       ? {
-          // 콘텐츠 노드(depth 2+): 그래프 색을 흰색과 블렌드한 연한 태그 + 1px 그래프색 테두리 (Figma 08 G1)
-          backgroundColor: `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, white)`,
+          // 콘텐츠 노드(depth 2+): Figma 08 light 색 태그, 기본 테두리 없음
+          backgroundColor:
+            fig?.light ??
+            `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, white)`,
           border: isHovered
             ? '2px solid #93C5FD'
             : selected
               ? '2px solid rgb(var(--ds-main))'
               : viewerBorderColor
                 ? `2px solid ${viewerBorderColor}`
-                : `1px solid ${nodeData.color || EDGE_COLOR}`,
+                : 'none',
         }
       : {
-          // 타이틀 노드(depth 0~1): 그래프 색을 텍스트 색과 섞은 '진한' 버전 + 흰 텍스트 (Figma 08 G1)
-          backgroundColor: `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
+          // 타이틀 노드(depth 0~1): Figma 08 deep 색 + 대비 글자색(deepText)
+          backgroundColor:
+            fig?.deep ??
+            `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
           border: isHovered
             ? '3px solid #93C5FD'
             : selected
@@ -291,7 +298,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               left: 20,
               width: 56,
               height: 22,
-              backgroundColor: mainOwnBorderColor ?? EDGE_COLOR,
+              backgroundColor: fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR,
               borderRadius: '8px 8px 0 0',
             }}
           />
@@ -302,7 +309,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             color: isEmpty
               ? 'rgb(var(--ds-gray-500))'
               : isTitle
-                ? '#ffffff'
+                ? (fig?.deepText ?? '#ffffff')
                 : nodeData.textColor || 'rgb(var(--foreground))',
             fontWeight: isMain ? 700 : undefined,
             fontSize: isMain ? '20px' : undefined,
