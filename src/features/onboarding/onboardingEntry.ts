@@ -1,6 +1,8 @@
 import type { UserMeResponse } from '@/api/types';
+import { getAuthSessionId } from '../../api/tokenStorage';
 
 const PENDING_KEY = 'onnode_onboarding_pending_user';
+const PENDING_SESSION_KEY = 'onnode_onboarding_pending_session';
 
 /*
  * CONTEXT
@@ -25,19 +27,36 @@ export function resolveAuthDestination(completed: boolean | undefined, pending: 
 }
 
 export function markOnboardingPending(userId: string) {
-  try { sessionStorage.setItem(PENDING_KEY, userId); } catch { /* 저장소 차단 시에도 현재 가입 흐름은 진행한다. */ }
+  try {
+    sessionStorage.setItem(PENDING_KEY, userId);
+    sessionStorage.removeItem(PENDING_SESSION_KEY);
+  } catch { /* 저장소 차단 시에도 현재 가입 흐름은 진행한다. */ }
+}
+
+export function markOnboardingPendingSession() {
+  const sessionId = getAuthSessionId();
+  if (!sessionId) return;
+  try { sessionStorage.setItem(PENDING_SESSION_KEY, sessionId); } catch { /* 현재 가입 흐름은 계속 진행한다. */ }
 }
 
 export function clearOnboardingPending(userId: string) {
   try {
     if (sessionStorage.getItem(PENDING_KEY) === userId) sessionStorage.removeItem(PENDING_KEY);
+    if (sessionStorage.getItem(PENDING_SESSION_KEY) === getAuthSessionId()) sessionStorage.removeItem(PENDING_SESSION_KEY);
   } catch { /* 저장소 사용 가능 여부가 API 저장 결과를 바꾸지 않는다. */ }
 }
 
 export function getAuthDestination(user: UserMeResponse, justSignedUp = false) {
   const completed = readOnboardingCompletion(user);
-  if (completed === true) clearOnboardingPending(user.userId);
   let pending = justSignedUp;
-  try { pending ||= sessionStorage.getItem(PENDING_KEY) === user.userId; } catch { /* 가입 직후 상태를 우선한다. */ }
+  try {
+    const pendingSession = sessionStorage.getItem(PENDING_SESSION_KEY);
+    if (pendingSession && pendingSession === getAuthSessionId()) {
+      markOnboardingPending(user.userId);
+      pending = true;
+    }
+    pending ||= sessionStorage.getItem(PENDING_KEY) === user.userId;
+  } catch { /* 가입 직후 상태를 우선한다. */ }
+  if (completed === true) clearOnboardingPending(user.userId);
   return resolveAuthDestination(completed, pending);
 }

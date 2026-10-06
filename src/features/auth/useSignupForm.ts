@@ -5,7 +5,7 @@ import { rememberOAuthPersistence } from '@/api/tokenStorage';
 import { login, signup } from '@/api/auth';
 import { getMe } from '@/api/user';
 import { useRouter } from 'next/navigation';
-import { getAuthDestination, markOnboardingPending } from '@/features/onboarding/onboardingEntry';
+import { getAuthDestination, markOnboardingPending, markOnboardingPendingSession } from '@/features/onboarding/onboardingEntry';
 import { useEmailVerification } from './useEmailVerification';
 import { isSignupPasswordValid, type SignupFormValues } from './signupRules';
 
@@ -62,6 +62,7 @@ export function useSignupForm() {
         setAccountCreated(true);
       }
       await login({ email: values.email, password: values.password }, 'session');
+      markOnboardingPendingSession();
       const user = await getMe();
       markOnboardingPending(user.userId);
       router.replace(getAuthDestination(user, true));

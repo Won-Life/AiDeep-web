@@ -6,6 +6,7 @@ import axios, {
 import type { ApiResponse } from './types';
 import { ApiError } from './types';
 import { REFRESH_TOKEN_KEY, readRefreshToken, readPersistence, writeRefreshToken, type TokenPersistence } from './tokenStorage';
+import { clearAuthSession, getAuthSessionId, startAuthSession } from './tokenStorage';
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -38,6 +39,7 @@ export function getRefreshToken(): string | null {
 export function setTokens(accessToken: string, refreshToken: string, persistence?: TokenPersistence) {
   if (typeof window === 'undefined') return;
   writeRefreshToken(refreshToken, persistence ?? readPersistence(localStorage, sessionStorage), localStorage, sessionStorage);
+  if (persistence !== undefined || !getAuthSessionId()) startAuthSession();
   accessTokenInMemory = accessToken;
 }
 
@@ -48,6 +50,7 @@ export function clearTokens() {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   sessionStorage.removeItem(REFRESH_TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
+  clearAuthSession();
 }
 
 // ─── Axios instance ──────────────────────────────────────────────────

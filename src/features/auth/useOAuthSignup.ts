@@ -4,7 +4,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { completeOAuthSignup } from '@/api/auth';
 import { getMe } from '@/api/user';
-import { getAuthDestination, markOnboardingPending } from '@/features/onboarding/onboardingEntry';
+import { getAuthDestination, markOnboardingPending, markOnboardingPendingSession } from '@/features/onboarding/onboardingEntry';
 
 /*
  * CONTEXT
@@ -29,6 +29,7 @@ export function useOAuthSignup(ticket: string) {
     try {
       if (!completed.current) {
         await completeOAuthSignup({ ticket, ...agreements });
+        markOnboardingPendingSession();
         completed.current = true;
         setAccountCreated(true);
       }
