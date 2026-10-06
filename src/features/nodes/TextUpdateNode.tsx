@@ -96,6 +96,33 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   // React Flow 기본 엣지 색상과 동일한 회색 (#b1b1b7)
   const EDGE_COLOR = '#D9D9D9';
 
+  /*
+   * CONTEXT
+   * - Problem      : Figma 08(C3 등)은 엣지가 노드에 닿는 지점마다 흰 채움+회색 링의 원형
+   *                  포트 점을 "항상" 표시하는데, 현재 핸들은 hover 시에만(opacity 토글)
+   *                  보이고 기본 React Flow 다크닷 스타일이라 시안과 다르다.
+   * - Why          : 핸들은 이미 연결 접점이므로, 실제 엣지가 있는 접점(부모 쪽 target /
+   *                  자식 있는 쪽 source)만 상시 점으로 노출한다. 자식·부모 유무는 기존
+   *                  collapseButtons(방향별 자식 유무)·hasParent로 판정 — 엣지 배열 조회
+   *                  없이 노드 data만으로 결정되어 드래그 중에도 일관.
+   * - Alternatives : 모든 핸들 상시 노출 — 자식 없는 변에도 점이 떠 시안과 다름, 기각.
+   *                  엣지 배열을 노드에 주입해 접점 집계 — data 계약 확장·리렌더 비용, 기각.
+   * - Trade-offs   : 자식 없는 변의 source 핸들은 여전히 hover 시에만(새 연결 드래그용)
+   *                  노출 → 상시 점과 hover 점이 공존하지만 둘 다 동일 PORT_DOT_STYLE이라
+   *                  시각 일관. 포트 치수·색은 C3 육안 근사치(실측 후 조정 예정).
+   * - Edge Case    : root(부모 없음)의 target 핸들은 엣지가 없으므로 계속 숨김(opacity 0).
+   */
+  const childSides = new Set(collapseButtons.map((b) => b.side));
+  const PORT_DOT_STYLE = {
+    width: 9,
+    height: 9,
+    minWidth: 9,
+    minHeight: 9,
+    background: '#ffffff',
+    border: `1.5px solid ${EDGE_COLOR}`,
+    borderRadius: '50%',
+  } as const;
+
   const viewerBorderColor = viewers.length > 0 ? viewers[0].color : null;
 
   // main 노드 기본 테두리는 자기 그래프 색 — 흰 배경 유지 규칙 안에서 소속 그래프를 드러낸다.
@@ -310,7 +337,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               type="source"
               position={Position.Left}
               id="source-left"
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              style={{
+                ...PORT_DOT_STYLE,
+                opacity: childSides.has('left') || isNodeHovered ? 1 : 0,
+              }}
             />
             <Handle
               type="target"
@@ -323,7 +353,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               type="source"
               position={Position.Right}
               id="source-right"
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              style={{
+                ...PORT_DOT_STYLE,
+                opacity: childSides.has('right') || isNodeHovered ? 1 : 0,
+              }}
             />
             <Handle
               type="target"
@@ -348,13 +381,17 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                   : 'target-right'
               }
               isConnectableStart={false}
-              style={{ opacity: 0 }}
+              style={{ ...PORT_DOT_STYLE, opacity: 1 }}
             />
             <Handle
               type="source"
               position={sourceHandlePosition}
               id={`source-${sideRelativeToParent}`}
-              style={{ opacity: isNodeHovered ? 1 : 0 }}
+              style={{
+                ...PORT_DOT_STYLE,
+                opacity:
+                  childSides.has(sideRelativeToParent) || isNodeHovered ? 1 : 0,
+              }}
             />
           </>
         )}

@@ -9,6 +9,7 @@ export const NODE_WIDTH = 200;
 export const EMPTY_SUB_NODE_WIDTH = 90;
 export const NODE_HEIGHT = 48;
 export const NODE_PADDING = 0; // 완전히 부딪힐 때만 충돌
+export const HUB_OFFSET = 25; // Figma 메인 화면 디자인 실측: 엣지 elbow 수평 거리 25px
 const DEFAULT_NODE_DISTANCE = 64; // Figma 메인 화면 디자인 실측: 부모-자식 수평 빈 간격 64px
 
 function rectForNode(node: Node) {
@@ -275,12 +276,22 @@ export function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]):
     getTargetSideRelativeToParent(target.position.x, source.position.x);
   const sourceHandle = resolveHandleId('source', side);
   const targetHandle = resolveHandleId('target', side);
+  const sourceHandleX =
+    source.position.x +
+    (side === 'right'
+      ? (source.measured?.width ?? source.width ?? NODE_WIDTH)
+      : 0);
 
   return {
     ...edge,
     type: 'branch',
     sourceHandle,
     targetHandle,
+    data: {
+      ...edge.data,
+      hubX: sourceHandleX + (side === 'right' ? HUB_OFFSET : -HUB_OFFSET),
+      hubY: source.position.y + NODE_HEIGHT / 2,
+    },
   };
 }
 

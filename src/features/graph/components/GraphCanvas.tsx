@@ -80,6 +80,7 @@ import {
   EMPTY_SUB_NODE_WIDTH,
   NODE_HEIGHT,
   NODE_PADDING,
+  HUB_OFFSET,
   isOverlapping,
   findClosestNodeInRange,
   findNonOverlappingPosition,
@@ -2082,6 +2083,11 @@ function GraphCanvasInner({
             const beforeDraggedCenterY = previousPosition.y + nodeHeight / 2;
 
             // 1. 서브트리 노드들: dragged node 기준 거리 유지 + 방향 반전
+            const newSubtreeCenters = new Map<
+              string,
+              { x: number; y: number }
+            >();
+
             d3NodesRef.current.forEach((d3Node) => {
               if (!subtreeIds.has(d3Node.id)) return;
               const distanceX = (d3Node.x ?? 0) - beforeCenterX; // 이전 프레임 subtree 노드 - dragged 사이 거리
@@ -2092,6 +2098,10 @@ function GraphCanvasInner({
               d3Node.y = newCenterY;
               if (d3Node.fx != null) d3Node.fx = newCenterX;
               if (d3Node.fy != null) d3Node.fy = newCenterY;
+              newSubtreeCenters.set(d3Node.id, {
+                x: newCenterX,
+                y: newCenterY,
+              });
             });
 
 
@@ -2115,17 +2125,57 @@ function GraphCanvasInner({
             setEdges((currentEdges) =>
               currentEdges.map((edge) => {
                 // rootNode와 draggedNode 사이 엣지 정보 업데이트: source 노드는 rootNode (위치 불변), 사용하는 source handle side만 바뀜
-                // 서브트리 엣지도 동일하게 newSide의 핸들로 갱신 (엣지 경로는 BranchEdge가 매 렌더 좌표로 계산)
-                const isRootToDragged =
+                if (
                   edge.source === rootNode.id &&
-                  edge.target === draggedNode.id;
-                const isSourceDragged = edge.source === draggedNode.id;
-                const isSourceInSubtree = subtreeIds.has(edge.source);
-                if (isRootToDragged || isSourceDragged || isSourceInSubtree) {
+                  edge.target === draggedNode.id
+                ) {
+                  const srcWidth = rootNode.width ?? NODE_WIDTH;
+                  // position.x 기준: right → position.x + width, left → position.x
+                  const srcHandleX =
+                    rootNode.position.x + (newSide === 'right' ? srcWidth : 0);
                   return {
                     ...edge,
                     sourceHandle: newSourceHandle,
                     targetHandle: newTargetHandle,
+                    data: {
+                      ...edge.data,
+                      hubX:
+                        srcHandleX +
+                        (newSide === 'right' ? HUB_OFFSET : -HUB_OFFSET),
+                      hubY: rootNode.position.y + NODE_HEIGHT / 2,
+                    },
+                  };
+                }
+
+                // 서브트리 엣지: sourceHandle/targetHandle은 newSide 재사용,
+                // hubX/Y는 이동한 source의 새 center 기반으로 재계산
+                const isSourceDragged = edge.source === draggedNode.id;
+                const isSourceInSubtree = subtreeIds.has(edge.source);
+                if (isSourceDragged || isSourceInSubtree) {
+                  const srcCenter = isSourceDragged
+                    ? { x: afterCenterX, y: afterCenterY }
+                    : newSubtreeCenters.get(edge.source);
+                  if (!srcCenter) return edge;
+
+                  const srcNode = nodes.find((n) => n.id === edge.source);
+                  const srcWidth = srcNode?.width ?? NODE_WIDTH;
+                  // d3 center → position.x: centerX - width/2
+                  // right handle: position.x + width = centerX + width/2
+                  // left handle: position.x = centerX - width/2
+                  const srcHandleX =
+                    srcCenter.x +
+                    (newSide === 'right' ? srcWidth / 2 : -srcWidth / 2);
+                  return {
+                    ...edge,
+                    sourceHandle: newSourceHandle,
+                    targetHandle: newTargetHandle,
+                    data: {
+                      ...edge.data,
+                      hubX:
+                        srcHandleX +
+                        (newSide === 'right' ? HUB_OFFSET : -HUB_OFFSET),
+                      hubY: srcCenter.y,
+                    },
                   };
                 }
 
@@ -2744,6 +2794,7 @@ function GraphCanvasInner({
         zoomOnDoubleClick={false}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
+        proOptions={{ hideAttribution: true }}
       />
       {!savedViewport && <InitialViewport mainNodeId={mainNodeId} />}
       {onFirstPaint && (
