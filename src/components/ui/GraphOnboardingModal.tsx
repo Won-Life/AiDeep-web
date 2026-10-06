@@ -3,7 +3,7 @@ import { useState, useSyncExternalStore, type ReactNode } from 'react';
 
 /*
  * CONTEXT
- * - Problem      : 첫 진입 사용자가 그래프의 정보 구조(프로젝트 → 타이틀 → 타입 3단계)를
+ * - Problem      : 첫 진입 사용자가 그래프의 정보 구조(프로젝트 → 타이틀 → 콘텐츠 3단계)를
  *                  알 방법이 없었다. 기존 GraphUsageGuide는 조작법(클릭·드래그) 안내 위주라
  *                  구조 자체를 설명하지 못한다.
  * - Why          : Figma 08 G3 시안 그대로의 구조 설명 모달. 표시 여부는 localStorage
@@ -66,21 +66,10 @@ function StageArrow() {
   );
 }
 
-/** 타입 노드 형식 뱃지 (T / IMG / AUD / FILE / URL) */
-function TypeBadge({ children }: { children: string }) {
-  return (
-    <span className="flex w-9 shrink-0 items-center justify-center rounded bg-surface px-1 py-0.5 text-[10px] font-semibold text-muted">
-      {children}
-    </span>
-  );
-}
-
-const NODE_TYPES: Array<[badge: string, name: string, desc: string]> = [
-  ['T', '텍스트', '메모나 노트를 바로 입력해요'],
-  ['IMG', '이미지', '사진, 스크린샷, 판서 등'],
-  ['AUD', '오디오', '음성 메모나 회의 녹음'],
-  ['FILE', '파일', 'PDF, PPT, 문서 등 첨부파일'],
-  ['URL', '웹 링크', '참고할 웹페이지 주소'],
+// Figma 08 G3: '콘텐츠 노드는 이렇게 써요' — 타입 분화 없이 글쓰기/첨부 2가지 사용법만 안내
+const CONTENT_USAGE: Array<[name: string, desc: string]> = [
+  ['글 쓰기', '바로 쓰거나 강의 필기·회의 메모 템플릿으로 시작해요'],
+  ['첨부', '파일 올리고, 링크는 본문에 붙여넣어요'],
 ];
 
 export default function GraphOnboardingModal({
@@ -121,7 +110,7 @@ export default function GraphOnboardingModal({
               그래프는 이렇게 구성돼요
             </h2>
             <p className="mt-1 text-[13px] text-muted">
-              프로젝트 → 타이틀 → 타입, 3단계로 정리돼요
+              프로젝트 → 타이틀 → 콘텐츠, 3단계로 정리돼요
             </p>
           </div>
           <button
@@ -146,7 +135,7 @@ export default function GraphOnboardingModal({
             </div>
             <StageArrow />
             <div className="flex flex-1 flex-col items-center gap-2">
-              <StagePill variant="outline">판서 사진</StagePill>
+              <StagePill variant="outline">강의 필기</StagePill>
             </div>
           </div>
           <div className="mt-3 flex items-start justify-between gap-1 text-center">
@@ -169,9 +158,9 @@ export default function GraphOnboardingModal({
             </div>
             <span className="w-[20px]" aria-hidden="true" />
             <div className="flex-1">
-              <p className="text-[13px] font-bold text-foreground">타입</p>
+              <p className="text-[13px] font-bold text-foreground">콘텐츠</p>
               <p className="mt-0.5 text-[11px] leading-[15px] text-muted">
-                실제 콘텐츠
+                실제 내용
               </p>
             </div>
           </div>
@@ -179,12 +168,11 @@ export default function GraphOnboardingModal({
 
         <div className="border-t border-border pt-[16px]">
           <p className="text-[14px] font-bold text-foreground">
-            타입 노드는 5가지 형식을 지원해요
+            콘텐츠 노드는 이렇게 써요
           </p>
           <div className="mt-3 flex flex-col gap-2.5">
-            {NODE_TYPES.map(([badge, name, desc]) => (
-              <div key={badge} className="flex items-center gap-2.5">
-                <TypeBadge>{badge}</TypeBadge>
+            {CONTENT_USAGE.map(([name, desc]) => (
+              <div key={name} className="flex items-center gap-2.5">
                 <span className="w-[56px] shrink-0 text-[13px] font-semibold text-foreground">
                   {name}
                 </span>
