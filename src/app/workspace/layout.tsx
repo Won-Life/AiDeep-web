@@ -154,7 +154,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     getWorkspaces()
       .then((list) => {
         if (!list.length) return Promise.reject('no workspace');
-        const ws = list[0];
+        const requestedWorkspaceId = new URLSearchParams(window.location.search).get('workspaceId');
+        const ws = list.find((workspace) => workspace.workspaceId === requestedWorkspaceId) ?? list[0];
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
 
