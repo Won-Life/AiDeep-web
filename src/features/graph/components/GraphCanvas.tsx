@@ -2777,6 +2777,11 @@ function GraphCanvasInner({
     <div
       ref={wrapperRef}
       className="relative w-full h-full bg-background"
+      // Figma 08(G1) 그래프뷰 배경: 흰색에서 아주 옅은 쿨톤으로 번지는 방사형 그라데이션
+      style={{
+        background:
+          'radial-gradient(130% 130% at 25% 12%, rgb(var(--ds-white)) 45%, rgb(var(--ds-sub-blue) / 0.22) 100%)',
+      }}
       onDoubleClick={onPaneDoubleClick}
     >
       <ReactFlow
