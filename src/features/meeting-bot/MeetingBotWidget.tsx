@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import MeetingBotStatusBadge, { type MeetingBotStatus } from "./MeetingBotStatusBadge";
 import MeetingBotToast, { type MeetingBotToastKind } from "./MeetingBotToast";
-import { createMeetingBotRequest, getMeetingPlatformFromUrl, type MeetingBotRequest } from "./meetingBotRequest";
+import { createMeetingBotRequest, normalizeMeetingTarget, type MeetingBotPlatform, type MeetingBotRequest } from "./meetingBotRequest";
 import "./meeting-bot.css";
 
 /*
@@ -17,7 +16,53 @@ import "./meeting-bot.css";
  * - Edge Case    : 무효한 URL, Escape/배경 닫기, 다른 모달 위 겹침, 화면이 좁은 경우를 처리한다.
  */
 
-const LOGO_SRC = "/images/meeting-bot/onnode-logo-black.svg";
+const PLATFORM_COPY: Record<MeetingBotPlatform, { label: string; field: string; placeholder: string; error: string }> = {
+  ZOOM: {
+    label: "Zoom",
+    field: "Zoom 링크 또는 회의 ID",
+    placeholder: "예: 123-4567-8901 또는 zoom.us/j/1234567890",
+    error: "올바른 Zoom 링크나 회의 ID가 아니에요. 다시 확인해 주세요",
+  },
+  GOOGLE_MEET: {
+    label: "Google Meet",
+    field: "Google Meet 링크",
+    placeholder: "예: meet.google.com/abc-defg-hij",
+    error: "올바른 Google Meet 링크가 아니에요. 다시 확인해 주세요",
+  },
+};
+
+function MeetingBotIcon() {
+  return (
+    <svg width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+      <circle cx="30" cy="30" r="30" fill="var(--meeting-primary-light)" />
+      <rect x="17" y="22" width="26" height="20" rx="6" fill="var(--meeting-surface)" stroke="var(--meeting-primary)" strokeWidth="2.5" />
+      <line x1="30" y1="22" x2="30" y2="15" stroke="var(--meeting-primary)" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="30" cy="14" r="2.5" fill="var(--meeting-primary)" />
+      <circle cx="25" cy="31" r="2.5" fill="var(--meeting-primary)" />
+      <circle cx="35" cy="31" r="2.5" fill="var(--meeting-primary)" />
+    </svg>
+  );
+}
+
+function PlatformIcon({ platform }: { platform: MeetingBotPlatform }) {
+  if (platform === "ZOOM") {
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+        <rect width="24" height="24" rx="6" fill="#2d8cff" />
+        <rect x="5" y="8" width="9" height="8" rx="2" fill="#fff" />
+        <path d="M15 11l4-2.5v7L15 13z" fill="#fff" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 8h9v8H6a3 3 0 0 1-3-3z" fill="#4285f4" />
+      <path d="M12 8h5v3.2L21 8v8l-4-3.2V16h-5z" fill="#00ac47" />
+      <path d="M12 16h5v1a2 2 0 0 1-2 2h-3z" fill="#ea4335" />
+      <path d="M12 5h3a2 2 0 0 1 2 2v1h-5z" fill="#ffba00" />
+    </svg>
+  );
+}
 
 function keepTabInsideDialog(event: KeyboardEvent, dialog: HTMLElement | null) {
   if (event.key !== "Tab" || !dialog) return;
@@ -42,8 +87,9 @@ function keepTabInsideDialog(event: KeyboardEvent, dialog: HTMLElement | null) {
 
 function MeetingBotAddModal({ onClose, onRequest }: {
   onClose: () => void;
-  onRequest: (meetingUrl: string) => Promise<boolean>;
+  onRequest: (meetingTarget: string, platform: MeetingBotPlatform) => Promise<boolean>;
 }) {
+  const [platform, setPlatform] = useState<MeetingBotPlatform>("ZOOM");
   const [meetingUrl, setMeetingUrl] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,16 +119,18 @@ function MeetingBotAddModal({ onClose, onRequest }: {
     event.preventDefault();
     if (isSubmitting) return;
     const value = meetingUrl.trim();
-    if (!getMeetingPlatformFromUrl(value)) {
-      setError("Zoom 또는 Google Meet의 https:// 회의 링크를 입력해주세요.");
+    if (!normalizeMeetingTarget(value, platform)) {
+      setError(PLATFORM_COPY[platform].error);
       inputRef.current?.focus();
       return;
     }
     setIsSubmitting(true);
-    const accepted = await onRequest(value);
+    const accepted = await onRequest(value, platform);
     setIsSubmitting(false);
     if (accepted) onClose();
   }
+
+  const copy = PLATFORM_COPY[platform];
 
   return createPortal(
     <div
@@ -94,45 +142,80 @@ function MeetingBotAddModal({ onClose, onRequest }: {
         role="dialog"
         aria-modal="true"
         aria-labelledby="meeting-bot-title"
-        className="relative my-auto w-full max-w-[480px] rounded-[20px] bg-[var(--meeting-surface)] p-6 text-[var(--meeting-ink)] shadow-2xl sm:p-10"
+        className="relative my-auto w-full max-w-[484px] rounded-[24px] bg-[var(--meeting-surface)] px-6 py-9 text-[var(--meeting-ink)] shadow-2xl sm:px-[54px]"
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="회의 봇 추가 닫기"
-          className="absolute right-5 top-4 flex size-10 items-center justify-center rounded-full text-3xl font-light text-[var(--meeting-muted)] transition-colors hover:bg-[var(--meeting-soft-surface)]"
+          className="absolute right-4 top-3 flex size-10 items-center justify-center rounded-full text-3xl font-light text-[var(--meeting-muted)] transition-colors hover:bg-[var(--meeting-soft-surface)]"
         >
           ×
         </button>
-        <div className="flex justify-start">
-          <Image src={LOGO_SRC} alt="On:Node" width={120} height={23} priority />
+        <div className="flex justify-center">
+          <MeetingBotIcon />
         </div>
-        <h2 id="meeting-bot-title" className="mt-6 text-left text-[26px] font-bold">회의 봇 추가</h2>
-        <p className="mt-2 text-sm leading-6 text-[var(--meeting-muted)]">회의 내용을 기록하고 정리해요.</p>
+        <h2 id="meeting-bot-title" className="mt-4 text-center text-lg font-bold">회의 봇 추가</h2>
+        <p className="mt-2 text-center text-[13px] leading-5 text-[var(--meeting-muted)]">
+          봇을 시작하면 회의를 녹음하고 자동으로 노드를 만들어드려요
+        </p>
         <form onSubmit={handleSubmit} noValidate className="mt-6">
-          <label htmlFor="meeting-bot-url" className="block text-[15px] font-semibold">회의 링크</label>
+          <div role="radiogroup" aria-label="플랫폼" className="grid grid-cols-2 gap-3">
+            {(Object.keys(PLATFORM_COPY) as MeetingBotPlatform[]).map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={platform === value}
+                disabled={isSubmitting}
+                onClick={() => { setPlatform(value); setError(""); }}
+                className={`flex h-11 items-center justify-center gap-2 rounded-lg border-2 text-sm font-semibold transition-colors ${
+                  platform === value
+                    ? "border-[var(--meeting-primary)] bg-[var(--meeting-primary-light)]"
+                    : "border-[var(--meeting-primary-soft)] bg-[var(--meeting-surface)] hover:bg-[var(--meeting-soft-surface)]"
+                }`}
+              >
+                <PlatformIcon platform={value} />
+                {PLATFORM_COPY[value].label}
+              </button>
+            ))}
+          </div>
+          <label htmlFor="meeting-bot-url" className="mt-5 block text-[13px] font-semibold text-[var(--meeting-muted)]">
+            {copy.field}
+          </label>
           <input
             ref={inputRef}
             id="meeting-bot-url"
-            type="url"
+            type="text"
             inputMode="url"
-            autoComplete="url"
+            autoComplete="off"
             disabled={isSubmitting}
             value={meetingUrl}
             onChange={(event) => { setMeetingUrl(event.target.value); setError(""); }}
             aria-invalid={Boolean(error)}
             aria-describedby={error ? "meeting-bot-url-error" : undefined}
-            placeholder="Zoom, Google Meet 등의 회의 링크"
-            className="mt-2 h-14 w-full rounded-xl border-2 border-[var(--meeting-input-border)] bg-[var(--meeting-surface)] px-4 text-[15px] outline-none placeholder:text-[var(--meeting-muted)] focus:border-[var(--meeting-muted)]"
+            placeholder={copy.placeholder}
+            className={`mt-2 h-10 w-full rounded-full border px-4 text-center text-[13px] outline-none placeholder:text-[var(--meeting-muted)]/60 ${
+              error
+                ? "border-[var(--meeting-error)] bg-[var(--meeting-error-surface)]"
+                : "border-[var(--meeting-primary)] bg-[var(--meeting-surface)] focus:border-2"
+            }`}
           />
-          {error ? <p id="meeting-bot-url-error" role="alert" className="mt-2 text-sm text-red-600">{error}</p> : null}
+          {error ? (
+            <p id="meeting-bot-url-error" role="alert" className="mt-2 text-xs text-[var(--meeting-error)]">{error}</p>
+          ) : (
+            <p className="mt-2 text-xs text-[var(--meeting-muted)]/70">무료 플랜: 회의당 최대 5분 녹음</p>
+          )}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-6 h-14 w-full rounded-xl bg-[var(--meeting-primary)] text-base font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)] disabled:cursor-wait disabled:opacity-60"
+            className="mt-6 h-[46px] w-full rounded-[10px] bg-[var(--meeting-primary)] text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)] disabled:cursor-wait disabled:opacity-60"
           >
-            {isSubmitting ? "요청 중..." : "봇 참여 요청"}
+            {isSubmitting ? "요청 중..." : "회의 봇 추가하기"}
           </button>
+          <p className="mt-4 text-center text-[11px] text-[var(--meeting-muted)]/80">
+            봇은 카메라·마이크를 끈 채 입장하고, 참가자에게 녹음 안내 메시지를 보내요
+          </p>
         </form>
       </section>
     </div>,
@@ -155,9 +238,9 @@ export default function MeetingBotWidget({ workspaceId, status = null, requestMe
   }, [toast]);
 
   const closeModal = useCallback(() => setIsOpen(false), []);
-  const handleRequest = useCallback(async (meetingUrl: string) => {
+  const handleRequest = useCallback(async (meetingTarget: string, platform: MeetingBotPlatform) => {
     try {
-      const request = createMeetingBotRequest(meetingUrl, workspaceId);
+      const request = createMeetingBotRequest(meetingTarget, workspaceId, platform);
       await requestMeetingBot?.(request);
       setToast("success");
       return true;

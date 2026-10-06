@@ -31,8 +31,26 @@ export function getMeetingPlatformFromUrl(value: string): MeetingBotPlatform | n
   }
 }
 
-export function createMeetingBotRequest(url: string, workspaceId: string): MeetingBotRequest {
-  const type = getMeetingPlatformFromUrl(url);
-  if (!type) throw new Error("Unsupported meeting URL");
-  return { url: url.trim(), type, workspaceId };
+export function normalizeMeetingTarget(input: string, platform: MeetingBotPlatform): string | null {
+  const value = input.trim();
+  if (!value) return null;
+
+  if (platform === "ZOOM" && /^[\d\s-]+$/.test(value)) {
+    const meetingId = value.replace(/[\s-]/g, "");
+    return /^\d{9,11}$/.test(meetingId) ? `https://zoom.us/j/${meetingId}` : null;
+  }
+
+  const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+  return getMeetingPlatformFromUrl(withScheme) === platform ? withScheme : null;
+}
+
+export function createMeetingBotRequest(
+  input: string,
+  workspaceId: string,
+  platform?: MeetingBotPlatform,
+): MeetingBotRequest {
+  const type = platform ?? getMeetingPlatformFromUrl(input);
+  const url = type ? normalizeMeetingTarget(input, type) : null;
+  if (!type || !url) throw new Error("Unsupported meeting URL");
+  return { url, type, workspaceId };
 }

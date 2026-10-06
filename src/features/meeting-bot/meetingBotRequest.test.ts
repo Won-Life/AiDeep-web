@@ -1,5 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { createMeetingBotRequest, getMeetingPlatformFromUrl } from "./meetingBotRequest";
+import { createMeetingBotRequest, getMeetingPlatformFromUrl, normalizeMeetingTarget } from "./meetingBotRequest";
+
+describe("normalizeMeetingTarget", () => {
+  it("turns a Zoom meeting ID into a join link", () => {
+    expect(normalizeMeetingTarget("123-4567-8901", "ZOOM")).toBe("https://zoom.us/j/12345678901");
+    expect(normalizeMeetingTarget("123 456 789", "ZOOM")).toBe("https://zoom.us/j/123456789");
+  });
+
+  it("adds https:// to a link typed without a scheme", () => {
+    expect(normalizeMeetingTarget("zoom.us/j/1234567890", "ZOOM")).toBe("https://zoom.us/j/1234567890");
+    expect(normalizeMeetingTarget("meet.google.com/abc-defg-hij", "GOOGLE_MEET")).toBe("https://meet.google.com/abc-defg-hij");
+  });
+
+  it("rejects a link for the other platform, short IDs, and non-https links", () => {
+    expect(normalizeMeetingTarget("https://meet.google.com/abc-defg-hij", "ZOOM")).toBeNull();
+    expect(normalizeMeetingTarget("12345", "ZOOM")).toBeNull();
+    expect(normalizeMeetingTarget("123456789", "GOOGLE_MEET")).toBeNull();
+    expect(normalizeMeetingTarget("http://zoom.us/j/123456789", "ZOOM")).toBeNull();
+    expect(normalizeMeetingTarget("   ", "ZOOM")).toBeNull();
+  });
+
+  it("uses the chosen platform when creating a request", () => {
+    expect(createMeetingBotRequest("123-4567-8901", "w1", "ZOOM")).toEqual({
+      url: "https://zoom.us/j/12345678901",
+      type: "ZOOM",
+      workspaceId: "w1",
+    });
+    expect(() => createMeetingBotRequest("zoom.us/j/123456789", "w1", "GOOGLE_MEET")).toThrow();
+  });
+});
 
 describe("createMeetingBotRequest", () => {
   it("pairs the entered meeting URL with the active workspace ID", () => {
