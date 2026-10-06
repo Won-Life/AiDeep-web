@@ -11,6 +11,7 @@ import {
 } from 'react';
 import {
   ReactFlow,
+  MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
   type NodeChange,
@@ -2813,7 +2814,35 @@ function GraphCanvasInner({
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
         proOptions={{ hideAttribution: true }}
-      />
+      >
+        {/* Figma 08(G1) 우하단 미니맵 — 라운드 카드. 줌 컨트롤 위에 오도록 bottom 오프셋.
+            노드 색은 프로젝트=흰색, 그 외=그래프 색으로 실제 그래프와 동일하게 표시 */}
+        <MiniMap
+          position="bottom-right"
+          pannable
+          zoomable
+          nodeColor={(n) =>
+            (n.data as { isMain?: boolean; color?: string })?.isMain
+              ? '#ffffff'
+              : ((n.data as { color?: string })?.color ?? '#E5E5E5')
+          }
+          nodeStrokeColor="#D9D9D9"
+          nodeBorderRadius={6}
+          maskColor="rgba(240, 242, 248, 0.6)"
+          bgColor="#ffffff"
+          style={{
+            width: 220,
+            height: 148,
+            bottom: 52,
+            right: 12,
+            margin: 0,
+            borderRadius: 12,
+            border: '1px solid rgb(var(--ds-gray-800))',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
+            overflow: 'hidden',
+          }}
+        />
+      </ReactFlow>
       {!savedViewport && <InitialViewport mainNodeId={mainNodeId} />}
       {onFirstPaint && (
         <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
