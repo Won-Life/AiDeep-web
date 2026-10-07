@@ -3088,37 +3088,84 @@ function GraphCanvasInner({
         open={onboardingOpen}
         onClose={() => setOnboardingOpen(false)}
       />
-      {isArchiveModalOpen && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[360px] rounded-xl border border-border bg-background p-5 shadow-xl">
-            {/* 보관함 UI가 활성화되기 전까지는 사용자 입장에서 복구 수단이 없으므로
-                "삭제"로 안내한다 (보관함 활성화 시 카피를 보관 문구로 되돌릴 것) */}
-            <p className="text-base font-semibold">노드를 삭제할까요?</p>
-            <p className="mt-2 text-sm text-muted">
-              선택한 노드와 아래에 연결된 노드까지 총{' '}
-              {pendingArchiveNodeIds.length}개가 삭제돼요.
-            </p>
-            <p className="mt-1 text-sm text-muted">삭제한 노드는 되돌릴 수 없어요.</p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={handleCancelArchive}
-                className="rounded-md border border-border px-3 py-1.5 text-sm"
+      {/* D2 하위 삭제 확인 — 대상 노드 이름·타입·하위 개수를 카피에 반영(Figma 08 D2).
+          보관함 UI 활성화 전까지 복구 수단이 없어 "삭제"로 안내(활성화 시 보관 문구로). */}
+      {isArchiveModalOpen &&
+        (() => {
+          const target = nodes.find(
+            (n) => n.id === pendingArchiveNodeIds[0],
+          );
+          const delTitle =
+            ((target?.data as { title?: string } | undefined)?.title ?? '') ||
+            '제목 없음';
+          const descendants = Math.max(0, pendingArchiveNodeIds.length - 1);
+          const parentId = edges.find(
+            (e) => e.target === pendingArchiveNodeIds[0],
+          )?.source;
+          const parentIsMain = parentId
+            ? !!(
+                nodes.find((n) => n.id === parentId)?.data as
+                  | { isMain?: boolean }
+                  | undefined
+              )?.isMain
+            : false;
+          // 콘텐츠 = 부모가 있고 그 부모가 프로젝트가 아님(노드 렌더의 isContentNode와 동일).
+          // 루트(부모 없음)·프로젝트 직계는 타이틀로 본다.
+          const isContentType = !!parentId && !parentIsMain;
+          const typeLabel = (target?.data as { isMain?: boolean } | undefined)
+            ?.isMain
+            ? '프로젝트'
+            : isContentType
+              ? '콘텐츠'
+              : '타이틀';
+          return (
+            <div
+              className="absolute inset-0 z-50 flex items-center justify-center bg-black/40"
+              onClick={handleCancelArchive}
+            >
+              <div
+                className="w-[360px] max-w-[90vw] rounded-[16px] bg-background p-5 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
               >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmArchive}
-                disabled={isArchiveDeleting}
-                className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50"
-              >
-                삭제하기
-              </button>
+                <div className="flex items-start justify-between">
+                  <p className="text-[16px] font-bold text-foreground">
+                    ‘{delTitle}’를 삭제할까요?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCancelArchive}
+                    aria-label="닫기"
+                    className="shrink-0 text-muted hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="mt-2 text-[13px] text-muted">
+                  {descendants > 0
+                    ? `이 ${typeLabel} 아래의 노드 ${descendants}개도 함께 삭제되고, 되돌릴 수 없어요`
+                    : '삭제하면 되돌릴 수 없어요'}
+                </p>
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelArchive}
+                    className="h-[40px] flex-1 rounded-full border border-border text-[13px] font-semibold text-foreground transition-colors hover:bg-surface"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmArchive}
+                    disabled={isArchiveDeleting}
+                    className="h-[40px] flex-1 rounded-full bg-red-500 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    삭제하기
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
     </div>
   );
 }
