@@ -31,6 +31,7 @@ import {
   $isRangeSelection,
   $getNodeByKey,
   $insertNodes,
+  $createTextNode,
   FORMAT_TEXT_COMMAND,
   SELECTION_CHANGE_COMMAND,
   KEY_DOWN_COMMAND,
@@ -42,6 +43,7 @@ import {
   DecoratorNode,
   createCommand,
   type LexicalEditor,
+  type LexicalNode,
   type NodeKey,
   type SerializedLexicalNode,
 } from 'lexical';
@@ -440,6 +442,25 @@ function insertTable(editor: LexicalEditor) {
   // dispatch 전에 focus()로 에디터 선택을 복원해야 삽입이 실제로 반영된다.
   editor.focus(() => {
     editor.dispatchCommand(INSERT_TABLE_COMMAND, { rows: String(rows), columns: String(columns) });
+  });
+}
+
+// ─── 콘텐츠 템플릿 (C3) ──────────────────────────────────────────────────────────
+// 섹션 제목을 h3 + 빈 문단으로 커서 위치에 삽입. G3 온보딩이 안내하는 "강의 필기/회의 메모
+// 템플릿으로 시작" 기능. 강의 필기는 Figma 08 C3 실측(핵심 개념/자세한 설명/헷갈린 점/참고),
+// 회의 메모는 일반 구조 근사치(디자인 확정되면 조정).
+const LECTURE_TEMPLATE = ['핵심 개념', '자세한 설명', '헷갈린 점', '참고'];
+const MEETING_TEMPLATE = ['안건', '논의 내용', '결정 사항', '할 일'];
+
+function insertTemplate(editor: LexicalEditor, sections: string[]) {
+  editor.update(() => {
+    const nodes: LexicalNode[] = [];
+    sections.forEach((title) => {
+      const heading = $createHeadingNode('h3');
+      heading.append($createTextNode(title));
+      nodes.push(heading, $createParagraphNode());
+    });
+    $insertNodes(nodes);
   });
 }
 
@@ -950,6 +971,12 @@ function SlashCommandPlugin({
           ),
       ),
       new SlashMenuOption('표', '⊞', 'action', () => insertTable(editor)),
+      new SlashMenuOption('강의 필기 템플릿', '📝', 'action', () =>
+        insertTemplate(editor, LECTURE_TEMPLATE),
+      ),
+      new SlashMenuOption('회의 메모 템플릿', '🗒️', 'action', () =>
+        insertTemplate(editor, MEETING_TEMPLATE),
+      ),
       new SlashMenuOption('이미지', '🖼', 'image', () => {}),
       new SlashMenuOption('파일', '📎', 'file', () => {}),
     ],

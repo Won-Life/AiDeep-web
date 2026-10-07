@@ -11,6 +11,7 @@ import {
 } from 'react';
 import {
   ReactFlow,
+  MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
   type NodeChange,
@@ -29,10 +30,11 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import ZoomControl from '@/components/ui/ZoomControl';
-import GraphUsageGuide, {
-  type GraphUsageGuideHandle,
-} from '@/components/ui/GraphUsageGuide';
-import MouseIcon, { ConnectDragIcon } from '@/components/ui/MouseIcon';
+import HelpMenu from '@/components/ui/HelpMenu';
+import GraphOnboardingModal, {
+  useGraphOnboardingSeen,
+} from '@/components/ui/GraphOnboardingModal';
+import { useOnboardingSeen } from '@/components/layout/OnboardingPopup';
 import * as d3 from 'd3';
 import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
@@ -63,6 +65,7 @@ import {
 } from '../logic/traversal';
 import {
   getGraphColor,
+  getUncoloredGraphAnchorIds,
   colorOfNodeIn,
   getSameGraphDescendantIds,
   getRecolorTargetIds,
@@ -349,6 +352,8 @@ function GraphCanvasInner({
   const [contextMenuNodeId, setContextMenuNodeId] = useState<string | null>(
     null,
   );
+  // 인라인 이름 편집(G5·G7 "이름 바꾸기") 중인 노드 — 해당 노드 제목이 input으로 전환
+  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isArchiveDeleting, setIsArchiveDeleting] = useState(false);
   const [pendingArchiveNodeIds, setPendingArchiveNodeIds] = useState<string[]>(
@@ -463,8 +468,19 @@ function GraphCanvasInner({
   const isMultiDragRef = useRef(false);
   // 뷰포트 중앙 좌표 계산용 캔버스 래퍼 (#204 보이는 생성 버튼)
   const wrapperRef = useRef<HTMLDivElement>(null);
-  // 빈 캔버스 안내의 인라인 "사용법" 버튼으로 사용법 창을 여는 핸들
-  const usageGuideRef = useRef<GraphUsageGuideHandle>(null);
+  // 그래프 구조 온보딩(G3) — Meet 온보딩 팝업(layout, z-50)과 겹치지 않게
+  // Meet 온보딩 확인 이후 첫 렌더에서 1회만 자동 오픈한다
+  const meetOnboardingSeen = useOnboardingSeen();
+  const graphOnboardingSeen = useGraphOnboardingSeen();
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const onboardingAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (onboardingAutoOpenedRef.current) return;
+    if (meetOnboardingSeen && !graphOnboardingSeen) {
+      onboardingAutoOpenedRef.current = true;
+      setOnboardingOpen(true);
+    }
+  }, [meetOnboardingSeen, graphOnboardingSeen]);
   const lastLiveEmitRef = useRef(0);
   const LIVE_EMIT_INTERVAL = 50; // ms
 
@@ -650,6 +666,139 @@ function GraphCanvasInner({
     },
     [workspaceId, handleNodeViewChange],
   );
+
+  // 인라인 이름 편집 시작(컨텍스트 메뉴 "이름 바꾸기") — 메뉴는 닫고 해당 노드를 편집 모드로.
+  const handleStartRename = useCallback((nodeId: string) => {
+    setRenamingNodeId(nodeId);
+    setContextMenuNodeId(null);
+  }, []);
+  const handleFinishRename = useCallback(() => setRenamingNodeId(null), []);
+
+  // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 빈 자식 노드 생성 + 엣지 + 색 상속 후
+  // 바로 인라인 이름 편집(G5). onConnectEnd(핸들 드래그 생성)과 동일한 생성 규칙을 노드 기준으로
+  // 재사용한다. 겹침 bail 없이 source 높이에 놓고 D3 rectCollide가 분리하도록 맡긴다.
+  const handleAddChild = useCallback(
+    async (parentId: string) => {
+      const sourceNode = nodes.find((n) => n.id === parentId);
+      if (!sourceNode) return;
+
+      const forced = getForcedOutboundSideForSubNode(sourceNode, nodes, edges);
+      let side: 'left' | 'right';
+      if (forced) {
+        side = forced;
+      } else {
+        const parentOfSource = getParentId(sourceNode.id, edges);
+        const parentNode = parentOfSource
+          ? nodes.find((n) => n.id === parentOfSource)
+          : undefined;
+        side = parentNode
+          ? getTargetSideRelativeToParent(
+              sourceNode.position.x,
+              parentNode.position.x,
+            )
+          : 'right'; // 루트/프로젝트는 기본 오른쪽으로 성장
+      }
+
+      const adjustedPosition = adjustPositionRelativeToSource(
+        sourceNode,
+        sourceNode.position.y,
+        side,
+        nodes,
+        edges,
+        undefined,
+        { width: EMPTY_SUB_NODE_WIDTH } as Node,
+      );
+
+      const colorPair = getGraphColor(sourceNode.id, nodes, edges);
+      const colorAnchorIds = getUncoloredGraphAnchorIds(
+        sourceNode.id,
+        nodes,
+        edges,
+      );
+      colorAnchorIds.forEach((id) =>
+        updateNodeContent(workspaceId, id, {
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        }).catch((err) => console.error('[addChild color anchor] failed', err)),
+      );
+
+      try {
+        const { nodeId } = await createMdNode(workspaceId, '', adjustedPosition, {
+          markdownBody: '',
+          jsonBody: EMPTY_LEXICAL_JSON,
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        });
+        setNodes((prev) => [
+          ...prev.map((node) =>
+            colorAnchorIds.includes(node.id)
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    color: colorPair.bg,
+                    textColor: colorPair.text,
+                  },
+                }
+              : node,
+          ),
+          {
+            id: nodeId,
+            type: 'textUpdater',
+            position: adjustedPosition,
+            data: {
+              title: '',
+              isMain: false,
+              depth: 0,
+              color: colorPair.bg,
+              textColor: colorPair.text,
+              handleSide: side,
+            },
+          } as Node,
+        ]);
+
+        const fromHandleId = `source-${side}`;
+        const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
+        // 엣지를 낙관적으로 먼저(임시 id) 추가해 부모 관계를 즉시 성립시킨다. 콘텐츠/타이틀
+        // 판정은 "부모가 프로젝트인가"로 하는데, 엣지가 없는 첫 프레임엔 부모 미상이라 새 노드가
+        // 타이틀로 잠깐 보였다가 콘텐츠로 바뀌는 깜빡임이 생겼다. createEdge 응답 시 실제 id로 교체.
+        const tempEdgeId = `temp-edge-${nodeId}`;
+        setEdges((prev) => [
+          ...prev,
+          {
+            id: tempEdgeId,
+            source: sourceNode.id,
+            target: nodeId,
+            type: 'branch',
+            sourceHandle: fromHandleId,
+            targetHandle: targetHandleId,
+          },
+        ]);
+        createEdge(workspaceId, sourceNode.id, nodeId, fromHandleId, targetHandleId)
+          .then(({ edgeId }) => {
+            setEdges((prev) =>
+              prev.map((e) => (e.id === tempEdgeId ? { ...e, id: edgeId } : e)),
+            );
+            setNodes((prev) =>
+              applyDepthOnEdgeCreate(prev, [], sourceNode.id, nodeId),
+            );
+          })
+          .catch((err) => {
+            // 실패 시 낙관적 임시 엣지 롤백
+            setEdges((prev) => prev.filter((e) => e.id !== tempEdgeId));
+            console.error('[addChild] createEdge failed', err);
+          });
+
+        // G5: 생성 직후 바로 인라인 이름 편집
+        setRenamingNodeId(nodeId);
+        setContextMenuNodeId(null);
+      } catch (err) {
+        console.error('[addChild] node creation failed', err);
+      }
+    },
+    [nodes, edges, workspaceId],
+  );
+
   const handleToggleNodeType = (nodeId: string) => {
     const target = nodes.find((n) => n.id === nodeId);
     if (!target) return;
@@ -732,9 +881,21 @@ function GraphCanvasInner({
   const collapseChildrenMap = buildChildrenMap(edges);
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
+  // 타이틀/콘텐츠 판정은 depth가 아니라 '부모가 프로젝트(main)인가'로 한다. depth는 서버가
+  // WS·REST 응답에 안 실어 stale할 수 있어(graph/CLAUDE.md) 깊은 콘텐츠가 타이틀로 오분류됨.
+  // 단일 부모 불변식이라 incoming 엣지(target=자식)의 source가 곧 부모다.
+  const isMainById = new Map(
+    nodes.map((n) => [n.id, !!(n.data as { isMain?: boolean })?.isMain]),
+  );
+  const parentIdByChildId = new Map<string, string>();
+  edges.forEach((e) => parentIdByChildId.set(e.target, e.source));
+
   const nodesWithCallbacks = nodes.map((node) => {
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
     const hasParent = !isRootNode(node);
+    // 콘텐츠 노드 = 부모가 있고 그 부모가 프로젝트가 아님 (프로젝트 직계 = 타이틀)
+    const parentId = parentIdByChildId.get(node.id);
+    const isContentNode = parentId != null && !isMainById.get(parentId);
 
     const isContextMenuOpen = contextMenuNodeId === node.id;
     const isEditorOpen = myOpenEditorNodeIds.includes(node.id);
@@ -747,8 +908,13 @@ function GraphCanvasInner({
         ...node.data,
         handleSide: node.data?.isMain ? undefined : node.data?.handleSide,
         hasParent, // 부모 노드 존재 여부 전달
+        isContentNode, // 타이틀(프로젝트 직계) vs 콘텐츠(그 이하) 구분 — Figma 08 G1 노드 스타일
         showInputBox: myOpenEditorNodeIds.includes(node.id), // 열린 노드에 입력박스 표시 (내 탭 기준)
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
+        isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
+        onStartRename: handleStartRename,
+        onFinishRename: handleFinishRename,
+        onAddChild: handleAddChild, // G4·C1 hover "+" 자식 노드 추가
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
@@ -1010,7 +1176,7 @@ function GraphCanvasInner({
                       ? updatedNodes.find((n) => n.id === remainingParentId)
                       : null;
                     const color = remainingParent
-                      ? getGraphColor(remainingParentId!, updatedNodes)
+                      ? getGraphColor(remainingParentId!, updatedNodes, updatedEdges)
                       : DEFAULT_NODE_COLOR;
                     // 페인트가 색을 바꾸기 전에 저장 대상 집합을 확정해 둔다
                     const recolorIds = getRecolorTargetIds(
@@ -1114,16 +1280,9 @@ function GraphCanvasInner({
         }
       }
 
-      // 단일 부모 불변식 (#92): swap 이후의 실제 자식이 이미 부모를 가지면 차단
-      const { targetId } = resolveConnectionDirection(
-        connection.source,
-        connection.target,
-        nodes,
-        edges,
-      );
-      if (getParentId(targetId, edges) !== null) {
-        return false;
-      }
+      // 단일 부모 불변식 (#92)은 차단이 아니라 재부모화로 보장한다 —
+      // 실제 자식(swap 이후 targetId)이 이미 부모를 가져도 연결을 허용하고,
+      // onConnect가 기존 부모 엣지를 전부 끊은 뒤 새 연결을 만든다.
 
       // 부모가 있는 노드의 부모 방향(target-*) 핸들로는 연결 불가 —
       // 연결은 부모 반대 방향으로만 가능 (docs/GRAPH_RULES.md §3-2).
@@ -1163,16 +1322,29 @@ function GraphCanvasInner({
       const { sourceId, targetId, shouldSwap, bothInGraphs } =
         resolveConnectionDirection(params.source, params.target, nodes, edges);
 
-      // 단일 부모 불변식 (#92): 실제 자식이 이미 부모를 가지면 연결하지 않는다.
-      // isValidConnection이 드래그 중에 걸러주지만, 프로그래매틱 연결 대비 이중 방어.
-      if (getParentId(targetId, edges) !== null) return;
-
       // 부모 있는 노드의 부모 방향(target-*) 핸들 연결 차단 — isValidConnection과 동일 규칙
       if (
         params.targetHandle?.startsWith('target-') &&
         getParentId(params.target, edges) !== null
       )
         return;
+
+      // 단일 부모 불변식 (#92): 실제 자식이 이미 부모를 가지면 기존 부모 엣지를
+      // 전부 끊고 새 연결로 재부모화한다 (차단 → 재부모화로 변경).
+      // filter(전부)인 이유: legacy 데이터에 부모가 2개인 노드가 존재하므로
+      // (과거 incoming 2개 허용 시절 산물), 재연결이 그 데이터의 복구 경로가 된다.
+      const oldParentEdges = edges.filter((e) => e.target === targetId);
+      if (oldParentEdges.length > 0) {
+        const oldIds = new Set(oldParentEdges.map((e) => e.id));
+        setEdges((prev) => prev.filter((e) => !oldIds.has(e.id)));
+        // 서버가 엣지 삭제 시 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+        setNodes((prev) => applyDepthOnEdgeDelete(prev, edges, targetId));
+        oldParentEdges.forEach((e) =>
+          deleteEdge(workspaceId, e.id).catch((err) =>
+            console.error(`[deleteEdge reparent-connect ${e.id}] failed`, err),
+          ),
+        );
+      }
 
       const srcNode = nodes.find((n) => n.id === sourceId);
       const tgtNode = nodes.find((n) => n.id === targetId);
@@ -1201,7 +1373,14 @@ function GraphCanvasInner({
       const resolvedSourceHandle = `source-${computedSide}`;
       const resolvedTargetHandle = resolveHandleId('target', computedSide);
 
-      const colorToPropagate = getGraphColor(sourceId, nodes);
+      const colorToPropagate = getGraphColor(sourceId, nodes, edges);
+      // 무색 그래프(legacy)에 랜덤 색이 확정된 경우, 소스 노드·루트에도 저장해
+      // 다음 연결부터 같은 색을 읽게 한다 (연결마다 색이 달라지는 혼색 버그 방지)
+      const sourceColorAnchorIds = getUncoloredGraphAnchorIds(
+        sourceId,
+        nodes,
+        edges,
+      );
 
       // target이 트리째 병합될 때 서브트리 방향 정규화 대상 (subtreeInternalEdgeFilter CONTEXT 참고)
       const mergedSubtreeIds = tgtNode
@@ -1289,12 +1468,27 @@ function GraphCanvasInner({
           }
         }
 
-        return updateSubtreeColors(
+        const painted = updateSubtreeColors(
           targetId,
           positionedNodes,
           edges,
           colorToPropagate,
         );
+        // 무색 앵커(소스·루트)도 같은 색으로 로컬 페인트 — main은 표시만 흰색 유지
+        return sourceColorAnchorIds.length === 0
+          ? painted
+          : painted.map((node) =>
+              sourceColorAnchorIds.includes(node.id)
+                ? {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      color: colorToPropagate.bg,
+                      textColor: colorToPropagate.text,
+                    },
+                  }
+                : node,
+            );
       });
 
       // 서브트리 내부 엣지 핸들도 새 방향으로 — 로컬 상태와 서버 저장분 동시 갱신
@@ -1345,7 +1539,10 @@ function GraphCanvasInner({
           ]);
           // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
           setNodes((prev) => applyDepthOnEdgeCreate(prev, edges, sourceId, targetId));
-          getRecolorTargetIds(targetId, nodes, edges).forEach((id) =>
+          new Set([
+            ...getRecolorTargetIds(targetId, nodes, edges),
+            ...sourceColorAnchorIds,
+          ]).forEach((id) =>
             updateNodeContent(workspaceId, id, {
               color: colorToPropagate.bg,
               textColor: colorToPropagate.text,
@@ -1456,8 +1653,21 @@ function GraphCanvasInner({
           return;
         }
 
-        // source 노드의 색상 가져오기
-        const colorPair = getGraphColor(fromNode.id, nodes);
+        // source 노드의 색상 가져오기 — 무색 그래프면 랜덤 확정 후 앵커에도 저장
+        const colorPair = getGraphColor(fromNode.id, nodes, edges);
+        const colorAnchorIds = getUncoloredGraphAnchorIds(
+          fromNode.id,
+          nodes,
+          edges,
+        );
+        colorAnchorIds.forEach((id) =>
+          updateNodeContent(workspaceId, id, {
+            color: colorPair.bg,
+            textColor: colorPair.text,
+          }).catch((err) =>
+            console.error('[updateNodeColor anchor] failed', err),
+          ),
+        );
 
         try {
           const { nodeId } = await createMdNode(
@@ -1475,7 +1685,18 @@ function GraphCanvasInner({
           // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
           // 본인 생성 노드의 WS 이벤트는 무시되므로 REST 응답이 항상 최초 삽입.
           setNodes((prev) => [
-            ...prev,
+            ...prev.map((node) =>
+              colorAnchorIds.includes(node.id)
+                ? {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      color: colorPair.bg,
+                      textColor: colorPair.text,
+                    },
+                  }
+                : node,
+            ),
             {
               id: nodeId,
               type: 'textUpdater',
@@ -1780,7 +2001,7 @@ function GraphCanvasInner({
           : findNonOverlappingPosition(basePosition, nodes);
 
       const colorPair = shouldConnect
-        ? getGraphColor(targetParent.id, nodes)
+        ? getGraphColor(targetParent.id, nodes, edges)
         : DEFAULT_NODE_COLOR;
 
       try {
@@ -2262,8 +2483,10 @@ function GraphCanvasInner({
           const parentNode = draggedIsMain ? draggedNode : newParent;
           const childNode = draggedIsMain ? newParent : draggedNode;
 
-          // 1. 기존 부모와의 연결 끊기 (childNode 기준)
-          const existingParentEdge = edges.find(
+          // 1. 기존 부모와의 연결 끊기 (childNode 기준) — filter(전부)인 이유:
+          // legacy 데이터에 부모 2개인 노드가 존재해, find(첫 번째)만 끊으면
+          // 재부모화 후에도 두 번째 부모가 남는다
+          const existingParentEdges = edges.filter(
             (edge) => edge.target === childNode.id,
           );
 
@@ -2475,25 +2698,30 @@ function GraphCanvasInner({
 
           // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
           // 기존 부모 연결 먼저 제거 — 로컬 state와 서버 모두 삭제해야 재접속 시 복원되지 않음
-          setEdges((prev) =>
-            existingParentEdge
-              ? prev.filter((edge) => edge.id !== existingParentEdge.id)
-              : prev,
-          );
-          if (existingParentEdge) {
+          if (existingParentEdges.length > 0) {
+            const oldIds = new Set(existingParentEdges.map((e) => e.id));
+            setEdges((prev) => prev.filter((edge) => !oldIds.has(edge.id)));
             // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
             setNodes((prev) =>
-              applyDepthOnEdgeDelete(prev, edges, existingParentEdge.target),
+              applyDepthOnEdgeDelete(prev, edges, childNode.id),
             );
-            deleteEdge(workspaceId, existingParentEdge.id).catch((err) =>
-              console.error('[deleteEdge re-parent] failed', err),
+            existingParentEdges.forEach((e) =>
+              deleteEdge(workspaceId, e.id).catch((err) =>
+                console.error(`[deleteEdge re-parent ${e.id}] failed`, err),
+              ),
             );
           }
 
           // API: 새 부모 연결 — REST 응답으로 edgeId 취득 후 state 추가
           const dragStopSourceHandle = `source-${sideRelativeToParent}`;
           const dragStopTargetHandle = `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`;
-          const dragStopColor = getGraphColor(parentNode.id, nodes);
+          const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
+          // 무색 그래프면 확정 색을 앵커(부모·루트)에도 저장 (onConnect와 동일 규칙)
+          const dragStopAnchorIds = getUncoloredGraphAnchorIds(
+            parentNode.id,
+            nodes,
+            edges,
+          );
           createEdge(
             workspaceId,
             parentNode.id,
@@ -2517,7 +2745,10 @@ function GraphCanvasInner({
               setNodes((prev) =>
                 applyDepthOnEdgeCreate(prev, edges, parentNode.id, childNode.id),
               );
-              getRecolorTargetIds(childNode.id, nodes, edges).forEach((id) =>
+              new Set([
+                ...getRecolorTargetIds(childNode.id, nodes, edges),
+                ...dragStopAnchorIds,
+              ]).forEach((id) =>
                 updateNodeContent(workspaceId, id, {
                   color: dragStopColor.bg,
                   textColor: dragStopColor.text,
@@ -2532,14 +2763,28 @@ function GraphCanvasInner({
 
           // 7. childNode 서브트리 색상을 parentNode 색상으로 업데이트
           // dragStopColor 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
-          setNodes((currentNodes) =>
-            updateSubtreeColors(
+          setNodes((currentNodes) => {
+            const painted = updateSubtreeColors(
               childNode.id,
               currentNodes,
               edges,
               dragStopColor,
-            ),
-          );
+            );
+            return dragStopAnchorIds.length === 0
+              ? painted
+              : painted.map((node) =>
+                  dragStopAnchorIds.includes(node.id)
+                    ? {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          color: dragStopColor.bg,
+                          textColor: dragStopColor.text,
+                        },
+                      }
+                    : node,
+                );
+          });
         }
       }
 
@@ -2672,6 +2917,12 @@ function GraphCanvasInner({
     <div
       ref={wrapperRef}
       className="relative w-full h-full bg-background"
+      // Figma 08 '그래프뷰 배경' 스타일 실측값: 각지형(conic) 그라데이션, 아주 옅은 라벤더/핑크 5색.
+      // 앱 토큰에 대응 값이 없어 Figma 디자인 hex를 그대로 사용.
+      style={{
+        background:
+          'conic-gradient(from 90deg at 50% 50%, #E5EBFF, #FFF7FB, #F1F4FE, #EDF2FF, #FAF4F8, #E5EBFF)',
+      }}
       onDoubleClick={onPaneDoubleClick}
     >
       <ReactFlow
@@ -2702,114 +2953,97 @@ function GraphCanvasInner({
         zoomOnDoubleClick={false}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
-      />
+        proOptions={{ hideAttribution: true }}
+      >
+        {/* Figma 08(G1) 우하단 미니맵 — 라운드 카드. 줌 컨트롤 위에 오도록 bottom 오프셋.
+            노드 색은 프로젝트=흰색, 그 외=그래프 색으로 실제 그래프와 동일하게 표시 */}
+        <MiniMap
+          position="bottom-right"
+          pannable
+          zoomable
+          nodeColor={(n) =>
+            (n.data as { isMain?: boolean; color?: string })?.isMain
+              ? '#ffffff'
+              : ((n.data as { color?: string })?.color ?? '#E5E5E5')
+          }
+          nodeStrokeColor="#D9D9D9"
+          nodeBorderRadius={6}
+          maskColor="rgba(240, 242, 248, 0.6)"
+          bgColor="#ffffff"
+          style={{
+            width: 220,
+            height: 148,
+            bottom: 52,
+            right: 12,
+            margin: 0,
+            borderRadius: 12,
+            border: '1px solid rgb(var(--ds-gray-800))',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
+            overflow: 'hidden',
+          }}
+        />
+      </ReactFlow>
       {!savedViewport && <InitialViewport mainNodeId={mainNodeId} />}
       {onFirstPaint && (
         <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
       )}
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
-      {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출.
-          실제 노드 모양 안에 용어를 그대로 써서(중심 주제/하위 주제/연결점) 사용법 창과 같은
-          어휘를 미리 학습시킨다. 노드 표면색은 UI 가이드의 고정 팔레트라 하드코딩 허용 */}
+      {/* 빈 캔버스 empty state (G2) — 프로젝트 노드부터 만들도록 첫 행동을 안내하고,
+          프로젝트 → 타이틀 → 회의 녹음으로 이어지는 핵심 흐름을 단계로 보여준다 */}
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
-          {/* 미니 그래프: 중심 주제 노드 → 연결점 → 같은 색(같은 그래프) 하위 주제 노드 2개 */}
-          <div className="flex items-center" aria-hidden="true">
-            <div
-              className="relative rounded-lg border px-5 py-3 text-sm font-medium"
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderColor: '#D9D9D9',
-                color: '#2C2C2C',
-              }}
-            >
-              중심 주제
-              {/* 연결점 — 노드 가장자리의 작은 점 */}
-              <span
-                className="absolute top-1/2 -right-[5px] h-2.5 w-2.5 -translate-y-1/2 rounded-full"
-                style={{ backgroundColor: '#2C2C2C' }}
-              />
-              {/* 연결점 라벨 — 점 바로 위, 연결선과 겹치지 않는 노드 우상단 바깥.
-                  연결점(검정)과 같은 색으로 맞춤 */}
-              <span className="absolute -top-5 right-0 translate-x-1/2 whitespace-nowrap text-[11px] text-foreground">
-                연결점
-              </span>
-            </div>
-            <svg width="48" height="104" viewBox="0 0 48 104" fill="none">
-              <path
-                d="M0 52 H20 V26 H48"
-                stroke="#D9D9D9"
-                strokeWidth="1.5"
-                fill="none"
-              />
-              <path
-                d="M0 52 H20 V78 H48"
-                stroke="#D9D9D9"
-                strokeWidth="1.5"
-                fill="none"
-              />
-            </svg>
-            {/* 같은 그래프의 서브 노드는 같은 색 (색상 = 그래프 구분) */}
-            <div className="flex flex-col gap-5">
-              <span
-                className="rounded-full px-4 py-1.5 text-[13px]"
-                style={{ backgroundColor: '#D0EEFB', color: '#254756' }}
-              >
-                하위 주제
-              </span>
-              <span
-                className="rounded-full px-4 py-1.5 text-[13px]"
-                style={{ backgroundColor: '#D0EEFB', color: '#254756' }}
-              >
-                하위 주제
-              </span>
-            </div>
-          </div>
-          <p className="mt-6 text-xl font-bold text-foreground">
-            머릿속 생각을 하나 꺼내볼까요?
+          {/* 점선 프로젝트 노드 모형 */}
+          <span
+            className="rounded-full border-[1.5px] border-dashed border-gray-700 px-7 py-2.5 text-[13px] text-gray-500"
+            aria-hidden="true"
+          >
+            프로젝트
+          </span>
+          <p className="mt-5 text-xl font-bold text-foreground">
+            첫 프로젝트 노드를 만들어보세요
+          </p>
+          <p className="mt-2 text-[13.5px] text-muted">
+            과목이나 팀 프로젝트 이름으로 시작하면 좋아요. 예: 운영체제, 캡스톤
           </p>
           <button
             type="button"
             onClick={createProjectAtViewportCenter}
             disabled={isCreatingProject}
-            className="pointer-events-auto mt-5 rounded-lg bg-main px-6 py-2.5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
+            className="pointer-events-auto mt-6 rounded-[20px] px-6 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            첫 주제 만들기
+            + 프로젝트 노드 만들기
           </button>
-          <div className="mt-7 flex flex-col gap-2.5">
+          {/* 핵심 흐름 3단계 */}
+          <div className="mt-8 flex items-center gap-2 text-[12.5px] text-muted">
             {(
               [
-                ['우클릭', '중심 주제 만들기', <MouseIcon key="r" button="right" />],
-                [
-                  '더블 클릭',
-                  '하위 주제 만들기',
-                  <MouseIcon key="d" button="double" />,
-                ],
-                ['연결점 끌기', '이어진 주제 만들기', <ConnectDragIcon key="c" />],
+                ['1', '프로젝트 만들기'],
+                ['2', '타이틀 추가'],
               ] as const
-            ).map(([action, desc, icon]) => (
-              <div key={action} className="flex items-center gap-2.5 text-sm">
-                <span className="flex w-[108px] shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-foreground">
-                  {icon}
-                  {action}
+            ).map(([step, label]) => (
+              <span key={step} className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-700 text-[11px]">
+                    {step}
+                  </span>
+                  {label}
                 </span>
-                <span className="text-muted">{desc}</span>
-              </div>
+                <span aria-hidden="true">→</span>
+              </span>
             ))}
+            <span className="flex items-center gap-1.5">
+              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-700 text-[11px]">
+                3
+              </span>
+              타이틀 위{' '}
+              <span className="font-semibold text-foreground whitespace-nowrap">
+                <span className="text-red-500">●</span> 회의 녹음
+              </span>{' '}
+              으로 회의 시작
+            </span>
           </div>
-          <p className="mt-6 flex items-center gap-1.5 text-[13px] text-muted">
-            자세한 방법은 우측 상단{' '}
-            {/* 실제 사용법 버튼과 동일한 디자인·동작 — 클릭 시 사용법 창 열림 */}
-            <button
-              type="button"
-              onClick={() => usageGuideRef.current?.open()}
-              className="pointer-events-auto rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
-            >
-              사용법
-            </button>{' '}
-            버튼에 있어요.
-          </p>
         </div>
       )}
       {/* 노드 생성 진입점을 항상 보이는 버튼으로 제공 (#204) — 뷰포트 중앙에 중심 노드 생성 */}
@@ -2839,7 +3073,7 @@ function GraphCanvasInner({
       {/* top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
           top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치. */}
       <div className="absolute top-20 right-4 z-40 flex items-start gap-2">
-        <GraphUsageGuide ref={usageGuideRef} highlight={nodes.length === 0} />
+        <HelpMenu onOpenGuide={() => setOnboardingOpen(true)} />
         {myOpenEditorNodeIds.length > 0 && (
           <button
             type="button"
@@ -2850,37 +3084,88 @@ function GraphCanvasInner({
           </button>
         )}
       </div>
-      {isArchiveModalOpen && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[360px] rounded-xl border border-border bg-background p-5 shadow-xl">
-            {/* 보관함 UI가 활성화되기 전까지는 사용자 입장에서 복구 수단이 없으므로
-                "삭제"로 안내한다 (보관함 활성화 시 카피를 보관 문구로 되돌릴 것) */}
-            <p className="text-base font-semibold">노드를 삭제할까요?</p>
-            <p className="mt-2 text-sm text-muted">
-              선택한 노드와 아래에 연결된 노드까지 총{' '}
-              {pendingArchiveNodeIds.length}개가 삭제돼요.
-            </p>
-            <p className="mt-1 text-sm text-muted">삭제한 노드는 되돌릴 수 없어요.</p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={handleCancelArchive}
-                className="rounded-md border border-border px-3 py-1.5 text-sm"
+      <GraphOnboardingModal
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+      />
+      {/* D2 하위 삭제 확인 — 대상 노드 이름·타입·하위 개수를 카피에 반영(Figma 08 D2).
+          보관함 UI 활성화 전까지 복구 수단이 없어 "삭제"로 안내(활성화 시 보관 문구로). */}
+      {isArchiveModalOpen &&
+        (() => {
+          const target = nodes.find(
+            (n) => n.id === pendingArchiveNodeIds[0],
+          );
+          const delTitle =
+            ((target?.data as { title?: string } | undefined)?.title ?? '') ||
+            '제목 없음';
+          const descendants = Math.max(0, pendingArchiveNodeIds.length - 1);
+          const parentId = edges.find(
+            (e) => e.target === pendingArchiveNodeIds[0],
+          )?.source;
+          const parentIsMain = parentId
+            ? !!(
+                nodes.find((n) => n.id === parentId)?.data as
+                  | { isMain?: boolean }
+                  | undefined
+              )?.isMain
+            : false;
+          // 콘텐츠 = 부모가 있고 그 부모가 프로젝트가 아님(노드 렌더의 isContentNode와 동일).
+          // 루트(부모 없음)·프로젝트 직계는 타이틀로 본다.
+          const isContentType = !!parentId && !parentIsMain;
+          const typeLabel = (target?.data as { isMain?: boolean } | undefined)
+            ?.isMain
+            ? '프로젝트'
+            : isContentType
+              ? '콘텐츠'
+              : '타이틀';
+          return (
+            <div
+              className="absolute inset-0 z-50 flex items-center justify-center bg-black/40"
+              onClick={handleCancelArchive}
+            >
+              <div
+                className="w-[360px] max-w-[90vw] rounded-[16px] bg-background p-5 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
               >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmArchive}
-                disabled={isArchiveDeleting}
-                className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50"
-              >
-                삭제하기
-              </button>
+                <div className="flex items-start justify-between">
+                  <p className="text-[16px] font-bold text-foreground">
+                    ‘{delTitle}’를 삭제할까요?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCancelArchive}
+                    aria-label="닫기"
+                    className="shrink-0 text-muted hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="mt-2 text-[13px] text-muted">
+                  {descendants > 0
+                    ? `이 ${typeLabel} 아래의 노드 ${descendants}개도 함께 삭제되고, 되돌릴 수 없어요`
+                    : '삭제하면 되돌릴 수 없어요'}
+                </p>
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelArchive}
+                    className="h-[40px] flex-1 rounded-full border border-border text-[13px] font-semibold text-foreground transition-colors hover:bg-surface"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmArchive}
+                    disabled={isArchiveDeleting}
+                    className="h-[40px] flex-1 rounded-full bg-red-500 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    삭제하기
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
     </div>
   );
 }
