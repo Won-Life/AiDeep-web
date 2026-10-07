@@ -101,7 +101,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const containerClasses = isMain
     ? 'text-updater-node rounded-[16px]'
     : isContent
-      ? 'text-updater-node rounded-[10px]'
+      ? 'text-updater-node' // 모양은 아래 clip-path 배경 레이어가 그린다(오른쪽 뾰족 배너)
       : 'text-updater-node rounded-full';
 
   // React Flow 기본 엣지 색상과 동일한 회색 (#b1b1b7)
@@ -124,17 +124,31 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
    * - Edge Case    : root(부모 없음)의 target 핸들은 엣지가 없으므로 계속 숨김(opacity 0).
    */
   const childSides = new Set(collapseButtons.map((b) => b.side));
+  // Figma 08 실측: 포트 점 지름 14px, 흰 fill + 2px #727272 링(엣지선과 동일 색)
   const PORT_DOT_STYLE = {
-    width: 9,
-    height: 9,
-    minWidth: 9,
-    minHeight: 9,
+    width: 14,
+    height: 14,
+    minWidth: 14,
+    minHeight: 14,
     background: '#ffffff',
-    border: `1.5px solid ${EDGE_COLOR}`,
+    border: '2px solid #727272',
     borderRadius: '50%',
   } as const;
 
   const viewerBorderColor = viewers.length > 0 ? viewers[0].color : null;
+
+  // 콘텐츠 노드 = 자식(엣지가 나가는) 방향으로 뾰족한 배너. clip-path를 컨테이너에 걸면
+  // 자식인 Handle이 잘려 렌더가 멈추므로(React Flow #008), 핸들의 '형제'인 배경 레이어에만 건다.
+  const pointRight = sideRelativeToParent === 'right';
+  const CONTENT_CLIP = pointRight
+    ? 'polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%)'
+    : 'polygon(16px 0, 100% 0, 100% 100%, 16px 100%, 0 50%)';
+  const contentFill = fig?.light ?? nodeData.color ?? 'rgb(var(--ds-sub-gray))';
+  const contentRing = isHovered
+    ? '#93C5FD'
+    : selected
+      ? 'rgb(var(--ds-main))'
+      : (viewerBorderColor ?? '#ffffff');
 
   // main 노드 기본 테두리는 자기 그래프 색 — 흰 배경 유지 규칙 안에서 소속 그래프를 드러낸다.
   // 파스텔 톤(--ds-sub-*)은 1px로는 식별이 어려워 색이 있으면 2px로 표시.
@@ -159,17 +173,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
       }
     : isContent
       ? {
-          // 콘텐츠 노드: Node Light 색(디자이너 확정) + 3px 흰 테두리 + 소프트 섀도(G1-H 실측).
-          // fig 없는 계열(red/pink/gray)은 저장된 --ds-sub 파스텔을 그대로 쓴다.
-          backgroundColor: fig?.light ?? nodeData.color ?? 'rgb(var(--ds-sub-gray))',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-          border: isHovered
-            ? '3px solid #93C5FD'
-            : selected
-              ? '3px solid rgb(var(--ds-main))'
-              : viewerBorderColor
-                ? `3px solid ${viewerBorderColor}`
-                : '3px solid #ffffff',
+          // 콘텐츠 노드: 모양(뾰족 배너 + 흰 테두리 + 섀도)은 아래 clip-path 레이어가 그린다.
+          // 컨테이너는 투명·사각형 유지해야 핸들이 안 잘린다.
+          backgroundColor: 'transparent',
+          border: 'none',
         }
       : {
           // 타이틀 노드(main 직계 자손): Node Deep fill + 흰 테두리 4px + 소프트 섀도 + 흰 꽁다리(아래).
@@ -287,11 +294,44 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           // 타이틀(main 직계 자손)은 사진처럼 넓은 pill — 짧은 제목도 넓게, 더 길면 확장(최대 300)
           maxWidth: isTitle ? '300px' : '200px',
           minWidth: isTitle ? '200px' : `${PLACEHOLDER.length}em`,
-          padding: isMain ? '26px 36px' : '6px 12px',
+          // 콘텐츠는 뾰족한 쪽에 여유 패딩(글자가 점에 안 겹치게)
+          padding: isMain
+            ? '26px 36px'
+            : isContent
+              ? pointRight
+                ? '6px 24px 6px 14px'
+                : '6px 14px 6px 24px'
+              : '6px 12px',
         }}
         onMouseEnter={() => setIsNodeHovered(true)}
         onMouseLeave={() => setIsNodeHovered(false)}
       >
+        {/* 콘텐츠 노드 뾰족 배너 — clip-path는 핸들의 '형제' 레이어에만(컨테이너 X).
+            ring(흰 테두리 3px, 섀도) 뒤 + fill 앞. 핸들은 컨테이너 직속이라 안 잘린다. */}
+        {isContent && (
+          <>
+            <div
+              aria-hidden
+              className="absolute"
+              style={{
+                inset: -3,
+                backgroundColor: contentRing,
+                clipPath: CONTENT_CLIP,
+                filter: 'drop-shadow(0 2px 5px rgba(0, 0, 0, 0.12))',
+                zIndex: -2,
+              }}
+            />
+            <div
+              aria-hidden
+              className="absolute inset-0"
+              style={{
+                backgroundColor: contentFill,
+                clipPath: CONTENT_CLIP,
+                zIndex: -1,
+              }}
+            />
+          </>
+        )}
         {/* 좌상단 폴더 탭(꽁다리) — 프로젝트는 Deep색, 타이틀은 흰색(흰 테두리와 연결). (Figma 08) */}
         {(isMain || isTitle) && (
           <div
