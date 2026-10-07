@@ -352,6 +352,8 @@ function GraphCanvasInner({
   const [contextMenuNodeId, setContextMenuNodeId] = useState<string | null>(
     null,
   );
+  // 인라인 이름 편집(G5·G7 "이름 바꾸기") 중인 노드 — 해당 노드 제목이 input으로 전환
+  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isArchiveDeleting, setIsArchiveDeleting] = useState(false);
   const [pendingArchiveNodeIds, setPendingArchiveNodeIds] = useState<string[]>(
@@ -664,6 +666,14 @@ function GraphCanvasInner({
     },
     [workspaceId, handleNodeViewChange],
   );
+
+  // 인라인 이름 편집 시작(컨텍스트 메뉴 "이름 바꾸기") — 메뉴는 닫고 해당 노드를 편집 모드로.
+  const handleStartRename = useCallback((nodeId: string) => {
+    setRenamingNodeId(nodeId);
+    setContextMenuNodeId(null);
+  }, []);
+  const handleFinishRename = useCallback(() => setRenamingNodeId(null), []);
+
   const handleToggleNodeType = (nodeId: string) => {
     const target = nodes.find((n) => n.id === nodeId);
     if (!target) return;
@@ -776,6 +786,9 @@ function GraphCanvasInner({
         isContentNode, // 타이틀(프로젝트 직계) vs 콘텐츠(그 이하) 구분 — Figma 08 G1 노드 스타일
         showInputBox: myOpenEditorNodeIds.includes(node.id), // 열린 노드에 입력박스 표시 (내 탭 기준)
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
+        isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
+        onStartRename: handleStartRename,
+        onFinishRename: handleFinishRename,
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용

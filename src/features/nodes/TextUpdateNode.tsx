@@ -48,6 +48,9 @@ export type NodeView = {
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
   isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
+  isRenaming?: boolean; // 인라인 이름 편집 중(G5·G7 "이름 바꾸기")
+  onStartRename?: (nodeId: string) => void; // 인라인 이름 편집 시작
+  onFinishRename?: (nodeId: string) => void; // 인라인 이름 편집 종료
   collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
   onDeleteNode?: (nodeId: string) => void; // 노드 삭제 (확인 모달 경유)
@@ -95,6 +98,13 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
 
   const label = nodeData.title || '';
   const isEmpty = label === '';
+  const isRenaming = nodeData.isRenaming ?? false;
+  // 채워진 글자색(인라인 input·비어있지 않은 라벨 공용): 타이틀은 Deep 대비색, 그 외는 계열색
+  const filledTextColor = isTitle
+    ? (titleTextOnDeep(fig?.deep) ??
+      nodeData.textColor ??
+      'rgb(var(--foreground))')
+    : nodeData.textColor || 'rgb(var(--foreground))';
 
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
@@ -259,6 +269,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           <NodeContextMenu
             isProjectNode={isMain}
             onToggleNodeType={() => nodeData.onToggleNodeType?.(id)}
+            onRename={() => nodeData.onStartRename?.(id)}
             onDeleteNode={() => nodeData.onDeleteNode?.(id)}
           />
         </div>
@@ -350,31 +361,51 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             }}
           />
         )}
-        <div
-          className={`${isContent ? 'text-left' : 'text-center'} select-none`}
-          style={{
-            // 타이틀: 어두운 Deep(파랑)만 흰 글자, 밝은 Deep은 계열 어두운색.
-            // 콘텐츠/프로젝트: 계열 어두운색(--ds-text-*). (Figma 08 실측)
-            color: isEmpty
-              ? 'rgb(var(--ds-gray-500))'
-              : isTitle
-                ? (titleTextOnDeep(fig?.deep) ??
-                  nodeData.textColor ??
-                  'rgb(var(--foreground))')
-                : nodeData.textColor || 'rgb(var(--foreground))',
-            fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
-            fontSize: isMain ? '20px' : undefined,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            wordBreak: 'break-word',
-            lineHeight: '1.4em',
-            maxHeight: '2.8em',
-          }}
-        >
-          {isEmpty ? PLACEHOLDER : label}
-        </div>
+        {isRenaming ? (
+          // 인라인 이름 편집(G5·G7) — input onChange가 handleTitleChange로 즉시+디바운스 저장,
+          // Enter/blur로 종료, Esc로 종료(저장은 이미 반영됨). nodrag·stopPropagation로 드래그/에디터 오픈 차단.
+          <input
+            autoFocus
+            defaultValue={label}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => nodeData.onChange?.(id, e.currentTarget.value)}
+            onBlur={() => nodeData.onFinishRename?.(id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              else if (e.key === 'Escape') nodeData.onFinishRename?.(id);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className={`nodrag w-full bg-transparent outline-none ${
+              isContent ? 'text-left' : 'text-center'
+            }`}
+            style={{
+              color: filledTextColor,
+              fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
+              fontSize: isMain ? '20px' : undefined,
+              lineHeight: '1.4em',
+            }}
+          />
+        ) : (
+          <div
+            className={`${isContent ? 'text-left' : 'text-center'} select-none`}
+            style={{
+              // 타이틀: 어두운 Deep(파랑)만 흰 글자, 밝은 Deep은 계열 어두운색.
+              // 콘텐츠/프로젝트: 계열 어두운색(--ds-text-*). (Figma 08 실측)
+              color: isEmpty ? 'rgb(var(--ds-gray-500))' : filledTextColor,
+              fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
+              fontSize: isMain ? '20px' : undefined,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              wordBreak: 'break-word',
+              lineHeight: '1.4em',
+              maxHeight: '2.8em',
+            }}
+          >
+            {isEmpty ? PLACEHOLDER : label}
+          </div>
+        )}
         {/* 접기/펼치기 버튼 — 자식이 있는 방향에만. 펼침: hover 시 셰브론, 접힘: 항상 개수 뱃지.
             노드 div의 자식이라 버튼 위 hover도 노드 hover로 유지된다(mouseleave 미발화). */}
         {collapseButtons.map((btn) => {
