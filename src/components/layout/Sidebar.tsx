@@ -601,6 +601,47 @@ function WorkspaceSettingsModal({
 
 // ─── 프로필 (X2·X3) ──────────────────────────────────────────────────────────
 
+// X2 프로필 메뉴 아이콘 (설정 기어 / 로그아웃)
+function GearIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0 text-muted"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+function LogoutIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0 text-muted"
+      aria-hidden="true"
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
 function ProfileRow({ collapsed }: { collapsed?: boolean }) {
   const router = useRouter();
   const { userMe } = useWorkspaceLayout();
@@ -642,9 +683,23 @@ function ProfileRow({ collapsed }: { collapsed?: boolean }) {
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute bottom-[56px] left-2.5 z-50 w-[180px] rounded-[10px] border border-gray-700 bg-background py-1.5 shadow-md">
+          <div className="absolute bottom-[56px] left-2.5 z-50 w-[200px] overflow-hidden rounded-[10px] border border-gray-700 bg-background shadow-md">
+            {/* 프로필 헤더 (X2) — 아바타 + 이름 + 이메일 */}
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+              <Avatar name={name} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold text-foreground">
+                  {name || '사용자'}
+                </span>
+                <span className="block truncate text-[11px] text-muted">
+                  {email}
+                </span>
+              </span>
+            </div>
+            <div className="border-t border-border" />
             <MenuItem disabled title="계정 설정 화면은 준비 중이에요">
-              계정 설정
+              <GearIcon />
+              설정
             </MenuItem>
             <MenuItem
               onClick={() => {
@@ -652,6 +707,7 @@ function ProfileRow({ collapsed }: { collapsed?: boolean }) {
                 handleLogout();
               }}
             >
+              <LogoutIcon />
               로그아웃
             </MenuItem>
           </div>
