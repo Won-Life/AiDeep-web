@@ -36,6 +36,22 @@ export async function verifyEmailCode(data: EmailVerifyRequest): Promise<string>
   return result;
 }
 
+/*
+ * CONTEXT
+ * - Problem      : 재설정 링크 확인의 AUTH-034(만료·사용됨)는 HTTP 401이라 공용 인터셉터가 토큰 갱신을 시도한다.
+ * - Why          : 로그인 전 요청이므로 skipAuthRefresh로 401을 그대로 ApiError로 받아 화면이 구분한다.
+ * - Alternatives : 인터셉터에 경로 예외 추가 → 공용 코드에 특수 케이스가 쌓인다.
+ * - Trade-offs   : 두 함수 모두 성공 응답 본문(문자열)은 쓰지 않는다.
+ * - Edge Case    : 미가입 이메일은 AUTH-010, 링크 만료·재사용은 AUTH-034.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await client.post<string>('/auth/password/reset/request', { email }, { skipAuthRefresh: true });
+}
+
+export async function confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+  await client.post<string>('/auth/password/reset/confirm', { token, newPassword }, { skipAuthRefresh: true });
+}
+
 export async function refresh(data: RefreshRequest): Promise<LoginResponse> {
   const { data: result } = await client.post<LoginResponse>('/auth/refresh', data, { skipAuthRefresh: true });
   setTokens(result.accessToken, result.refreshToken);
