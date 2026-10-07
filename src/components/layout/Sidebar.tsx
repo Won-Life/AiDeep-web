@@ -97,12 +97,29 @@ function OnNodeLogo() {
   );
 }
 
-/** 워크스페이스 아이콘 — 이름 첫 글자를 어두운 사각형에 표시 */
-function WorkspaceIcon({ name, size = 24 }: { name: string; size?: number }) {
+/** 워크스페이스 아이콘 — 이름 첫 글자를 색 사각형에 표시.
+ *  기본(현재 워크스페이스)은 Main Blue, muted(목록의 다른 워크스페이스)는 연한 파랑 (Figma X1·X6). */
+function WorkspaceIcon({
+  name,
+  size = 24,
+  muted = false,
+}: {
+  name: string;
+  size?: number;
+  muted?: boolean;
+}) {
   return (
     <span
-      className="flex shrink-0 items-center justify-center rounded-[6px] bg-foreground font-semibold text-background"
-      style={{ width: size, height: size, fontSize: size * 0.5 }}
+      className="flex shrink-0 items-center justify-center rounded-[6px] font-semibold"
+      style={{
+        width: size,
+        height: size,
+        fontSize: size * 0.5,
+        backgroundColor: muted
+          ? 'rgb(var(--ds-main-blue-pale))'
+          : 'rgb(var(--ds-main-blue))',
+        color: muted ? 'rgb(var(--ds-main-blue-deep))' : '#ffffff',
+      }}
     >
       {name.trim().charAt(0) || 'W'}
     </span>
@@ -268,21 +285,27 @@ function WorkspaceSwitcher({
         {list === null ? (
           <p className="px-3 py-2 text-[12px] text-muted">불러오는 중…</p>
         ) : (
-          list.map((ws) => (
-            <MenuItem
-              key={ws.workspaceId}
-              onClick={() => {
-                onClose();
-                if (ws.workspaceId !== currentId) onSwitch(ws);
-              }}
-            >
-              <WorkspaceIcon name={ws.title} size={18} />
-              <span className="min-w-0 flex-1 truncate">{ws.title}</span>
-              {ws.workspaceId === currentId && (
-                <span className="text-[12px]">✓</span>
-              )}
-            </MenuItem>
-          ))
+          list.map((ws) => {
+            const isCurrent = ws.workspaceId === currentId;
+            return (
+              <button
+                key={ws.workspaceId}
+                type="button"
+                onClick={() => {
+                  onClose();
+                  if (!isCurrent) onSwitch(ws);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition-colors ${
+                  isCurrent
+                    ? 'bg-main-blue-pale font-semibold text-main-blue-deep shadow-[inset_3px_0_0_0_rgb(var(--ds-main-blue))]'
+                    : 'text-foreground hover:bg-surface'
+                }`}
+              >
+                <WorkspaceIcon name={ws.title} size={18} muted={!isCurrent} />
+                <span className="min-w-0 flex-1 truncate">{ws.title}</span>
+              </button>
+            );
+          })
         )}
         <div className="my-1 border-t border-border" />
         <MenuItem
