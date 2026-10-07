@@ -56,24 +56,32 @@ function AttachmentSection({
 }) {
   const imageRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // C4: 업로드 중 파일 — 완료 전까지 "업로드 중…" 칩으로 즉시 표시(기존엔 완료 후에야 나타남)
+  const [uploading, setUploading] = useState<{ id: string; name: string }[]>([]);
 
   const handleImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const id = generateId();
+    setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
       const { url } = await uploadFile(file);
       onAddImage(url);
     } catch { /* silent */ }
+    setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
   }, [onAddImage]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const id = generateId();
+    setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
       const { url, originalName, size } = await uploadFile(file);
       onAddFile(originalName, size, url);
     } catch { /* silent */ }
+    setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
   }, [onAddFile]);
 
@@ -82,7 +90,7 @@ function AttachmentSection({
       <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
       <input ref={fileRef} type="file" className="hidden" onChange={handleFileChange} />
 
-      {attachments.length > 0 && (
+      {(attachments.length > 0 || uploading.length > 0) && (
         <div className="px-3 pt-2 space-y-2">
           {attachments.map((att) =>
             att.type === "image" ? (
@@ -144,6 +152,23 @@ function AttachmentSection({
               </div>
             )
           )}
+          {/* C4: 업로드 중 파일 — 완료 전 "업로드 중…" 칩(흐린 상태, 배경 없음) */}
+          {uploading.map((u) => (
+            <div
+              key={u.id}
+              className="flex items-center gap-2.5 rounded-md"
+              style={{ padding: "9px 12px", opacity: 0.55 }}
+            >
+              <svg width="14" height="16" viewBox="0 0 15 18" fill="none">
+                <path d="M9 1H2C1.46957 1 0.960859 1.21071 0.585786 1.58579C0.210714 1.96086 0 2.46957 0 3V15C0 15.5304 0.210714 16.0391 0.585786 16.4142C0.960859 16.7893 1.46957 17 2 17H13C13.5304 17 14.0391 16.7893 14.4142 16.4142C14.7893 16.0391 15 15.5304 15 15V7L9 1Z" fill="rgb(var(--ds-gray-900))" stroke="rgb(var(--ds-gray-700))" strokeWidth="1" strokeLinejoin="round" />
+                <path d="M9 1V7H15" stroke="rgb(var(--ds-gray-700))" strokeWidth="1" strokeLinejoin="round" />
+              </svg>
+              <span className="flex-1 typo-cap2 text-foreground truncate">
+                {u.name}
+              </span>
+              <span className="text-[12px] text-muted shrink-0">업로드 중…</span>
+            </div>
+          ))}
         </div>
       )}
 
