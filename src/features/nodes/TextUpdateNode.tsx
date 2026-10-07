@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
@@ -26,6 +26,16 @@ function getUserCursorColor(userId: string): string {
     hash = userId.charCodeAt(i) + ((hash << 5) - hash);
   }
   return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length].text;
+}
+
+// 콘텐츠 노드 뾰족 배너 path — 왼쪽(또는 우측) 둥근 모서리 + 자식 방향 뾰족 점.
+// SVG stroke로 그려야 테두리 두께가 어느 변에서도 균일하다(clip-path 스케일링은 점 쪽이 두꺼워짐).
+function contentBannerPath(w: number, h: number, pointRight: boolean): string {
+  const p = 14; // 점 깊이(크기와 무관하게 고정)
+  const r = Math.max(2, Math.min(10, h / 2 - 1)); // 둥근 모서리 반경
+  return pointRight
+    ? `M ${r},0 H ${w - p} L ${w},${h / 2} L ${w - p},${h} H ${r} Q 0,${h} 0,${h - r} V ${r} Q 0,0 ${r},0 Z`
+    : `M ${w - r},0 H ${p} L 0,${h / 2} L ${p},${h} H ${w - r} Q ${w},${h} ${w},${h - r} V ${r} Q ${w},0 ${w - r},0 Z`;
 }
 
 export interface NodeViewer {
@@ -80,6 +90,19 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
 
   const [isNodeHovered, setIsNodeHovered] = useState(false);
+  // 콘텐츠 배너 SVG를 노드 실제 px 크기에 맞춰 그리기 위한 측정
+  const contentBoxRef = useRef<HTMLDivElement>(null);
+  const [contentSize, setContentSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = contentBoxRef.current;
+    if (!el) return;
+    const measure = () =>
+      setContentSize({ w: el.offsetWidth, h: el.offsetHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const collapseButtons = nodeData.collapseButtons ?? [];
   const { provider: collabProvider } = useYjsProvider({
     nodeId: isNodeHovered || showInputBox ? id : null,
@@ -148,12 +171,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
 
   const viewerBorderColor = viewers.length > 0 ? viewers[0].color : null;
 
-  // 콘텐츠 노드 = 자식(엣지가 나가는) 방향으로 뾰족한 배너. clip-path를 컨테이너에 걸면
-  // 자식인 Handle이 잘려 렌더가 멈추므로(React Flow #008), 핸들의 '형제'인 배경 레이어에만 건다.
+  // 콘텐츠 노드 = 자식(엣지가 나가는) 방향으로 뾰족한 배너. 모양은 SVG path로 그리고
+  // 컨테이너는 투명 유지 → 핸들(컨테이너 직속)이 안 잘린다(React Flow #008 회피).
   const pointRight = sideRelativeToParent === 'right';
-  const CONTENT_CLIP = pointRight
-    ? 'polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%)'
-    : 'polygon(16px 0, 100% 0, 100% 100%, 16px 100%, 0 50%)';
   const contentFill = fig?.light ?? nodeData.color ?? 'rgb(var(--ds-sub-gray))';
   const contentRing = isHovered
     ? '#93C5FD'
@@ -298,6 +318,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
 
       {/* 노드 - 입력박스보다 앞에 배치 */}
       <div
+        ref={contentBoxRef}
         className={containerClasses}
         style={{
           ...containerStyle,
@@ -318,31 +339,28 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         onMouseEnter={() => setIsNodeHovered(true)}
         onMouseLeave={() => setIsNodeHovered(false)}
       >
-        {/* 콘텐츠 노드 뾰족 배너 — clip-path는 핸들의 '형제' 레이어에만(컨테이너 X).
-            ring(흰 테두리 3px, 섀도) 뒤 + fill 앞. 핸들은 컨테이너 직속이라 안 잘린다. */}
-        {isContent && (
-          <>
-            <div
-              aria-hidden
-              className="absolute"
-              style={{
-                inset: -3,
-                backgroundColor: contentRing,
-                clipPath: CONTENT_CLIP,
-                filter: 'drop-shadow(0 2px 5px rgba(0, 0, 0, 0.12))',
-                zIndex: -2,
-              }}
+        {/* 콘텐츠 노드 뾰족 배너 — SVG path를 연한 fill + 흰색 uniform stroke로 그린다.
+            stroke는 어느 변에서도 두께가 균일(점 쪽도). 핸들은 컨테이너 직속이라 안 잘린다. */}
+        {isContent && contentSize.w > 0 && (
+          <svg
+            aria-hidden
+            width={contentSize.w}
+            height={contentSize.h}
+            className="absolute inset-0"
+            style={{
+              zIndex: -1,
+              overflow: 'visible',
+              filter: 'drop-shadow(0 2px 5px rgba(0, 0, 0, 0.12))',
+            }}
+          >
+            <path
+              d={contentBannerPath(contentSize.w, contentSize.h, pointRight)}
+              fill={contentFill}
+              stroke={contentRing}
+              strokeWidth={3}
+              strokeLinejoin="round"
             />
-            <div
-              aria-hidden
-              className="absolute inset-0"
-              style={{
-                backgroundColor: contentFill,
-                clipPath: CONTENT_CLIP,
-                zIndex: -1,
-              }}
-            />
-          </>
+          </svg>
         )}
         {/* 좌상단 폴더 탭(꽁다리) — 프로젝트는 Deep색, 타이틀은 흰색(흰 테두리와 연결). (Figma 08) */}
         {(isMain || isTitle) && (
