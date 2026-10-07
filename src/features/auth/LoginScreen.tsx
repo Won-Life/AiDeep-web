@@ -11,11 +11,11 @@ import { useLoginForm } from './useLoginForm';
 export default function LoginScreen({ onSignup, checking }: { onSignup: () => void; checking: boolean }) {
   const form = useLoginForm();
   return (
-    <AuthLayout error={form.state.status === 'error'}>
+    <AuthLayout error={form.state.status === 'error' || form.locked}>
       <h1 className="sr-only">로그인</h1>
       <p className="mt-[13px] text-center font-medium leading-[13.07px]">Just say it, We’ll node it.</p>
       <div className="mt-[15px] flex min-h-[28px] items-center justify-center">
-        {form.state.message && <p id="login-error" role="alert" className="w-full rounded-[20px] bg-[var(--onnode-danger-surface)] px-3 py-[6px] text-center text-[13px] leading-4 text-[var(--onnode-danger)]">{form.state.message}</p>}
+        {form.state.message && <p id="login-error" role="alert" className="w-full whitespace-pre-line rounded-[20px] bg-[var(--onnode-danger-surface)] px-3 py-[6px] text-center text-[13px] leading-4 text-[var(--onnode-danger)]">{form.state.message}</p>}
       </div>
       <form onSubmit={form.submit} className="mt-[17px]" aria-busy={form.isSubmitting}>
         <fieldset disabled={checking || form.isSubmitting} className="flex flex-col gap-[17px]">
@@ -37,7 +37,8 @@ export default function LoginScreen({ onSignup, checking }: { onSignup: () => vo
               <Link href="/forgot-password" className="hover:underline">비밀번호를 잊으셨나요?</Link>
             )}
           </div>
-          <Button type="submit" loading={form.isSubmitting} className="mt-[17px] w-full">{form.isSubmitting ? '로그인 중...' : '로그인'}</Button>
+          <Button type="submit" loading={form.isSubmitting} disabled={form.locked}
+            className={`mt-[17px] w-full ${form.locked ? 'bg-[var(--onnode-text-tertiary)]! opacity-100!' : ''}`}>{form.isSubmitting ? '로그인 중...' : '로그인'}</Button>
         </fieldset>
         <div className="my-[9px] flex items-center gap-[13px] text-[10px] leading-[11px] text-[var(--onnode-border)]"><span className="h-px flex-1 bg-[var(--onnode-border)]" />또는<span className="h-px flex-1 bg-[var(--onnode-border)]" /></div>
         <Button variant="secondary" className="w-full" disabled={checking || form.isSubmitting} onClick={form.startGoogleLogin}>

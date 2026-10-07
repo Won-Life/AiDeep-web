@@ -8,6 +8,13 @@ import { ApiError } from '../../api/types';
  * - Trade-offs   : 새 서버 오류 정책은 별도 연동이 필요하다.
  * - Edge Case    : 네트워크 오류는 일반 재시도 안내를 유지한다.
  */
+export const LOGIN_LOCK_MESSAGE =
+  '비밀번호를 5회 잘못 입력했어요.\n비밀번호를 재설정하거나 10분 후 다시 시도해주세요';
+
+export function isAccountLocked(error: unknown): boolean {
+  return error instanceof ApiError && error.errorCode === 'AUTH-032';
+}
+
 export function getLoginErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError))
     return '로그인에 실패했습니다. 다시 시도해주세요.';

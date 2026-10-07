@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/types';
-import { getLoginErrorMessage } from './loginError';
+import { getLoginErrorMessage, isAccountLocked } from './loginError';
+
+describe('isAccountLocked', () => {
+  it('detects only the server lock code AUTH-032', () => {
+    expect(isAccountLocked(new ApiError('AUTH-032', '잠겼습니다', ''))).toBe(true);
+    expect(isAccountLocked(new ApiError('AUTH-018', '비밀번호가 일치하지 않습니다.', ''))).toBe(false);
+    expect(isAccountLocked(new Error('network'))).toBe(false);
+  });
+});
 
 describe('getLoginErrorMessage', () => {
   it('uses Figma copy for the observed password mismatch', () => {
