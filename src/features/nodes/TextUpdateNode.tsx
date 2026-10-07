@@ -407,63 +407,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             {isEmpty ? PLACEHOLDER : label}
           </div>
         )}
-        {/* 접기/펼치기 버튼 — 자식이 있는 방향에만. 펼침: hover 시 셰브론, 접힘: 항상 개수 뱃지.
-            노드 div의 자식이라 버튼 위 hover도 노드 hover로 유지된다(mouseleave 미발화). */}
-        {collapseButtons.map((btn) => {
-          const isVisible = btn.collapsed || isNodeHovered;
-          return (
-            <div
-              key={btn.side}
-              className="nodrag absolute top-1/2 -translate-y-1/2 transition-opacity duration-150"
-              style={{
-                ...(btn.side === 'left'
-                  ? { right: '100%', paddingRight: 4 }
-                  : { left: '100%', paddingLeft: 4 }),
-                opacity: isVisible ? 1 : 0,
-                pointerEvents: isVisible ? 'auto' : 'none',
-              }}
-            >
-              <button
-                type="button"
-                aria-label={btn.collapsed ? '자식 노드 펼치기' : '자식 노드 접기'}
-                className={`flex h-5 min-w-5 items-center justify-center rounded-full shadow-sm transition-all duration-150 ${
-                  isVisible ? 'scale-100' : 'scale-90'
-                } ${
-                  btn.collapsed
-                    ? 'bg-main px-1 text-[10px] font-semibold leading-none text-white hover:opacity-90'
-                    : 'border border-border bg-background text-muted hover:bg-surface-hover hover:text-foreground'
-                }`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  nodeData.onToggleCollapse?.(id, btn.side);
-                }}
-              >
-                {btn.collapsed ? (
-                  btn.hiddenCount
-                ) : (
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="none"
-                    aria-hidden="true"
-                    className={btn.side === 'left' ? 'rotate-180' : undefined}
-                  >
-                    <path
-                      d="M3.5 2 6.5 5 3.5 8"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </button>
-            </div>
-          );
-        })}
-        {/* G4·C1: hover "+" 자식 추가 버튼 — source(자식) 방향. 프로젝트→타이틀, 타이틀→콘텐츠.
-            해당 방향에 이미 자식(접기 버튼)이 있으면 더 바깥으로 밀어 겹침 회피. */}
+        {/* G4·C1: hover "+" 자식 추가 버튼 — source(자식) 방향. 프로젝트→타이틀, 타이틀→콘텐츠. */}
         {(isMain || isTitle) && isNodeHovered && !isRenaming && (
           <div
             className="nodrag absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5"
@@ -471,13 +415,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               ...(sideRelativeToParent === 'left'
                 ? {
                     right: '100%',
-                    paddingRight: childSides.has('left') ? 32 : 10,
+                    paddingRight: 10,
                     flexDirection: 'row-reverse',
                   }
-                : {
-                    left: '100%',
-                    paddingLeft: childSides.has('right') ? 32 : 10,
-                  }),
+                : { left: '100%', paddingLeft: 10 }),
               zIndex: 10,
             }}
           >
@@ -489,15 +430,17 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                 nodeData.onAddChild?.(id);
               }}
               className="flex items-center justify-center rounded-full text-white shadow-sm transition-opacity hover:opacity-90"
-              style={{
-                width: 22,
-                height: 22,
-                backgroundColor: '#748DFD',
-                fontSize: 16,
-                lineHeight: 1,
-              }}
+              style={{ width: 22, height: 22, backgroundColor: '#748DFD' }}
             >
-              +
+              {/* SVG 십자로 배경원 정중앙 정렬 (텍스트 "+"의 베이스라인 쏠림 제거) */}
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path
+                  d="M6 1.5V10.5M1.5 6H10.5"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
             </button>
             <span
               className="whitespace-nowrap rounded-full text-white select-none"

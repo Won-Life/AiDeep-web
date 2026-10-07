@@ -759,24 +759,35 @@ function GraphCanvasInner({
 
         const fromHandleId = `source-${side}`;
         const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
+        // 엣지를 낙관적으로 먼저(임시 id) 추가해 부모 관계를 즉시 성립시킨다. 콘텐츠/타이틀
+        // 판정은 "부모가 프로젝트인가"로 하는데, 엣지가 없는 첫 프레임엔 부모 미상이라 새 노드가
+        // 타이틀로 잠깐 보였다가 콘텐츠로 바뀌는 깜빡임이 생겼다. createEdge 응답 시 실제 id로 교체.
+        const tempEdgeId = `temp-edge-${nodeId}`;
+        setEdges((prev) => [
+          ...prev,
+          {
+            id: tempEdgeId,
+            source: sourceNode.id,
+            target: nodeId,
+            type: 'branch',
+            sourceHandle: fromHandleId,
+            targetHandle: targetHandleId,
+          },
+        ]);
         createEdge(workspaceId, sourceNode.id, nodeId, fromHandleId, targetHandleId)
           .then(({ edgeId }) => {
-            setEdges((prev) => [
-              ...prev,
-              {
-                id: edgeId,
-                source: sourceNode.id,
-                target: nodeId,
-                type: 'branch',
-                sourceHandle: fromHandleId,
-                targetHandle: targetHandleId,
-              },
-            ]);
+            setEdges((prev) =>
+              prev.map((e) => (e.id === tempEdgeId ? { ...e, id: edgeId } : e)),
+            );
             setNodes((prev) =>
               applyDepthOnEdgeCreate(prev, [], sourceNode.id, nodeId),
             );
           })
-          .catch((err) => console.error('[addChild] createEdge failed', err));
+          .catch((err) => {
+            // 실패 시 낙관적 임시 엣지 롤백
+            setEdges((prev) => prev.filter((e) => e.id !== tempEdgeId));
+            console.error('[addChild] createEdge failed', err);
+          });
 
         // G5: 생성 직후 바로 인라인 이름 편집
         setRenamingNodeId(nodeId);
