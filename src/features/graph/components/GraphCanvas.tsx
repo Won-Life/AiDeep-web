@@ -674,6 +674,120 @@ function GraphCanvasInner({
   }, []);
   const handleFinishRename = useCallback(() => setRenamingNodeId(null), []);
 
+  // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 빈 자식 노드 생성 + 엣지 + 색 상속 후
+  // 바로 인라인 이름 편집(G5). onConnectEnd(핸들 드래그 생성)과 동일한 생성 규칙을 노드 기준으로
+  // 재사용한다. 겹침 bail 없이 source 높이에 놓고 D3 rectCollide가 분리하도록 맡긴다.
+  const handleAddChild = useCallback(
+    async (parentId: string) => {
+      const sourceNode = nodes.find((n) => n.id === parentId);
+      if (!sourceNode) return;
+
+      const forced = getForcedOutboundSideForSubNode(sourceNode, nodes, edges);
+      let side: 'left' | 'right';
+      if (forced) {
+        side = forced;
+      } else {
+        const parentOfSource = getParentId(sourceNode.id, edges);
+        const parentNode = parentOfSource
+          ? nodes.find((n) => n.id === parentOfSource)
+          : undefined;
+        side = parentNode
+          ? getTargetSideRelativeToParent(
+              sourceNode.position.x,
+              parentNode.position.x,
+            )
+          : 'right'; // 루트/프로젝트는 기본 오른쪽으로 성장
+      }
+
+      const adjustedPosition = adjustPositionRelativeToSource(
+        sourceNode,
+        sourceNode.position.y,
+        side,
+        nodes,
+        edges,
+        undefined,
+        { width: EMPTY_SUB_NODE_WIDTH } as Node,
+      );
+
+      const colorPair = getGraphColor(sourceNode.id, nodes, edges);
+      const colorAnchorIds = getUncoloredGraphAnchorIds(
+        sourceNode.id,
+        nodes,
+        edges,
+      );
+      colorAnchorIds.forEach((id) =>
+        updateNodeContent(workspaceId, id, {
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        }).catch((err) => console.error('[addChild color anchor] failed', err)),
+      );
+
+      try {
+        const { nodeId } = await createMdNode(workspaceId, '', adjustedPosition, {
+          markdownBody: '',
+          jsonBody: EMPTY_LEXICAL_JSON,
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        });
+        setNodes((prev) => [
+          ...prev.map((node) =>
+            colorAnchorIds.includes(node.id)
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    color: colorPair.bg,
+                    textColor: colorPair.text,
+                  },
+                }
+              : node,
+          ),
+          {
+            id: nodeId,
+            type: 'textUpdater',
+            position: adjustedPosition,
+            data: {
+              title: '',
+              isMain: false,
+              depth: 0,
+              color: colorPair.bg,
+              textColor: colorPair.text,
+              handleSide: side,
+            },
+          } as Node,
+        ]);
+
+        const fromHandleId = `source-${side}`;
+        const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
+        createEdge(workspaceId, sourceNode.id, nodeId, fromHandleId, targetHandleId)
+          .then(({ edgeId }) => {
+            setEdges((prev) => [
+              ...prev,
+              {
+                id: edgeId,
+                source: sourceNode.id,
+                target: nodeId,
+                type: 'branch',
+                sourceHandle: fromHandleId,
+                targetHandle: targetHandleId,
+              },
+            ]);
+            setNodes((prev) =>
+              applyDepthOnEdgeCreate(prev, [], sourceNode.id, nodeId),
+            );
+          })
+          .catch((err) => console.error('[addChild] createEdge failed', err));
+
+        // G5: 생성 직후 바로 인라인 이름 편집
+        setRenamingNodeId(nodeId);
+        setContextMenuNodeId(null);
+      } catch (err) {
+        console.error('[addChild] node creation failed', err);
+      }
+    },
+    [nodes, edges, workspaceId],
+  );
+
   const handleToggleNodeType = (nodeId: string) => {
     const target = nodes.find((n) => n.id === nodeId);
     if (!target) return;
@@ -789,6 +903,7 @@ function GraphCanvasInner({
         isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
         onStartRename: handleStartRename,
         onFinishRename: handleFinishRename,
+        onAddChild: handleAddChild, // G4·C1 hover "+" 자식 노드 추가
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용

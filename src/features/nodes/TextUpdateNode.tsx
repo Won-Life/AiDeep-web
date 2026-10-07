@@ -51,6 +51,7 @@ export type NodeView = {
   isRenaming?: boolean; // 인라인 이름 편집 중(G5·G7 "이름 바꾸기")
   onStartRename?: (nodeId: string) => void; // 인라인 이름 편집 시작
   onFinishRename?: (nodeId: string) => void; // 인라인 이름 편집 종료
+  onAddChild?: (nodeId: string) => void; // G4·C1 hover "+" 자식 노드 추가
   collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
   onDeleteNode?: (nodeId: string) => void; // 노드 삭제 (확인 모달 경유)
@@ -461,6 +462,55 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             </div>
           );
         })}
+        {/* G4·C1: hover "+" 자식 추가 버튼 — source(자식) 방향. 프로젝트→타이틀, 타이틀→콘텐츠.
+            해당 방향에 이미 자식(접기 버튼)이 있으면 더 바깥으로 밀어 겹침 회피. */}
+        {(isMain || isTitle) && isNodeHovered && !isRenaming && (
+          <div
+            className="nodrag absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5"
+            style={{
+              ...(sideRelativeToParent === 'left'
+                ? {
+                    right: '100%',
+                    paddingRight: childSides.has('left') ? 32 : 10,
+                    flexDirection: 'row-reverse',
+                  }
+                : {
+                    left: '100%',
+                    paddingLeft: childSides.has('right') ? 32 : 10,
+                  }),
+              zIndex: 10,
+            }}
+          >
+            <button
+              type="button"
+              aria-label="자식 노드 추가"
+              onClick={(event) => {
+                event.stopPropagation();
+                nodeData.onAddChild?.(id);
+              }}
+              className="flex items-center justify-center rounded-full text-white shadow-sm transition-opacity hover:opacity-90"
+              style={{
+                width: 22,
+                height: 22,
+                backgroundColor: '#748DFD',
+                fontSize: 16,
+                lineHeight: 1,
+              }}
+            >
+              +
+            </button>
+            <span
+              className="whitespace-nowrap rounded-full text-white select-none"
+              style={{
+                backgroundColor: '#748DFD',
+                fontSize: 12,
+                padding: '4px 10px',
+              }}
+            >
+              {isMain ? '새 타이틀 노드 추가' : '콘텐츠 노드 추가'}
+            </span>
+          </div>
+        )}
         {!hasParent ? (
           <>
             <Handle
