@@ -53,6 +53,8 @@ export type NodeView = {
   handleSide?: 'left' | 'right';
   hasParent?: boolean; // 부모 노드 존재 여부
   showInputBox?: boolean; // 입력박스 표시 여부
+  dockIndex?: number; // 우측 도크 에디터 순번(C3/C4) — 열린 패널 중 위치
+  editorBreadcrumb?: string; // 도크 헤더 경로 "프로젝트 > 타이틀"
   panelZIndex?: number; // 패널 z-index (포커스된 패널이 위)
   isHovered?: boolean; // 드래그 중 hover 상태
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
@@ -301,6 +303,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         <NodeEditorPanel
           nodeId={id}
           handleSide={sideRelativeToParent}
+          dockIndex={nodeData.dockIndex}
+          title={label}
+          breadcrumb={nodeData.editorBreadcrumb}
           panelZIndex={nodeData.panelZIndex}
           onExpandClick={() =>
             router.push(

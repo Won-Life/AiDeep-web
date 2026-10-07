@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { NotionEditor, ToolbarPlugin } from "./NotionEditor";
 import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 import { uploadFile } from "@/api/upload";
@@ -206,6 +207,12 @@ interface NodeEditorPanelProps {
   nodeId: string;
   fullscreen?: boolean;
   inline?: boolean;
+  /** 우측 도크 모드(C3/C4) — 열린 패널들 중 이 패널의 순번(0부터). 넘기면 캔버스 우측에 도크된다. */
+  dockIndex?: number;
+  /** 도크 헤더 제목 — 노드명(첫 줄) */
+  title?: string;
+  /** 도크 헤더 경로 — "프로젝트 > 타이틀" */
+  breadcrumb?: string;
   updatedAt?: string;
   onExpandClick?: () => void;
   onClose?: () => void;
@@ -223,6 +230,9 @@ export function NodeEditorPanel({
   nodeId,
   fullscreen = false,
   inline = false,
+  dockIndex,
+  title,
+  breadcrumb,
   updatedAt,
   onExpandClick,
   onClose,
@@ -294,6 +304,112 @@ export function NodeEditorPanel({
   const handleRemove = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
+
+  // ── 우측 도크 모드 (C3/C4 — 콘텐츠 노드 클릭 → 캔버스 우측 내용 패널) ──────────
+  /*
+   * CONTEXT
+   * - Problem      : 기존 캔버스 패널은 노드에 붙어(absolute top:100%) 뜨는 작은 창이라,
+   *                  Figma C3/C4의 "우측 사이드바처럼 도크되는 내용 패널"과 달랐다.
+   * - Why          : React Flow 뷰포트는 transform이 걸려 있어 그 안에서 position:fixed가
+   *                  화면이 아니라 변환된 pane 기준이 된다. 그래서 createPortal로 패널을
+   *                  document.body로 빼내 진짜 화면 우측에 고정한다. provider·협업 배선은
+   *                  TextUpdateNode가 소유한 그대로 prop으로 받아 재사용 — 에디터 로직 불변.
+   * - Alternatives : 패널 내용(NotionEditor+AttachmentSection)을 인라인 모드가 이미 가지므로
+   *                  재사용. 별도 컴포넌트 신설은 provider·attachments 상태 중복이라 기각.
+   * - Trade-offs   : 여러 노드를 동시에 열면 dockIndex 순으로 좌측으로 타일링된다(C3는 1개
+   *                  기준). 화면이 좁으면 겹칠 수 있으나 다중 오픈은 드문 경로.
+   * - Edge Case    : SSR(document 없음) — 포털 전 가드. collabProvider null 시 로딩 표시.
+   */
+  if (typeof dockIndex === "number") {
+    if (typeof document === "undefined") return null;
+    const DOCK_WIDTH = 340;
+    return createPortal(
+      <div
+        className="fixed top-16 bottom-0 z-[100] flex w-[340px] flex-col border-l border-t border-gray-700 bg-background"
+        style={{ right: dockIndex * DOCK_WIDTH }}
+        // portal이지만 React 합성 이벤트는 React 트리(노드 컴포넌트)로 버블한다 — 막지 않으면
+        // 패널 클릭이 React Flow onNodeClick을 재발화해 방금 닫은 패널이 다시 열린다.
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          onFocus?.();
+        }}
+      >
+        {/* 헤더: 경로(프로젝트 > 타이틀) + 제목 + 확장/닫기 */}
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 pt-4 pb-3">
+          <div className="min-w-0 flex-1">
+            {breadcrumb && (
+              <p className="mb-0.5 truncate text-[11px] text-muted">{breadcrumb}</p>
+            )}
+            <h2 className="truncate text-[15px] font-bold text-foreground">
+              {title?.trim() || "제목 없음"}
+            </h2>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {onExpandClick && (
+              <button
+                type="button"
+                onClick={onExpandClick}
+                title="전체화면으로 보기"
+                className="flex h-[22px] w-[22px] items-center justify-center rounded text-muted transition-colors hover:bg-surface"
+              >
+                <ExpandIcon />
+              </button>
+            )}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                title="닫기"
+                className="flex h-[22px] w-[22px] items-center justify-center rounded text-muted transition-colors hover:bg-surface"
+              >
+                <CloseIcon />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!collabProvider ? (
+          <div className="flex flex-1 items-center justify-center text-muted typo-body1">
+            워크스페이스를 불러오는 중...
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <NotionEditor
+              nodeId={nodeId}
+              collabProvider={collabProvider}
+              username={username}
+              cursorColor={cursorColor}
+              onFirstLineChange={onFirstLineChange}
+              onContentChange={onContentChange}
+              noMediaDrop
+              autoGrow
+              minHeight={attachments.length > 0 ? 80 : 150}
+            />
+            <AttachmentSection
+              attachments={attachments}
+              onAddImage={handleAddImage}
+              onAddFile={handleAddFile}
+              onCaptionChange={handleCaptionChange}
+              onRemove={handleRemove}
+            />
+            {updatedAt && (
+              <div className="shrink-0 border-t border-gray-900 px-4 py-2 text-[12px] text-gray-500">
+                최종 수정일:{" "}
+                {new Date(updatedAt).toLocaleDateString("ko-KR", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  weekday: "short",
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>,
+      document.body,
+    );
+  }
 
   // ── 인라인 모드 (사이드바 리소스 패널) ─────────────────────────────────────
   if (inline) {
