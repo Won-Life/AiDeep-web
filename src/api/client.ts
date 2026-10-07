@@ -5,6 +5,7 @@ import axios, {
 } from 'axios';
 import type { ApiResponse } from './types';
 import { ApiError } from './types';
+import { showToast } from '@/components/ui/toastStore';
 
 // ─── Token helpers ───────────────────────────────────────────────────
 
@@ -91,6 +92,19 @@ client.interceptors.response.use(
 
     // Non-401 or already retried → reject immediately
     if (error.response?.status !== 401 || originalRequest._retry) {
+      // 저장 실패 토스트 (Figma L3): 노드·엣지 변경 저장(POST/PATCH/DELETE)이 네트워크
+      // 끊김이나 서버 오류(5xx)로 실패하면 알린다. 검증 오류(4xx)·auth 등은 제외.
+      const method = originalRequest?.method?.toUpperCase();
+      const url = originalRequest?.url ?? '';
+      const status = error.response?.status;
+      if (
+        method &&
+        ['POST', 'PATCH', 'DELETE'].includes(method) &&
+        /\/(node|edge)(\/|$|\?)/.test(url) &&
+        (!error.response || (status !== undefined && status >= 500))
+      ) {
+        showToast('변경사항을 저장하지 못했어요. 네트워크를 확인해주세요');
+      }
       const body = error.response?.data as ApiResponse<unknown> | undefined;
       if (body?.resultType === 'FAIL') {
         return Promise.reject(

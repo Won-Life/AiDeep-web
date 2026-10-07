@@ -6,6 +6,7 @@ import { type Node } from '@xyflow/react';
 import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
 import ChipHeader from '@/components/layout/ChipHeader';
 import OfflineBanner from '@/components/ui/OfflineBanner';
+import ToastHost from '@/components/ui/ToastHost';
 import DropDown from '@/components/ui/DropDown';
 import AiChatPanel, {
   AI_CHAT_HANDLE_WIDTH,
@@ -251,8 +252,9 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
       <OnboardingPopup />
 
-      {/* L3: 오프라인 배너 — 연결 끊김 시 상단 중앙에 노출 */}
+      {/* L3: 오프라인 배너 + 저장 실패 토스트 */}
       <OfflineBanner />
+      <ToastHost />
     </div>
   );
 }
