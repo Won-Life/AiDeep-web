@@ -10,7 +10,12 @@ import {
 import { useRouter } from 'next/navigation';
 import type { Node } from '@xyflow/react';
 import { useWorkspaceLayout } from '@/app/workspace/context';
-import { getWorkspaces, createWorkspace } from '@/api/workspace';
+import {
+  getWorkspaces,
+  createWorkspace,
+  renameWorkspace,
+  deleteWorkspace,
+} from '@/api/workspace';
 import { logout } from '@/api/auth';
 import { createProjectNode } from '@/features/graph/api/nodes';
 import { getRandomColorPair } from '@/features/graph/constants/colors';
@@ -182,12 +187,14 @@ function WorkspaceSwitcher({
   onClose,
   onSwitch,
   onNewWorkspace,
+  onSettings,
 }: {
   open: boolean;
   currentId: string | null;
   onClose: () => void;
   onSwitch: (ws: WorkspaceListItem) => void;
   onNewWorkspace: () => void;
+  onSettings: () => void;
 }) {
   const [list, setList] = useState<WorkspaceListItem[] | null>(null);
 
@@ -236,7 +243,12 @@ function WorkspaceSwitcher({
         >
           + 새 워크스페이스
         </MenuItem>
-        <MenuItem disabled title="워크스페이스 설정 화면은 준비 중이에요">
+        <MenuItem
+          onClick={() => {
+            onClose();
+            onSettings();
+          }}
+        >
           워크스페이스 설정
         </MenuItem>
       </div>
@@ -334,6 +346,256 @@ function NewWorkspaceModal({
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── 워크스페이스 삭제 확인 모달 (X9) ──────────────────────────────────────────
+// 되돌릴 수 없는 작업이라 "이름 입력 일치" 확인을 요구한다(실수 삭제 방지).
+// 조건부 마운트(호출부에서 confirmOpen && ...)로 열 때마다 fresh 상태 → 리셋 effect 불필요.
+function WorkspaceDeleteConfirmModal({
+  workspaceTitle,
+  onClose,
+  onConfirm,
+}: {
+  workspaceTitle: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const matched = confirmText.trim() === workspaceTitle.trim();
+  const submit = async () => {
+    if (!matched || deleting) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await onConfirm();
+    } catch (e) {
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      setError(
+        status === 403
+          ? '소유자만 삭제할 수 있어요.'
+          : status === 400
+            ? '워크스페이스는 최소 한 개가 남아 있어야 해요.'
+            : '삭제에 실패했어요. 잠시 후 다시 시도해주세요.',
+      );
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-[360px] max-w-[90vw] flex-col gap-[14px] rounded-[16px] border border-gray-700 bg-background p-[20px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <h2 className="text-[16px] font-bold text-foreground">
+            ‘{workspaceTitle}’를 삭제할까요?
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="shrink-0 text-muted hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-[12.5px] text-muted">
+          이 워크스페이스의 프로젝트와 노드가 모두 삭제되고, 되돌릴 수 없어요.
+        </p>
+        <div>
+          <p className="mb-1.5 text-[12px] font-semibold text-foreground">
+            확인을 위해 워크스페이스 이름을 입력해주세요
+          </p>
+          <input
+            autoFocus
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submit();
+            }}
+            placeholder="워크스페이스 이름 입력"
+            className="h-[36px] w-full rounded-[8px] border border-gray-700 bg-background px-3 text-[13px] text-foreground outline-none placeholder:text-gray-500"
+          />
+          <p className="mt-1.5 text-[11px] text-gray-500">
+            이름이 일치해야 삭제 버튼이 켜져요.
+          </p>
+        </div>
+        {error && <p className="text-[12px] text-red-500">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-[38px] flex-1 rounded-[8px] border border-border bg-background text-[13px] font-semibold text-muted transition-colors hover:bg-surface"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!matched || deleting}
+            className="h-[38px] flex-1 rounded-[8px] bg-red-500 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            삭제
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 워크스페이스 설정 모달 (X8) — 이름 변경 + 삭제 진입 ────────────────────────
+function WorkspaceSettingsModal({
+  open,
+  workspaceId,
+  onClose,
+  onRenamed,
+  onDeleted,
+}: {
+  open: boolean;
+  workspaceId: string | null;
+  onClose: () => void;
+  onRenamed: (title: string) => void;
+  onDeleted: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [loadedTitle, setLoadedTitle] = useState('');
+  const [isOwner, setIsOwner] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // 열릴 때 현재 이름·권한을 직접 조회 — 사이드바 상태(초기 로드/전환 시 비어있을 수 있음)에
+  // 의존하지 않아 항상 정확. OWNER만 삭제 영역을 노출한다(서버도 OWNER만 허용).
+  useEffect(() => {
+    if (!open || !workspaceId) return;
+    getWorkspaces()
+      .then((list) => {
+        const ws = list.find((w) => w.workspaceId === workspaceId);
+        if (ws) {
+          setTitle(ws.title);
+          setLoadedTitle(ws.title);
+          setIsOwner(ws.role === 'OWNER');
+        }
+      })
+      .catch(() => {});
+  }, [open, workspaceId]);
+
+  if (!open || !workspaceId) return null;
+
+  const save = async () => {
+    const name = title.trim();
+    if (!name || saving) return;
+    setSaving(true);
+    try {
+      await renameWorkspace(workspaceId, name);
+      onRenamed(name);
+    } catch (err) {
+      console.error('[WorkspaceSettingsModal] rename failed', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+        onClick={onClose}
+      >
+        <div
+          className="flex w-[360px] max-w-[90vw] flex-col gap-[14px] rounded-[16px] border border-gray-700 bg-background p-[20px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between">
+            <h2 className="text-[16px] font-bold text-foreground">
+              워크스페이스 설정
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="닫기"
+              className="text-muted hover:text-foreground"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="text-[12.5px] text-muted">
+            이름을 바꾸거나, 워크스페이스를 삭제할 수 있어요.
+          </p>
+          <div>
+            <p className="mb-1.5 text-[12px] font-semibold text-foreground">이름</p>
+            <div className="flex items-center gap-2">
+              <WorkspaceIcon name={title || '새'} size={32} />
+              <input
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') save();
+                }}
+                className="h-[36px] min-w-0 flex-1 rounded-[8px] border border-gray-700 bg-background px-3 text-[13px] text-foreground outline-none placeholder:text-gray-500"
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-500">
+              아이콘은 이름 첫 글자로 자동 생성돼요.
+            </p>
+          </div>
+          {isOwner && (
+            <div className="rounded-[10px] border border-red-300 p-3">
+              <p className="text-[12.5px] font-semibold text-red-500">
+                되돌릴 수 없는 작업
+              </p>
+              <p className="mt-0.5 text-[11.5px] text-muted">
+                삭제하면 이 워크스페이스의 프로젝트와 노드가 모두 사라져요.
+              </p>
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                className="mt-2 rounded-[8px] border border-red-300 px-3 py-1.5 text-[12px] font-semibold text-red-500 transition-colors hover:bg-red-50"
+              >
+                워크스페이스 삭제
+              </button>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-[38px] flex-1 rounded-[8px] border border-border bg-background text-[13px] font-semibold text-muted transition-colors hover:bg-surface"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={!title.trim() || saving}
+              className="h-[38px] flex-1 rounded-[8px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
+            >
+              저장
+            </button>
+          </div>
+        </div>
+      </div>
+      {confirmOpen && (
+        <WorkspaceDeleteConfirmModal
+          workspaceTitle={loadedTitle}
+          onClose={() => setConfirmOpen(false)}
+          onConfirm={async () => {
+            await deleteWorkspace(workspaceId);
+            setConfirmOpen(false);
+            onDeleted();
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -566,6 +828,7 @@ export default function Sidebar({
   const [query, setQuery] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [newWsOpen, setNewWsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [workspaceTitle, setWorkspaceTitle] = useState('워크스페이스');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingSearchFocusRef = useRef(false);
@@ -703,6 +966,7 @@ export default function Sidebar({
               onClose={() => setSwitcherOpen(false)}
               onSwitch={switchWorkspace}
               onNewWorkspace={() => setNewWsOpen(true)}
+              onSettings={() => setSettingsOpen(true)}
             />
           </div>
 
@@ -756,6 +1020,28 @@ export default function Sidebar({
         onCreated={(id, title) => {
           setNewWsOpen(false);
           switchWorkspace({ workspaceId: id, title, role: 'OWNER' });
+        }}
+      />
+
+      <WorkspaceSettingsModal
+        open={settingsOpen}
+        workspaceId={workspaceId}
+        onClose={() => setSettingsOpen(false)}
+        onRenamed={(title) => {
+          setWorkspaceTitle(title);
+          setSettingsOpen(false);
+        }}
+        onDeleted={async () => {
+          setSettingsOpen(false);
+          // 삭제 후 남은 워크스페이스로 전환 (서버가 최소 1개 유지를 보장)
+          try {
+            const list = await getWorkspaces();
+            const next =
+              list.find((w) => w.workspaceId !== workspaceId) ?? list[0];
+            if (next) switchWorkspace(next);
+          } catch (err) {
+            console.error('[Sidebar onDeleted] switch failed', err);
+          }
         }}
       />
     </aside>
