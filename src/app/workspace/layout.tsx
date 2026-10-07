@@ -45,6 +45,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     edgesRef,
     synced,
     setSynced,
+    syncError,
+    setSyncError,
   } = useWorkspaceLayout();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -92,8 +94,9 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   }, [router, setUserMe]);
 
   // 워크스페이스 + 노드/엣지 + 참여자 목록 — 최초 1회만 fetch (synced 이후 스킵)
+  // syncError 중에도 스킵 — L2 "다시 시도"가 setSyncError(false)로 해제해야 재시도된다.
   useEffect(() => {
-    if (synced) return;
+    if (synced || syncError) return;
 
     getWorkspaces()
       .then((list) => {
@@ -128,12 +131,16 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         setSynced(true);
       })
       .catch((err) => {
-        if (err !== 'no workspace') {
-          console.error('[WorkspaceLayout] sync failed', err);
+        if (err === 'no workspace') {
+          // 워크스페이스 0개는 에러가 아니라 빈 상태 — 캔버스를 그대로 연다.
+          setSynced(true);
+          return;
         }
-        setSynced(true);
+        // 네트워크·서버 실패 → L2 에러 화면. synced는 false로 둬 다시 시도 시 재fetch.
+        console.error('[WorkspaceLayout] sync failed', err);
+        setSyncError(true);
       });
-  }, [synced, workspaceId, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced]);
+  }, [synced, syncError, workspaceId, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced, setSyncError]);
 
   // 주기적 재sync: 같은 계정의 다른 세션(예: Meet Scribe 익스텐션)이 만든 노드는
   // WS로 안 온다 — 서버가 발신자 유저룸을 broadcast에서 제외하고(ws.gateway .except),
