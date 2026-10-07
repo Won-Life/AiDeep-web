@@ -57,31 +57,50 @@ export const COLOR_PALETTE = [
   },
 ];
 
-// Figma 08 'Spectral' 팔레트 실측값 — 각 색은 light(콘텐츠 노드 배경)와 deep(타이틀 노드
-// 배경)의 2단으로 쓴다. deepText는 deep 배경 위 타이틀 글자색(blue/red만 흰색, 나머지는
-// 해당 색의 진한 텍스트 — Node 색이 밝아 흰 글씨는 대비 부족).
-// 노드에 저장된 data.color("rgb(var(--ds-sub-blue))" 형태)에서 family를 추출해 매칭한다.
+// Figma 디자인시스템 "Etc" 노드 색 그룹 실측값 (디자이너 래경 확정 스펙).
+// 각 계열은 Node(base)/Node Light/Node Deep 3톤. 노드 적용 규칙:
+//   - 콘텐츠 노드 = Node Light (light)
+//   - 타이틀 노드 + 프로젝트 노드 꽁다리(폴더탭) = Node Deep (deep)
+// base(최연한)는 노드에 쓰지 않아 저장하지 않는다. 글자색은 계열별 --ds-text-* (어두운 톤)을
+// 그대로 쓴다(Light/Deep 모두 밝은 파스텔이라 흰 글씨는 대비 부족).
+// 값 출처: 디자이너가 공유한 Etc 스와치 이미지에서 픽셀 실측(scripts 없이 1회 추출).
+// red/pink/gray는 Etc 그룹에 없어 합리적 폴백(deep=기존 톤, light=연한 틴트)으로 둔다.
 export const FIGMA_NODE_COLORS: Record<
   string,
-  { light: string; deep: string; deepText: string }
+  { light: string; deep: string }
 > = {
-  blue: { light: "#E8F5FF", deep: "#748DFD", deepText: "#FFFFFF" },
-  pink: { light: "#FFF8FB", deep: "#FEAECE", deepText: "#683B52" },
-  orange: { light: "#FFF0DF", deep: "#FDAC50", deepText: "#59432C" },
-  yellow: { light: "#FFFCF0", deep: "#FEE066", deepText: "#5D5428" },
-  green: { light: "#F4FDF2", deep: "#88E58E", deepText: "#40512A" },
-  mint: { light: "#EAFDFB", deep: "#77DED9", deepText: "#1F4C3A" },
-  purple: { light: "#FFE9FF", deep: "#B59AFA", deepText: "#563B68" },
-  red: { light: "#FFF0F0", deep: "#F2777A", deepText: "#FFFFFF" },
-  gray: { light: "#EFEFEF", deep: "#B8B8B8", deepText: "#2C2C2C" },
+  orange: { light: "#FFCD93", deep: "#FDAD50" },
+  yellow: { light: "#FFEB9B", deep: "#FEE066" },
+  green: { light: "#AAF09A", deep: "#85E56E" },
+  mint: { light: "#B4F7F3", deep: "#77DED8" },
+  blue: { light: "#97AAFE", deep: "#748DFD" }, // 08 예시 Main Blue(solid=deep, 0.75≈light)
+  purple: { light: "#D1BFFE", deep: "#B59AFA" },
+  // 아래 3계열은 Etc 그룹 미정의 — 폴백(공식 아님)
+  red: { light: "#FCA5A8", deep: "#F2777A" },
+  pink: { light: "#FDC9DF", deep: "#FEAECE" },
+  gray: { light: "#D9D9D9", deep: "#B8B8B8" },
 };
 
 /** data.color("rgb(var(--ds-sub-blue))" 등)에서 색 family("blue")를 추출 */
 export function figmaNodeColorOf(
   storedColor: string | undefined,
-): { light: string; deep: string; deepText: string } | undefined {
+): { light: string; deep: string } | undefined {
   const family = storedColor?.match(/--ds-(?:sub|deep)-(\w+)/)?.[1];
   return family ? FIGMA_NODE_COLORS[family] : undefined;
+}
+
+/**
+ * Deep 배경 위 글자색 결정 — 어두운 Deep(파랑 등)은 흰 글자, 밝은 Deep(오렌지·노랑 등)은
+ * null 반환(호출부가 계열 어두운색 --ds-text-*로 폴백). 상대 휘도 0.6 임계.
+ */
+export function titleTextOnDeep(deepHex: string | undefined): string | null {
+  const m = deepHex?.match(/^#?([0-9a-fA-F]{6})$/)?.[1];
+  if (!m) return null;
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum < 0.6 ? "#FFFFFF" : null;
 }
 
 // gray는 DEFAULT_NODE_COLOR(그래프 미소속 상태)와 같은 값이라 랜덤 풀에서 제외 —

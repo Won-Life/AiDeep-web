@@ -10,6 +10,7 @@ import {
   COLOR_PALETTE,
   MAIN_NODE_COLOR,
   figmaNodeColorOf,
+  titleTextOnDeep,
 } from '@/features/graph/constants/colors';
 import NodeContextMenu from '@/components/ui/NodeContextMenu';
 import type {
@@ -158,30 +159,32 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
       }
     : isContent
       ? {
-          // 콘텐츠 노드(depth 2+): Figma 08 light 색 태그, 기본 테두리 없음
-          backgroundColor:
-            fig?.light ??
-            `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, white)`,
-          border: isHovered
-            ? '2px solid #93C5FD'
-            : selected
-              ? '2px solid rgb(var(--ds-main))'
-              : viewerBorderColor
-                ? `2px solid ${viewerBorderColor}`
-                : 'none',
-        }
-      : {
-          // 타이틀 노드(depth 0~1): Figma 08 deep 색 + 대비 글자색(deepText)
-          backgroundColor:
-            fig?.deep ??
-            `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
+          // 콘텐츠 노드: Node Light 색(디자이너 확정) + 3px 흰 테두리 + 소프트 섀도(G1-H 실측).
+          // fig 없는 계열(red/pink/gray)은 저장된 --ds-sub 파스텔을 그대로 쓴다.
+          backgroundColor: fig?.light ?? nodeData.color ?? 'rgb(var(--ds-sub-gray))',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
           border: isHovered
             ? '3px solid #93C5FD'
             : selected
-              ? '2px solid rgb(var(--ds-main))'
+              ? '3px solid rgb(var(--ds-main))'
               : viewerBorderColor
-                ? `2px solid ${viewerBorderColor}`
-                : 'none',
+                ? `3px solid ${viewerBorderColor}`
+                : '3px solid #ffffff',
+        }
+      : {
+          // 타이틀 노드(main 직계 자손): Node Deep fill + 흰 테두리 4px + 소프트 섀도 + 흰 꽁다리(아래).
+          // 글자는 어두운 Deep(파랑)만 흰색, 밝은 Deep은 계열 어두운색. (Figma 08 실측)
+          backgroundColor:
+            fig?.deep ??
+            `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
+          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.10)',
+          border: isHovered
+            ? '4px solid #93C5FD'
+            : selected
+              ? '4px solid rgb(var(--ds-main))'
+              : viewerBorderColor
+                ? `4px solid ${viewerBorderColor}`
+                : '4px solid #ffffff',
         };
 
   // 최대 3명 표시, 이후 +N
@@ -281,24 +284,28 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           ...containerStyle,
           position: 'relative',
           zIndex: 40,
-          maxWidth: '200px',
-          minWidth: `${PLACEHOLDER.length}em`,
+          // 타이틀(main 직계 자손)은 사진처럼 넓은 pill — 짧은 제목도 넓게, 더 길면 확장(최대 300)
+          maxWidth: isTitle ? '300px' : '200px',
+          minWidth: isTitle ? '200px' : `${PLACEHOLDER.length}em`,
           padding: isMain ? '26px 36px' : '6px 12px',
         }}
         onMouseEnter={() => setIsNodeHovered(true)}
         onMouseLeave={() => setIsNodeHovered(false)}
       >
-        {/* Figma 08(G1) 프로젝트 노드 좌상단 폴더 탭 — 탭 색이 소속 그래프 색 */}
-        {isMain && (
+        {/* 좌상단 폴더 탭(꽁다리) — 프로젝트는 Deep색, 타이틀은 흰색(흰 테두리와 연결). (Figma 08) */}
+        {(isMain || isTitle) && (
           <div
             aria-hidden
             className="absolute"
             style={{
-              top: -22,
-              left: 20,
-              width: 56,
-              height: 22,
-              backgroundColor: fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR,
+              // 꽁다리는 노드 길이와 무관한 고정 크기. 타이틀은 프로젝트보다 작게.
+              top: isMain ? -22 : -14,
+              left: isMain ? 20 : 22,
+              width: isMain ? 56 : 38,
+              height: isMain ? 22 : 14,
+              backgroundColor: isMain
+                ? (fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR)
+                : '#ffffff',
               borderRadius: '8px 8px 0 0',
             }}
           />
@@ -306,12 +313,16 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         <div
           className={`${isContent ? 'text-left' : 'text-center'} select-none`}
           style={{
+            // 타이틀: 어두운 Deep(파랑)만 흰 글자, 밝은 Deep은 계열 어두운색.
+            // 콘텐츠/프로젝트: 계열 어두운색(--ds-text-*). (Figma 08 실측)
             color: isEmpty
               ? 'rgb(var(--ds-gray-500))'
               : isTitle
-                ? (fig?.deepText ?? '#ffffff')
+                ? (titleTextOnDeep(fig?.deep) ??
+                  nodeData.textColor ??
+                  'rgb(var(--foreground))')
                 : nodeData.textColor || 'rgb(var(--foreground))',
-            fontWeight: isMain ? 700 : undefined,
+            fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
             fontSize: isMain ? '20px' : undefined,
             display: '-webkit-box',
             WebkitLineClamp: 2,
