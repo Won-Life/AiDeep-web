@@ -26,7 +26,7 @@
 | deleteAccount    | 성공 시 void; 그때만 토큰 제거와 삭제 완료 화면 표시                                 |
 | saveGeneral      | 전체 GeneralSettings 스냅샷 → 저장된 GeneralSettings 반환                            |
 
-선택 메서드가 없으면 저장 버튼만 비활성화한다. 임의 경로/성공 응답을 만들지 않았다. 현재 어댑터는 기존 getMe 조회와 Spring `PATCH /auth/password`, `PATCH /auth/username`, `DELETE /auth/me`를 연결하며, DTO에 없는 사진/로그인 방식은 null로 둔다. 로그인 방식/구독/사용량의 미확인 값은 `—`로 표시한다. 일반 설정 초기값은 서버 저장값으로 간주하지 않는다.
+선택 메서드가 없으면 저장 버튼만 비활성화한다. 임의 경로/성공 응답을 만들지 않았다. 현재 어댑터는 기존 getMe 조회와 Spring `PATCH /auth/password`, `PATCH /auth/username`, `DELETE /auth/me`를 연결하며, DTO에 없는 사진은 null로 둔다. 로그인 방식은 `GET /auth/oauth/links`에 구글이 있으면 GOOGLE, 없으면 EMAIL로 정하고(둘 다 가진 계정은 구글로 표시), 조회에 실패하면 null이라 `—`로 표시한다. 구독/사용량의 미확인 값도 `—`로 표시한다. 일반 설정 초기값은 서버 저장값으로 간주하지 않는다.
 
 닉네임·사진 변경 응답이 부분 DTO라면 어댑터에서 계정 정보를 재조회해 완전한 SettingsAccount로 반환한다. 업로드의 multipart 필드명/삭제 방식은 실제 계약에 맞춰 이 파일에서 변환한다. 비밀번호 오류 코드는 어댑터에서 `ApiError('CURRENT_PASSWORD_MISMATCH', ...)`로 정규화하면 현재 비밀번호 필드에 디자인의 오류 스타일이 적용된다. 기타 오류는 입력을 유지한 채 표시한다.
 
