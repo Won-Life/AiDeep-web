@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { createPortal } from "react-dom";
 import MeetingBotStatusBadge, { type MeetingBotStatus } from "./MeetingBotStatusBadge";
 import MeetingBotToast, { type MeetingBotToastKind } from "./MeetingBotToast";
+import { MeetingBotLimitPanel, MeetingBotStatusActions, getMeetingBotView, type MeetingBotView } from "./MeetingBotStatusView";
 import { createMeetingBotRequest, normalizeMeetingTarget, type MeetingBotPlatform, type MeetingBotRequest } from "./meetingBotRequest";
 import "./meeting-bot.css";
 
@@ -85,9 +86,12 @@ function keepTabInsideDialog(event: KeyboardEvent, dialog: HTMLElement | null) {
   target.focus();
 }
 
-function MeetingBotAddModal({ onClose, onRequest }: {
+function MeetingBotAddModal({ view, onClose, onRequest, onEditLink, onViewGraph }: {
+  view: MeetingBotView;
   onClose: () => void;
   onRequest: (meetingTarget: string, platform: MeetingBotPlatform) => Promise<boolean>;
+  onEditLink: () => void;
+  onViewGraph: () => void;
 }) {
   const [platform, setPlatform] = useState<MeetingBotPlatform>("ZOOM");
   const [meetingUrl, setMeetingUrl] = useState("");
@@ -130,7 +134,14 @@ function MeetingBotAddModal({ onClose, onRequest }: {
     if (accepted) onClose();
   }
 
+  function handleRetry() {
+    const value = meetingUrl.trim();
+    if (normalizeMeetingTarget(value, platform)) void onRequest(value, platform);
+    else onEditLink();
+  }
+
   const copy = PLATFORM_COPY[platform];
+  const locked = isSubmitting || view !== "form";
 
   return createPortal(
     <div
@@ -152,6 +163,7 @@ function MeetingBotAddModal({ onClose, onRequest }: {
         >
           ×
         </button>
+        {view === "limit" ? <MeetingBotLimitPanel onConfirm={onViewGraph} /> : (<>
         <div className="flex justify-center">
           <MeetingBotIcon />
         </div>
@@ -167,7 +179,7 @@ function MeetingBotAddModal({ onClose, onRequest }: {
                 type="button"
                 role="radio"
                 aria-checked={platform === value}
-                disabled={isSubmitting}
+                disabled={locked}
                 onClick={() => { setPlatform(value); setError(""); }}
                 className={`flex h-11 items-center justify-center gap-2 rounded-lg border-2 text-sm font-semibold transition-colors ${
                   platform === value
@@ -189,7 +201,7 @@ function MeetingBotAddModal({ onClose, onRequest }: {
             type="text"
             inputMode="url"
             autoComplete="off"
-            disabled={isSubmitting}
+            disabled={locked}
             value={meetingUrl}
             onChange={(event) => { setMeetingUrl(event.target.value); setError(""); }}
             aria-invalid={Boolean(error)}
@@ -206,29 +218,41 @@ function MeetingBotAddModal({ onClose, onRequest }: {
           ) : (
             <p className="mt-2 text-xs text-[var(--meeting-muted)]/70">무료 플랜: 회의당 최대 5분 녹음</p>
           )}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="mt-6 h-[46px] w-full rounded-[10px] bg-[var(--meeting-primary)] text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)] disabled:cursor-wait disabled:opacity-60"
-          >
-            {isSubmitting ? "요청 중..." : "회의 봇 추가하기"}
-          </button>
-          <p className="mt-4 text-center text-[11px] text-[var(--meeting-muted)]/80">
-            봇은 카메라·마이크를 끈 채 입장하고, 참가자에게 녹음 안내 메시지를 보내요
-          </p>
+          {view === "form" ? (
+            <>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="mt-6 h-[46px] w-full rounded-[10px] bg-[var(--meeting-primary)] text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)] disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSubmitting ? "요청 중..." : "회의 봇 추가하기"}
+              </button>
+              <p className="mt-4 text-center text-[11px] text-[var(--meeting-muted)]/80">
+                봇은 카메라·마이크를 끈 채 입장하고, 참가자에게 녹음 안내 메시지를 보내요
+              </p>
+            </>
+          ) : (
+            <MeetingBotStatusActions view={view} onRetry={handleRetry} onEditLink={onEditLink} onViewGraph={onViewGraph} />
+          )}
         </form>
+        </>)}
       </section>
     </div>,
     document.body,
   );
 }
 
-export default function MeetingBotWidget({ workspaceId, status = null, requestMeetingBot }: {
+export default function MeetingBotWidget({ workspaceId, status = null, limitReached = false, requestMeetingBot, onViewGraph }: {
   workspaceId: string;
   status?: MeetingBotStatus | null;
+  limitReached?: boolean;
   requestMeetingBot?: (request: MeetingBotRequest) => Promise<void>;
+  onViewGraph?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [editedKey, setEditedKey] = useState<string | null>(null);
+  const viewKey = `${status}-${limitReached}`;
+  const view: MeetingBotView = editedKey === viewKey ? "form" : getMeetingBotView(status, limitReached);
   const [toast, setToast] = useState<MeetingBotToastKind | null>(null);
 
   useEffect(() => {
@@ -265,8 +289,11 @@ export default function MeetingBotWidget({ workspaceId, status = null, requestMe
       {toast ? <MeetingBotToast kind={toast} onClose={() => setToast(null)} /> : null}
       {isOpen ? (
         <MeetingBotAddModal
+          view={view}
           onClose={closeModal}
           onRequest={handleRequest}
+          onEditLink={() => setEditedKey(viewKey)}
+          onViewGraph={() => { closeModal(); onViewGraph?.(); }}
         />
       ) : null}
     </div>
