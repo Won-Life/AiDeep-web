@@ -34,6 +34,9 @@
     --ds-main-10: 245 253 236;   /* #F5FDEC */
     --ds-main-5: 249 253 243;    /* #F9FDF3 */
     --ds-main-blue: 116 141 253; /* #748DFD — Figma 08 Main Blue (주요 CTA 버튼) */
+    --ds-main-blue-deep: 52 88 191;    /* #3458BF — Main Blue 1.75 (사이드바 프로젝트명) */
+    --ds-main-blue-light: 146 170 255; /* #92AAFF — Main Blue 0.75 (사이드바 타이틀명) */
+    --ds-main-blue-pale: 233 238 255;  /* #E9EEFF — Main Blue 0.25 (사이드바 선택 행 배경) */
 
     /* ---------- Sub (Pastel) ---------- */
     --ds-sub-gray: 239 239 239;   /* #EFEFEF */
@@ -172,6 +175,9 @@
   --color-main-10: rgb(var(--ds-main-10));
   --color-main-5: rgb(var(--ds-main-5));
   --color-main-blue: rgb(var(--ds-main-blue));
+  --color-main-blue-deep: rgb(var(--ds-main-blue-deep));
+  --color-main-blue-light: rgb(var(--ds-main-blue-light));
+  --color-main-blue-pale: rgb(var(--ds-main-blue-pale));
 
   /* =========================
      Sub (Pastel)

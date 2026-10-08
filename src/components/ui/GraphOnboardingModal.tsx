@@ -31,21 +31,69 @@ export function useGraphOnboardingSeen(): boolean {
   );
 }
 
-/** 3단계 다이어그램의 노드 모형 */
-function StagePill({
-  variant,
-  children,
-}: {
-  variant: 'dark' | 'outline';
-  children: ReactNode;
-}) {
+/*
+ * CONTEXT
+ * - Problem      : 3단계 다이어그램이 제네릭 알약(StagePill)이라 실제 캔버스 노드 모양
+ *                  (프로젝트=흰 박스+꽁다리 / 타이틀=솔리드 알약+꽁다리 / 콘텐츠=오른쪽
+ *                  뾰족 배너)과 전혀 달라, 사용자가 팝업과 실제 그래프를 연결 짓지 못했다.
+ * - Why          : 온보딩은 "무엇이 어떤 모양인지" 가르치는 화면이므로 실제 노드 비주얼을
+ *                  미니로 미러링해야 교육 효과가 있다. Figma 08 showcase 색(Main Blue)으로
+ *                  통일 — 색은 노드별 랜덤이지만 모양 학습이 목적이라 단일 색이 더 명확.
+ * - Alternatives : 실제 TextUpdateNode를 모달에 재사용 — @xyflow Handle·ResizeObserver·
+ *                  provider 의존이 커 모달에서 깨지고 과함. 정적 미니 모형으로 분리.
+ * - Trade-offs   : 모양이 코드에 중복(진짜 노드는 SVG). 온보딩 전용 축약이라 수용.
+ * - Edge Case    : 콘텐츠 배너의 오른쪽 뾰족함은 clip-path로 표현 — 라운드 코너는 포기
+ *                  (미니 illustration이라 캔버스 SVG만큼 정밀할 필요 없음).
+ */
+
+const STAGE_BLUE = 'rgb(var(--ds-main-blue))';
+
+/** 폴더 꽁다리 — 노드 상단 왼쪽의 작은 라운드 탭 */
+function MiniTab({ color }: { color: string }) {
   return (
     <span
-      className={
-        variant === 'dark'
-          ? 'rounded-full bg-foreground px-4 py-2 text-[13px] font-medium text-background whitespace-nowrap'
-          : 'rounded-full border border-gray-700 bg-background px-4 py-2 text-[13px] font-medium text-foreground whitespace-nowrap'
-      }
+      className="absolute -top-[5px] left-2.5 h-[7px] w-[15px] rounded-t-[3px]"
+      style={{ backgroundColor: color }}
+      aria-hidden="true"
+    />
+  );
+}
+
+/** 프로젝트 노드 모형 — 흰 박스 + 색 꽁다리 + 검은 볼드 (가장 상위) */
+function MiniProjectNode({ children }: { children: ReactNode }) {
+  return (
+    <span className="relative inline-flex items-center rounded-[10px] border border-gray-700 bg-background px-4 py-2 text-[13px] font-bold whitespace-nowrap text-foreground">
+      <MiniTab color={STAGE_BLUE} />
+      {children}
+    </span>
+  );
+}
+
+/** 타이틀 노드 모형 — 솔리드 색 알약 + 흰 꽁다리 + 흰 텍스트 */
+function MiniTitleNode({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="relative inline-flex items-center rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold whitespace-nowrap text-white"
+      style={{ backgroundColor: STAGE_BLUE }}
+    >
+      <MiniTab color="#ffffff" />
+      {children}
+    </span>
+  );
+}
+
+/** 콘텐츠 노드 모형 — 연한 색 + 오른쪽 뾰족 배너 */
+function MiniContentNode({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="relative inline-flex items-center py-1.5 pr-5 pl-3.5 text-[12.5px] font-medium whitespace-nowrap"
+      style={{
+        backgroundColor: 'rgb(var(--ds-main-blue-pale))',
+        color: 'rgb(var(--ds-main-blue-deep))',
+        clipPath:
+          'polygon(0 10%, 0 90%, calc(100% - 9px) 90%, 100% 50%, calc(100% - 9px) 10%, 0 10%)',
+        borderRadius: 7,
+      }}
     >
       {children}
     </span>
@@ -127,15 +175,15 @@ export default function GraphOnboardingModal({
         <div className="rounded-[12px] bg-surface px-4 py-5">
           <div className="flex items-center justify-between gap-1">
             <div className="flex flex-1 flex-col items-center gap-2">
-              <StagePill variant="dark">OS</StagePill>
+              <MiniProjectNode>OS</MiniProjectNode>
             </div>
             <StageArrow />
             <div className="flex flex-1 flex-col items-center gap-2">
-              <StagePill variant="dark">9/23 강의</StagePill>
+              <MiniTitleNode>9/23 강의</MiniTitleNode>
             </div>
             <StageArrow />
             <div className="flex flex-1 flex-col items-center gap-2">
-              <StagePill variant="outline">강의 필기</StagePill>
+              <MiniContentNode>강의 필기</MiniContentNode>
             </div>
           </div>
           <div className="mt-3 flex items-start justify-between gap-1 text-center">

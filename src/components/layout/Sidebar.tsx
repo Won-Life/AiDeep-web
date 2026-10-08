@@ -43,16 +43,83 @@ import type { WorkspaceListItem } from '@/api/types';
  */
 
 export const SIDEBAR_WIDTH = 240;
-export const RAIL_WIDTH = 48;
+export const RAIL_WIDTH = 72; // Figma X4 레일 폭
 
 // ─── 공통 소품 ────────────────────────────────────────────────────────────────
 
-/** 워크스페이스 아이콘 — 이름 첫 글자를 어두운 사각형에 표시 */
-function WorkspaceIcon({ name, size = 24 }: { name: string; size?: number }) {
+/*
+ * CONTEXT
+ * - Problem      : Figma 08 X1/X4 시안은 상단에 On:Node 브랜드 로고(파란 음파 마크 +
+ *                  워드마크)를 둔다. 앱에는 이 애셋이 없어 사이드바에 로고 행이 비어 있었다.
+ * - Why          : 브랜드 마크를 별도 파일(png/svg) 대신 인라인 SVG로 둔다 — 색을 디자인
+ *                  토큰(--ds-main-blue)에 묶어 테마/리브랜딩에 자동 추종하고, 레일(24~28px)과
+ *                  헤더(24px) 양쪽에서 size prop만으로 재사용한다.
+ * - Alternatives : public/*.svg 파일 임포트 — 색이 하드코딩돼 토큰과 어긋나고, 레일/헤더
+ *                  크기 변형마다 파일이 늘어 기각.
+ * - Trade-offs   : 로고 형상이 코드에 박혀 디자이너가 직접 못 바꾼다. MVP 단계라 수용.
+ * - Edge Case    : 음파 막대는 좌우 대칭(가운데가 가장 큼)으로 viewBox 비율 고정 — size가
+ *                  바뀌어도 막대 비율이 일정하게 유지된다.
+ */
+
+/** On:Node 브랜드 마크 — 파란 라운드 사각형 + 흰 이퀄라이저(음파) 막대 */
+function OnNodeMark({ size = 28 }: { size?: number }) {
   return (
     <span
-      className="flex shrink-0 items-center justify-center rounded-[6px] bg-foreground font-semibold text-background"
-      style={{ width: size, height: size, fontSize: size * 0.5 }}
+      className="flex shrink-0 items-center justify-center"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.3),
+        backgroundColor: 'rgb(var(--ds-main-blue))',
+      }}
+      aria-hidden="true"
+    >
+      <svg width={size * 0.58} height={size * 0.58} viewBox="0 0 20 20" fill="#fff">
+        <rect x="1" y="6.5" width="2.6" height="7" rx="1.3" />
+        <rect x="5" y="4.5" width="2.6" height="11" rx="1.3" />
+        <rect x="8.7" y="2.5" width="2.6" height="15" rx="1.3" />
+        <rect x="12.4" y="4.5" width="2.6" height="11" rx="1.3" />
+        <rect x="16.4" y="6.5" width="2.6" height="7" rx="1.3" />
+      </svg>
+    </span>
+  );
+}
+
+/** On:Node 로고 락업 (마크 + 워드마크) — X1 펼침 헤더 */
+function OnNodeLogo() {
+  return (
+    <span className="flex items-center gap-2">
+      <OnNodeMark size={24} />
+      <span className="text-[16px] font-extrabold tracking-tight text-main-blue">
+        On:Node
+      </span>
+    </span>
+  );
+}
+
+/** 워크스페이스 아이콘 — 이름 첫 글자를 색 사각형에 표시.
+ *  기본(현재 워크스페이스)은 Main Blue, muted(목록의 다른 워크스페이스)는 연한 파랑 (Figma X1·X6). */
+function WorkspaceIcon({
+  name,
+  size = 24,
+  muted = false,
+}: {
+  name: string;
+  size?: number;
+  muted?: boolean;
+}) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-[6px] font-semibold"
+      style={{
+        width: size,
+        height: size,
+        fontSize: size * 0.5,
+        backgroundColor: muted
+          ? 'rgb(var(--ds-main-blue-pale))'
+          : 'rgb(var(--ds-main-blue))',
+        color: muted ? 'rgb(var(--ds-main-blue-deep))' : '#ffffff',
+      }}
     >
       {name.trim().charAt(0) || 'W'}
     </span>
@@ -213,26 +280,32 @@ function WorkspaceSwitcher({
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute top-11 left-3 z-50 w-[200px] rounded-[10px] border border-gray-700 bg-background py-1.5 shadow-md">
+      <div className="absolute top-full left-0 z-50 mt-1 w-[200px] rounded-[10px] border border-gray-700 bg-background py-1.5 shadow-md">
         <p className="px-3 pt-1 pb-1.5 text-[11px] text-gray-500">워크스페이스</p>
         {list === null ? (
           <p className="px-3 py-2 text-[12px] text-muted">불러오는 중…</p>
         ) : (
-          list.map((ws) => (
-            <MenuItem
-              key={ws.workspaceId}
-              onClick={() => {
-                onClose();
-                if (ws.workspaceId !== currentId) onSwitch(ws);
-              }}
-            >
-              <WorkspaceIcon name={ws.title} size={18} />
-              <span className="min-w-0 flex-1 truncate">{ws.title}</span>
-              {ws.workspaceId === currentId && (
-                <span className="text-[12px]">✓</span>
-              )}
-            </MenuItem>
-          ))
+          list.map((ws) => {
+            const isCurrent = ws.workspaceId === currentId;
+            return (
+              <button
+                key={ws.workspaceId}
+                type="button"
+                onClick={() => {
+                  onClose();
+                  if (!isCurrent) onSwitch(ws);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition-colors ${
+                  isCurrent
+                    ? 'bg-main-blue-pale font-semibold text-main-blue-deep shadow-[inset_3px_0_0_0_rgb(var(--ds-main-blue))]'
+                    : 'text-foreground hover:bg-surface'
+                }`}
+              >
+                <WorkspaceIcon name={ws.title} size={18} muted={!isCurrent} />
+                <span className="min-w-0 flex-1 truncate">{ws.title}</span>
+              </button>
+            );
+          })
         )}
         <div className="my-1 border-t border-border" />
         <MenuItem
@@ -729,6 +802,7 @@ function ProjectTreeSection({
   onFocusNode: (id: string) => void;
 }) {
   const tree = useProjectTree(query);
+  const { focusedNodeId } = useWorkspaceLayout();
   // 기본 전부 펼침 — 접은 프로젝트만 기억한다 (노드가 비동기 로드라 "펼침 집합" 초기화 불가)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
@@ -739,6 +813,11 @@ function ProjectTreeSection({
       else next.add(id);
       return next;
     });
+
+  // 선택 행 하이라이트(Figma: Main Blue 0.25 배경 + 왼쪽 파란 액센트 바).
+  // 레이아웃 이동 없이 액센트를 그리려 inset box-shadow를 쓴다.
+  const SELECTED_ROW =
+    'bg-main-blue-pale shadow-[inset_3px_0_0_0_rgb(var(--ds-main-blue))]';
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
@@ -762,39 +841,58 @@ function ProjectTreeSection({
 
       {tree.map((project) => {
         const collapsed = collapsedIds.has(project.id);
+        const projectSelected = project.id === focusedNodeId;
         return (
           <div key={project.id} className="mb-0.5">
-            <div className="group flex items-center rounded-[6px] transition-colors hover:bg-surface">
+            <div
+              className={`group flex items-center rounded-[6px] transition-colors ${
+                projectSelected ? SELECTED_ROW : 'hover:bg-surface'
+              }`}
+            >
+              {/* 디스클로저: 평상시 • 불릿, 행 hover 시 접기/펼치기 셰브런 (Figma는 불릿) */}
               <button
                 type="button"
                 onClick={() => toggle(project.id)}
                 aria-label={collapsed ? '펼치기' : '접기'}
-                className="w-5 shrink-0 py-1.5 text-center text-[9px] text-gray-500"
+                className="w-5 shrink-0 py-1.5 text-center leading-none"
               >
-                {collapsed ? '▸' : '▾'}
+                <span className="text-[13px] text-main-blue-deep group-hover:hidden">
+                  •
+                </span>
+                <span className="hidden text-[9px] text-gray-500 group-hover:inline">
+                  {collapsed ? '▸' : '▾'}
+                </span>
               </button>
               <button
                 type="button"
                 onClick={() => onFocusNode(project.id)}
-                className="min-w-0 flex-1 truncate py-1.5 pr-2 text-left text-[13px] font-medium text-foreground"
+                className="min-w-0 flex-1 truncate py-1.5 pr-2 text-left text-[13px] font-semibold text-main-blue-deep"
               >
                 {project.title}
               </button>
             </div>
             {!collapsed &&
-              project.titles.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => onFocusNode(t.id)}
-                  className="flex w-full items-center rounded-[6px] py-1.5 pr-2 pl-8 text-left transition-colors hover:bg-surface"
-                >
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-foreground">
-                    {t.title}
-                  </span>
-                  {/* 타이틀 옆 빨간 점(회의 녹음 보유)은 회의 기능 데이터 계약 확정 후 */}
-                </button>
-              ))}
+              project.titles.map((t) => {
+                const titleSelected = t.id === focusedNodeId;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onFocusNode(t.id)}
+                    className={`flex w-full items-center gap-1.5 rounded-[6px] py-1.5 pr-2 pl-7 text-left transition-colors ${
+                      titleSelected ? SELECTED_ROW : 'hover:bg-surface'
+                    }`}
+                  >
+                    <span className="shrink-0 text-[10px] leading-none text-main-blue-light">
+                      ·
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-main-blue-light">
+                      {t.title}
+                    </span>
+                    {/* 타이틀 옆 빨간 점(회의 녹음 보유)은 회의 기능 데이터 계약 확정 후 */}
+                  </button>
+                );
+              })}
           </div>
         );
       })}
@@ -804,12 +902,56 @@ function ProjectTreeSection({
 
 // ─── 접힘 레일 (X4) ──────────────────────────────────────────────────────────
 
+/** 레일 아이콘을 파란 사각형에 흰색으로 담는 래퍼 (그래프·프로젝트) */
+function RailBlueIcon({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="flex h-6 w-6 items-center justify-center rounded-[7px]"
+      style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
+      aria-hidden="true"
+    >
+      {children}
+    </span>
+  );
+}
+
+/** 레일 네비 항목 — 아이콘 + 하단 라벨, active면 Main Blue 0.25 배경 */
+function RailItem({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      className={`flex w-full flex-col items-center gap-1 py-2 transition-colors ${
+        active ? 'bg-main-blue-pale' : 'hover:bg-surface'
+      }`}
+    >
+      {children}
+      <span
+        className={`text-[9px] leading-none ${
+          active ? 'font-semibold text-main-blue-deep' : 'text-gray-500'
+        }`}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
 function CollapsedRail({
-  workspaceName,
   onExpand,
   onExpandToSearch,
 }: {
-  workspaceName: string;
   onExpand: () => void;
   onExpandToSearch: () => void;
 }) {
@@ -817,43 +959,67 @@ function CollapsedRail({
 
   return (
     <div
-      className="flex h-full flex-col items-center"
+      className="relative flex h-full flex-col"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
+      {/* 로고 (On:Node 마크) → 클릭 시 펼침 */}
       <button
         type="button"
         onClick={onExpand}
         title="사이드바 펼치기 ⌘\"
-        className="mt-3"
+        className="flex justify-center py-3"
       >
-        <WorkspaceIcon name={workspaceName} />
+        <OnNodeMark size={36} />
       </button>
-      <button
-        type="button"
-        onClick={onExpandToSearch}
-        aria-label="노드 검색"
-        title="노드 검색 ⌘K"
-        className="mt-4 flex h-8 w-8 items-center justify-center rounded-[8px] text-muted transition-colors hover:bg-surface hover:text-foreground"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.3-4.3" />
-        </svg>
-      </button>
+      <div className="mx-3 border-t border-border" />
+
+      {/* 네비: 그래프(현재 뷰)·검색·프로젝트 */}
+      <div className="flex flex-col pt-2">
+        <RailItem label="그래프" active onClick={onExpand}>
+          <RailBlueIcon>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 5.5C6 4.5 9 4.5 11 6v12c-2-1.5-5-1.5-7-1V5.5Z" />
+              <path d="M20 5.5C18 4.5 15 4.5 13 6v12c2-1.5 5-1.5 7-1V5.5Z" />
+            </svg>
+          </RailBlueIcon>
+        </RailItem>
+        <RailItem label="검색" onClick={onExpandToSearch}>
+          <span className="flex h-6 w-6 items-center justify-center text-main-blue" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </span>
+        </RailItem>
+        <RailItem label="프로젝트" onClick={onExpand}>
+          <RailBlueIcon>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
+              <rect x="4" y="12" width="3.5" height="8" rx="1" />
+              <rect x="10.25" y="6.5" width="3.5" height="13.5" rx="1" />
+              <rect x="16.5" y="9.5" width="3.5" height="10.5" rx="1" />
+            </svg>
+          </RailBlueIcon>
+        </RailItem>
+      </div>
 
       <div className="flex-1" />
 
-      {/* hover 시 펼치기 핸들 (X4) */}
+      {/* hover 시 펼치기 핸들 + 툴팁 (X4 "레일 hover (펼치기 핸들)") */}
       {hovered && (
-        <button
-          type="button"
-          onClick={onExpand}
-          className="absolute top-1/2 -right-3 z-50 flex h-10 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-gray-700 bg-background text-[11px] text-muted shadow-md hover:text-foreground"
-          title="사이드바 펼치기 ⌘\"
-        >
-          ›
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={onExpand}
+            className="absolute top-[86px] -right-3 z-50 flex h-7 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-gray-700 bg-background text-[12px] text-main-blue shadow-md hover:bg-surface"
+            title="사이드바 펼치기 ⌘\"
+          >
+            ›
+          </button>
+          <span className="absolute top-[86px] left-full z-50 ml-4 -translate-y-1/2 whitespace-nowrap rounded-[6px] bg-foreground px-2 py-1 text-[11px] text-background shadow-md">
+            사이드바 펼치기
+          </span>
+        </>
       )}
 
       <ProfileRow collapsed />
@@ -993,37 +1159,42 @@ export default function Sidebar({
     >
       {isOpen ? (
         <>
-          {/* 헤더 (X1·X6) */}
-          <div className="relative flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
-            <button
-              type="button"
-              onClick={() => setSwitcherOpen((v) => !v)}
-              aria-expanded={switcherOpen}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-[8px] px-1 py-1 text-left transition-colors hover:bg-surface"
-            >
-              <WorkspaceIcon name={workspaceTitle} />
-              <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
-                {workspaceTitle}
-              </span>
-              <span className="text-[10px] text-muted">⌄</span>
-            </button>
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-label="사이드바 접기"
-              title="사이드바 접기 ⌘\"
-              className="shrink-0 px-1 text-[14px] text-gray-500 hover:text-foreground"
-            >
-              «
-            </button>
-            <WorkspaceSwitcher
-              open={switcherOpen}
-              currentId={workspaceId}
-              onClose={() => setSwitcherOpen(false)}
-              onSwitch={switchWorkspace}
-              onNewWorkspace={() => setNewWsOpen(true)}
-              onSettings={() => setSettingsOpen(true)}
-            />
+          {/* 헤더 (X1·X6): On:Node 로고 행 + 워크스페이스 스위처 행 */}
+          <div className="shrink-0 px-3 pt-3">
+            <div className="flex items-center justify-between pb-2">
+              <OnNodeLogo />
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-label="사이드바 접기"
+                title="사이드바 접기 ⌘\"
+                className="shrink-0 px-1 text-[14px] text-gray-500 hover:text-foreground"
+              >
+                «
+              </button>
+            </div>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen((v) => !v)}
+                aria-expanded={switcherOpen}
+                className="flex w-full min-w-0 items-center gap-2 rounded-[8px] px-1 py-1 text-left transition-colors hover:bg-surface"
+              >
+                <WorkspaceIcon name={workspaceTitle} />
+                <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
+                  {workspaceTitle}
+                </span>
+                <span className="text-[10px] text-muted">⌄</span>
+              </button>
+              <WorkspaceSwitcher
+                open={switcherOpen}
+                currentId={workspaceId}
+                onClose={() => setSwitcherOpen(false)}
+                onSwitch={switchWorkspace}
+                onNewWorkspace={() => setNewWsOpen(true)}
+                onSettings={() => setSettingsOpen(true)}
+              />
+            </div>
           </div>
 
           {/* 회의 진행 중 배너 (X5) — 회의 기능이 상태를 주기 전까지 숨김(null) */}
@@ -1061,7 +1232,6 @@ export default function Sidebar({
         </>
       ) : (
         <CollapsedRail
-          workspaceName={workspaceTitle}
           onExpand={onToggle}
           onExpandToSearch={() => {
             pendingSearchFocusRef.current = true;

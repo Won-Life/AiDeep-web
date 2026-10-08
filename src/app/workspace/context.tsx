@@ -47,6 +47,9 @@ interface WorkspaceLayoutContextValue {
   edgesRef: RefObject<Edge[]>;
   synced: boolean;
   setSynced: Dispatch<SetStateAction<boolean>>;
+  /** 최초 그래프 로드 실패(네트워크 등) — L2 에러 화면 트리거 */
+  syncError: boolean;
+  setSyncError: Dispatch<SetStateAction<boolean>>;
 }
 
 const WorkspaceLayoutContext = createContext<WorkspaceLayoutContextValue>(
@@ -64,6 +67,7 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [synced, setSynced] = useState(false);
+  const [syncError, setSyncError] = useState(false);
 
   const edgesRef = useRef<Edge[]>(edges);
 
@@ -85,6 +89,7 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
         edges, setEdges,
         edgesRef,
         synced, setSynced,
+        syncError, setSyncError,
       }}
     >
       {children}

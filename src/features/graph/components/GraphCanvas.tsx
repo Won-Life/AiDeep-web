@@ -900,6 +900,23 @@ function GraphCanvasInner({
     const isContextMenuOpen = contextMenuNodeId === node.id;
     const isEditorOpen = myOpenEditorNodeIds.includes(node.id);
 
+    // 도크 에디터(C3/C4) 헤더 경로 "프로젝트 > 타이틀" — 열린 노드만 조상 체인을 거슬러 생성
+    let editorBreadcrumb: string | undefined;
+    if (isEditorOpen) {
+      const names: string[] = [];
+      let ancestorId = parentIdByChildId.get(node.id);
+      let guard = 0;
+      while (ancestorId && guard++ < 20) {
+        const name = (
+          (nodeById.get(ancestorId)?.data as { title?: string } | undefined)
+            ?.title ?? ''
+        ).trim();
+        names.unshift(name || '제목 없음');
+        ancestorId = parentIdByChildId.get(ancestorId);
+      }
+      editorBreadcrumb = names.join(' > ') || undefined;
+    }
+
     return {
       ...node,
       zIndex: isContextMenuOpen ? 1000 : isEditorOpen ? 100 : undefined,
@@ -910,6 +927,8 @@ function GraphCanvasInner({
         hasParent, // 부모 노드 존재 여부 전달
         isContentNode, // 타이틀(프로젝트 직계) vs 콘텐츠(그 이하) 구분 — Figma 08 G1 노드 스타일
         showInputBox: myOpenEditorNodeIds.includes(node.id), // 열린 노드에 입력박스 표시 (내 탭 기준)
+        dockIndex: isEditorOpen ? myOpenEditorNodeIds.indexOf(node.id) : undefined, // C3/C4 우측 도크 순번
+        editorBreadcrumb, // 도크 헤더 경로
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
         isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
         onStartRename: handleStartRename,

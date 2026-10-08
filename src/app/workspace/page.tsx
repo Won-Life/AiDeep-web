@@ -8,6 +8,7 @@ import { getDefaultMeetingTarget } from "@/features/meeting-bot/meetingTargets";
 import { inviteMeetingBot } from "@/api/meeting";
 import { useFestivalPopup } from "@/features/festival/useFestivalPopup";
 import WorkspaceLoading from "@/components/ui/WorkspaceLoading";
+import GraphLoadError from "@/components/ui/GraphLoadError";
 import { useWorkspaceLayout } from "./context";
 
 /*
@@ -34,7 +35,8 @@ export default function WorkspacePage() {
     workspaceRole,
     nodes, setNodes,
     edges, setEdges,
-    synced,
+    synced, setSynced,
+    syncError, setSyncError,
   } = useWorkspaceLayout();
 
   const currentUserId = userMe?.userId ?? "";
@@ -50,6 +52,20 @@ export default function WorkspacePage() {
     const timer = setTimeout(() => setOverlayGone(true), 350);
     return () => clearTimeout(timer);
   }, [canvasPainted]);
+
+  // L2: 최초 로드 실패 → 에러 화면. "다시 시도"는 syncError 해제로 sync effect 재실행,
+  // "닫기"는 빈 캔버스로 계속(synced=true).
+  if (syncError) {
+    return (
+      <GraphLoadError
+        onRetry={() => setSyncError(false)}
+        onDismiss={() => {
+          setSyncError(false);
+          setSynced(true);
+        }}
+      />
+    );
+  }
 
   if (!workspaceId || !synced) {
     return <WorkspaceLoading />;
