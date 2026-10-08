@@ -1788,12 +1788,10 @@ function GraphCanvasInner({
      Node click → toggle input box
      ========================= */
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    // 우측 도크 에디터는 한 번에 하나만 (Figma C3) — 다른 노드 클릭 시 교체
     setMyOpenEditorNodeIds((prev) => {
-      if (prev.includes(node.id)) {
-        // 이미 열려 있으면 포커스만 이동
-        return prev;
-      }
-      return [...prev, node.id];
+      if (prev.length === 1 && prev[0] === node.id) return prev; // 같은 노드 재클릭 → 변화 없음
+      return [node.id];
     });
     setWorkingOnEditorNodeId(node.id);
     onNodeVisited?.(node.id);
