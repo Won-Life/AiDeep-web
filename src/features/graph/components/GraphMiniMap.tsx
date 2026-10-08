@@ -1,6 +1,41 @@
 'use client';
 
 import { useEdges, useNodes, useReactFlow, useStore, useViewport, getNodesBounds } from '@xyflow/react';
+import type { Node } from '@xyflow/react';
+
+/*
+ * CONTEXT
+ * - Problem      : 미니맵의 사각형·캡슐만으로는 실제 노드의 폴더·탭·배너를 구분하기 어렵다.
+ * - Why          : 캔버스가 주입한 isMain/isContentNode와 실제 크기로 같은 실루엣을 그린다.
+ * - Alternatives : 부모 엣지로 유형을 다시 추론하면 숨김 여부에 따라 캔버스와 모양이 달라진다.
+ * - Trade-offs   : 축소 상태에서 식별하기 위해 글자와 장식은 생략하고 단색 윤곽을 사용한다.
+ * - Edge Case    : 측정 전에도 유형별 기본 크기를 사용하고 왼쪽 텍스트 노드는 배너를 반전한다.
+ */
+function MiniMapNode({ node, accent }: { node: Node; accent: string }) {
+  const main = !!node.data.isMain;
+  const content = !main && !!node.data.isContentNode;
+  const w = node.measured?.width ?? node.width ?? 200;
+  const h = node.measured?.height ?? node.height ?? (main ? 140 : 40);
+  const r = Math.min(10, h / 2);
+  const p = Math.min(14, w / 4);
+  const banner = node.data.handleSide === 'left'
+    ? `M ${w - r} 0 H ${p} L 0 ${h / 2} L ${p} ${h} H ${w - r} Q ${w} ${h} ${w} ${h - r} V ${r} Q ${w} 0 ${w - r} 0 Z`
+    : `M ${r} 0 H ${w - p} L ${w} ${h / 2} L ${w - p} ${h} H ${r} Q 0 ${h} 0 ${h - r} V ${r} Q 0 0 ${r} 0 Z`;
+  const radius = Math.min(h / 2, w / 2);
+  const tabLeft = Math.min(22, w / 4);
+  const tabRight = Math.min(60, w / 2);
+  const title = `M ${radius} 0 H ${tabLeft} V -6 Q ${tabLeft} -14 ${tabLeft + 8} -14 H ${tabRight - 8} Q ${tabRight} -14 ${tabRight} -6 V 0 H ${w - radius} A ${radius} ${radius} 0 0 1 ${w - radius} ${h} H ${radius} A ${radius} ${radius} 0 0 1 ${radius} 0 Z`;
+
+  return (
+    <g transform={`translate(${node.position.x} ${node.position.y})`} fill={main ? accent : 'rgb(var(--background))'} stroke={accent} strokeWidth={1.5} strokeLinejoin="round">
+      {main ? (
+        <path d={`M 0 8 V -4 Q 0 -12 8 -12 H 58 Q 66 -12 66 -4 V 0 H ${w - 14} Q ${w} 0 ${w} 14 V ${h - 14} Q ${w} ${h} ${w - 14} ${h} H 14 Q 0 ${h} 0 ${h - 14} Z`} vectorEffect="non-scaling-stroke" />
+      ) : (
+        <path d={content ? banner : title} vectorEffect="non-scaling-stroke" />
+      )}
+    </g>
+  );
+}
 
 /*
  * CONTEXT
@@ -29,7 +64,6 @@ export default function GraphMiniMap() {
   const viewLeft = left - (viewWidth - mapWidth) / 2;
   const viewTop = top - (viewHeight - mapHeight) / 2;
   const byId = new Map(nodes.map((node) => [node.id, node]));
-  const parents = new Map(edges.map((edge) => [edge.target, edge.source]));
   const accent = '#7B87FF';
 
   return (
@@ -55,24 +89,14 @@ export default function GraphMiniMap() {
           const source = byId.get(edge.source);
           const target = byId.get(edge.target);
           if (!source || !target) return null;
-          const sw = source.measured?.width ?? 200;
-          const tw = target.measured?.width ?? 200;
+          const sw = source.measured?.width ?? source.width ?? 200;
+          const tw = target.measured?.width ?? target.width ?? 200;
+          const sh = source.measured?.height ?? source.height ?? (source.data.isMain ? 140 : 40);
+          const th = target.measured?.height ?? target.height ?? (target.data.isMain ? 140 : 40);
           const toRight = target.position.x > source.position.x;
-          return <line key={edge.id} x1={source.position.x + (toRight ? sw : 0)} y1={source.position.y + (source.measured?.height ?? 40) / 2} x2={target.position.x + (toRight ? 0 : tw)} y2={target.position.y + (target.measured?.height ?? 40) / 2} stroke={accent} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />;
+          return <line key={edge.id} x1={source.position.x + (toRight ? sw : 0)} y1={source.position.y + sh / 2} x2={target.position.x + (toRight ? 0 : tw)} y2={target.position.y + th / 2} stroke={accent} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />;
         })}
-        {nodes.map((node) => {
-          const w = node.measured?.width ?? 200;
-          const h = node.measured?.height ?? 40;
-          const main = !!node.data.isMain;
-          const parent = byId.get(parents.get(node.id) ?? '');
-          const content = !main && parent && !parent.data.isMain;
-          return (
-            <g key={node.id} transform={`translate(${node.position.x} ${node.position.y})`} fill="rgb(var(--background))" stroke={accent} strokeWidth={1.5}>
-              {content ? <path d={node.data.handleSide === 'left' ? `M 14 0 H ${w} V ${h} H 14 L 0 ${h / 2} Z` : `M 0 0 H ${w - 14} L ${w} ${h / 2} L ${w - 14} ${h} H 0 Z`} vectorEffect="non-scaling-stroke" /> : <rect width={w} height={h} rx={main ? 14 : h / 2} vectorEffect="non-scaling-stroke" />}
-              {main && <path d="M 0 16 V -8 Q 0 -14 8 -14 H 46 Q 54 -14 54 -6 H 70 V 16 Z" fill={accent} stroke="none" />}
-            </g>
-          );
-        })}
+        {nodes.map((node) => <MiniMapNode key={node.id} node={node} accent={accent} />)}
         <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} rx={18 * scale} fill={accent} fillOpacity={0.14} stroke="#626FFF" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="flex h-8 items-center justify-between border-t-2 px-5 text-foreground" style={{ borderColor: accent, backgroundColor: 'color-mix(in srgb, #7B87FF 14%, rgb(var(--background)))' }}>

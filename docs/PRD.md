@@ -25,7 +25,7 @@
 ### 1. 인증
 - 이메일 + 비밀번호 회원가입. 이메일 인증 코드 발송 → 코드 입력으로 인증 완료
 - JWT 기반 로그인. access token은 JS 메모리에만 보관, refresh token(`aideep_refresh_token`)은 localStorage에 저장
-- 401 수신 시(새로고침 후 첫 요청 포함) refresh 시도. refresh 실패 시 토큰 파기 후 `/login`으로 리다이렉트
+- 401 수신 시(새로고침 후 첫 요청 포함) refresh 시도. 토큰 없음·갱신 인증 거절이면 토큰 파기 후 `/login`으로 이동하고, 네트워크·서버 장애이면 토큰을 보존해 재시도 제공
 - 로그아웃: `logout()` API 호출 시도 → 성공/실패 무관하게 항상 `/login`으로 이동 (stuck session 방지)
 
 ---
