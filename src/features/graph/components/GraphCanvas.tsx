@@ -33,7 +33,6 @@ import HelpMenu from '@/components/ui/HelpMenu';
 import GraphOnboardingModal, {
   useGraphOnboardingSeen,
 } from '@/components/ui/GraphOnboardingModal';
-import { useOnboardingSeen } from '@/components/layout/OnboardingPopup';
 import * as d3 from 'd3';
 import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
@@ -439,19 +438,18 @@ function GraphCanvasInner({
   const isMultiDragRef = useRef(false);
   // 뷰포트 중앙 좌표 계산용 캔버스 래퍼 (#204 보이는 생성 버튼)
   const wrapperRef = useRef<HTMLDivElement>(null);
-  // 그래프 구조 온보딩(G3) — Meet 온보딩 팝업(layout, z-50)과 겹치지 않게
-  // Meet 온보딩 확인 이후 첫 렌더에서 1회만 자동 오픈한다
-  const meetOnboardingSeen = useOnboardingSeen();
+  // 그래프 구조 온보딩(G3) — 미확인 사용자에게 첫 렌더에서 1회만 자동 오픈.
+  // (Meet 출시 팝업은 제거돼 더 이상 순서 대기가 필요 없다)
   const graphOnboardingSeen = useGraphOnboardingSeen();
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const onboardingAutoOpenedRef = useRef(false);
   useEffect(() => {
     if (onboardingAutoOpenedRef.current) return;
-    if (meetOnboardingSeen && !graphOnboardingSeen) {
+    if (!graphOnboardingSeen) {
       onboardingAutoOpenedRef.current = true;
       setOnboardingOpen(true);
     }
-  }, [meetOnboardingSeen, graphOnboardingSeen]);
+  }, [graphOnboardingSeen]);
   const lastLiveEmitRef = useRef(0);
   const LIVE_EMIT_INTERVAL = 50; // ms
 

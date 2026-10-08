@@ -14,7 +14,7 @@ import AiChatPanel, {
   AI_CHAT_PANEL_WIDTH,
 } from '@/features/chat/AiChatPanel';
 import ArchiveModal from '@/components/layout/ArchiveModal';
-import OnboardingPopup from '@/components/layout/OnboardingPopup';
+import SessionLoadError from '@/features/auth/SessionLoadError';
 import { getMe } from '@/api/user';
 import { logout } from '@/api/auth';
 import { getWorkspaces } from '@/api/workspace';
@@ -62,6 +62,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     return sessionStorage.getItem('aideep_chat_open') === 'true';
   });
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [sessionLoadFailed, setSessionLoadFailed] = useState(false);
+  const [sessionAttempt, setSessionAttempt] = useState(0);
 
   const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : RAIL_WIDTH;
 
@@ -90,11 +92,39 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /*
+   * CONTEXT
+   * - Problem      : 사용자 조회의 네트워크·서버 오류도 로그인 화면으로 보냈다.
+   * - Why          : 인증 만료는 공용 client가 처리하고 조회 실패는 화면에서 재시도한다.
+   * - Alternatives : 모든 실패 redirect → 유효한 세션에서도 재로그인을 요구한다.
+   * - Trade-offs   : 일시적 장애 동안 사용자 정보를 필요로 하는 기능은 대기한다.
+   * - Edge Case    : 연결 복구, unmount 후 응답, React StrictMode의 effect 재실행.
+   */
   useEffect(() => {
-    getMe()
-      .then(setUserMe)
-      .catch(() => router.replace('/login'));
-  }, [router, setUserMe]);
+    let active = true;
+    let loading = false;
+    const loadSession = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        const user = await getMe();
+        if (active) {
+          setUserMe(user);
+          setSessionLoadFailed(false);
+        }
+      } catch {
+        if (active) setSessionLoadFailed(true);
+      } finally {
+        loading = false;
+      }
+    };
+    void loadSession();
+    window.addEventListener('online', loadSession);
+    return () => {
+      active = false;
+      window.removeEventListener('online', loadSession);
+    };
+  }, [sessionAttempt, setUserMe]);
 
   // 워크스페이스 + 노드/엣지 + 참여자 목록 — 최초 1회만 fetch (synced 이후 스킵)
   // syncError 중에도 스킵 — L2 "다시 시도"가 setSyncError(false)로 해제해야 재시도된다.
@@ -266,9 +296,15 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         />
       )}
 
-      <OnboardingPopup />
-
       {/* L3: 오프라인 배너 + 저장 실패 토스트 */}
+      {sessionLoadFailed && (
+        <div className="absolute inset-0 z-[60]">
+          <SessionLoadError onRetry={() => {
+            setSessionLoadFailed(false);
+            setSessionAttempt((attempt) => attempt + 1);
+          }} />
+        </div>
+      )}
       <OfflineBanner />
       <ToastHost />
     </div>
