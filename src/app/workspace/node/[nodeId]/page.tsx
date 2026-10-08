@@ -114,6 +114,7 @@ export default function NodeFullscreenPage() {
           <NodeEditorPanel
             nodeId={nodeId}
             fullscreen
+            workspaceId={workspaceId}
             collabProvider={collabProvider}
             username={userName}
             cursorColor={cursorColor}

@@ -387,6 +387,7 @@ export function NodeEditorPanel({
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <NotionEditor
               nodeId={nodeId}
+              workspaceId={workspaceId}
               collabProvider={collabProvider}
               username={username}
               cursorColor={cursorColor}
@@ -445,6 +446,7 @@ export function NodeEditorPanel({
 
         <NotionEditor
           nodeId={nodeId}
+          workspaceId={workspaceId}
           collabProvider={collabProvider}
           username={username}
           cursorColor={cursorColor}
@@ -487,11 +489,12 @@ export function NodeEditorPanel({
         <div className="w-[62.5%] min-w-[300px] mx-auto flex flex-col flex-1 min-h-0">
           <NotionEditor
             nodeId={nodeId}
+            workspaceId={workspaceId}
             collabProvider={collabProvider}
             username={username}
             cursorColor={cursorColor}
             onFirstLineChange={onFirstLineChange}
-            toolbarSlot={<ToolbarPlugin />}
+            toolbarSlot={<ToolbarPlugin workspaceId={workspaceId} />}
             extraBottomPadding
           />
         </div>
@@ -553,6 +556,7 @@ export function NodeEditorPanel({
       ) : (
         <NotionEditor
           nodeId={nodeId}
+          workspaceId={workspaceId}
           collabProvider={collabProvider}
           username={username}
           cursorColor={cursorColor}

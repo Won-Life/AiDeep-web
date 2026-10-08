@@ -77,6 +77,8 @@ import { TRANSFORMERS, $convertToMarkdownString } from '@lexical/markdown';
 import { MarkdownPastePlugin } from './plugins/MarkdownPastePlugin';
 import { $setBlocksType } from '@lexical/selection';
 import { $getNearestNodeOfType, mergeRegister } from '@lexical/utils';
+import { uploadFile } from '@/api/upload';
+import { showToast } from '@/components/ui/toastStore';
 import { CollaborationPlugin } from '@lexical/react/LexicalCollaborationPlugin';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { LexicalCollaboration } from '@lexical/react/LexicalCollaborationContext';
@@ -110,6 +112,7 @@ export interface NotionEditorProps {
   minHeight?: number;
   extraBottomPadding?: boolean;
   compactTop?: boolean; // 캔버스 미니 패널 — 본문 상단 패딩 축소 (pt-3 → pt-1)
+  workspaceId?: string; // 본문 이미지/파일 S3 업로드 시 서버가 요구
 }
 
 // ─── Media Commands ───────────────────────────────────────────────────────────
@@ -466,12 +469,31 @@ function insertTemplate(editor: LexicalEditor, sections: string[]) {
 
 // ─── Media helpers ────────────────────────────────────────────────────────────
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.readAsDataURL(file);
-  });
+/*
+ * CONTEXT
+ * - Problem      : 본문 이미지/파일(툴바·슬래시·드롭)이 base64 data URL을 Yjs 문서에
+ *                  심어, 문서가 비대해지고 협업 동기화 부담이 컸다. S3 미사용.
+ * - Why          : 첨부(AttachmentSection)와 동일하게 서버 /upload(S3)를 거쳐 공개 URL만
+ *                  문서에 저장한다. 서버는 workspaceId(멤버십)를 요구하므로 함께 넘긴다.
+ * - Trade-offs   : base64는 즉시 표시됐지만 이제 업로드 왕복 지연이 있다(이미지가 조금 늦게
+ *                  뜸). 문서 경량화·영속 URL 이점이 더 크다. 실패 시 토스트로 알린다.
+ * - Edge Case    : workspaceId 없으면 업로드 불가 → 토스트 후 중단.
+ */
+async function uploadMedia(
+  file: File,
+  workspaceId: string | undefined,
+): Promise<string | null> {
+  if (!workspaceId) {
+    showToast('업로드할 수 없어요 (워크스페이스 정보 없음)');
+    return null;
+  }
+  try {
+    const { fileUrl } = await uploadFile(file, workspaceId);
+    return fileUrl;
+  } catch {
+    showToast('업로드에 실패했어요');
+    return null;
+  }
 }
 
 // ─── Media Plugin ─────────────────────────────────────────────────────────────
@@ -509,7 +531,7 @@ function MediaPlugin() {
 
 // ─── Drag Drop Plugin ─────────────────────────────────────────────────────────
 
-function DragDropPlugin() {
+function DragDropPlugin({ workspaceId }: { workspaceId?: string }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -527,11 +549,12 @@ function DragDropPlugin() {
       if (!file) return;
       de.preventDefault();
       de.stopPropagation();
-      const dataUrl = await readFileAsDataUrl(file);
+      const url = await uploadMedia(file, workspaceId);
+      if (!url) return;
       if (file.type.startsWith('image/')) {
-        editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src: dataUrl });
+        editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src: url });
       } else {
-        editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+        editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl: url });
       }
     };
 
@@ -541,7 +564,7 @@ function DragDropPlugin() {
       root?.addEventListener('dragover', handleDragOver);
       root?.addEventListener('drop', handleDrop);
     });
-  }, [editor]);
+  }, [editor, workspaceId]);
 
   return null;
 }
@@ -590,7 +613,7 @@ function EditorShortcutsPlugin() {
 
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
 
-export function ToolbarPlugin() {
+export function ToolbarPlugin({ workspaceId }: { workspaceId?: string } = {}) {
   const [editor] = useLexicalComposerContext();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
@@ -672,16 +695,16 @@ export function ToolbarPlugin() {
   const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const src = await readFileAsDataUrl(file);
-    editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
+    const src = await uploadMedia(file, workspaceId);
+    if (src) editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
     e.target.value = '';
   };
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+    const dataUrl = await uploadMedia(file, workspaceId);
+    if (dataUrl) editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
     e.target.value = '';
   };
 
@@ -920,12 +943,14 @@ class SlashMenuOption extends MenuOption {
 function SlashCommandPlugin({
   onMenuVisibleChange,
   menuActiveSyncRef,
+  workspaceId,
 }: {
   // 메뉴 모달 표시 여부(React 상태 채널) — 닫힘 시 TitleTracker가 제목을 재반영한다
   onMenuVisibleChange?: (visible: boolean) => void;
   // 트리거 매치 여부(동기 ref 채널) — '/' 입력과 같은 업데이트 사이클에 세팅되어,
   // onOpen setState가 커밋되기 전에 TitleTracker 리스너가 '/'를 제목으로 내보내는 깜빡임을 막는다
   menuActiveSyncRef?: RefObject<boolean>;
+  workspaceId?: string;
 }) {
   const [editor] = useLexicalComposerContext();
   const [queryString, setQueryString] = useState<string | null>(null);
@@ -1013,16 +1038,16 @@ function SlashCommandPlugin({
   const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const src = await readFileAsDataUrl(file);
-    editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
+    const src = await uploadMedia(file, workspaceId);
+    if (src) editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
     e.target.value = '';
   };
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+    const dataUrl = await uploadMedia(file, workspaceId);
+    if (dataUrl) editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
     e.target.value = '';
   };
 
@@ -1188,6 +1213,7 @@ export function NotionEditor({
   minHeight,
   extraBottomPadding = false,
   compactTop = false,
+  workspaceId,
 }: NotionEditorProps) {
   // 슬래시 메뉴 표시 여부 — 메뉴가 떠있는 동안 TitleTracker의 제목 반영을 멈춘다.
   // 상태(닫힘 시 재반영 트리거)와 동기 ref(첫 '/' 깜빡임 방지) 이중 채널.
@@ -1266,9 +1292,10 @@ export function NotionEditor({
           <SlashCommandPlugin
             onMenuVisibleChange={setSlashMenuVisible}
             menuActiveSyncRef={slashMenuActiveRef}
+            workspaceId={workspaceId}
           />
           <EditorShortcutsPlugin />
-          {!noMediaDrop && <DragDropPlugin />}
+          {!noMediaDrop && <DragDropPlugin workspaceId={workspaceId} />}
 
           {onFirstLineChange && (
             <TitleTrackerPlugin
