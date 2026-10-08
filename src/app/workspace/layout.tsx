@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { type Node } from '@xyflow/react';
 import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
-import ChipHeader from '@/components/layout/ChipHeader';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
 import DropDown from '@/components/ui/DropDown';
@@ -22,7 +20,6 @@ import { convertToReactFlow } from '@/features/graph/api/mappers';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
 import { onPresenceState } from '@/api/ws';
 import { getCursorColor } from '@/utils/cursorColor';
-import { type NodeView } from '@/features/nodes/TextUpdateNode';
 import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
 
 // 마지막으로 보던 워크스페이스 — 새로고침 후에도 유지 (sync effect가 읽고/쓴다)
@@ -236,17 +233,9 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
       <Sidebar isOpen={isSidebarOpen} onToggle={handleToggleSidebar} />
 
-      <ChipHeader
-        sidebarWidth={sidebarWidth}
-        nodes={nodes as Node<NodeView>[]}
-        onNodeFocus={setFocusedNodeId}
-        activeProjectId={focusedNodeId}
-        user={userMe}
-        onLogout={handleLogout}
-        workspaceId={workspaceId}
-        onOpenArchive={() => setIsArchiveOpen(true)}
-        onSettings={() => router.push('/settings')}
-      />
+      {/* 상단 ChipHeader는 렌더하지 않는다 — 캔버스 상단바를 없애 우측 도크 에디터를
+          full-height(Figma C3)로 띄우기 위함. 프로필·설정·아카이브·프로젝트 칩 기능은
+          좌측 사이드바로 이전 중(별도 세션). 컴포넌트 파일(ChipHeader.tsx)은 유지. */}
 
       <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setChatOpen(true)} />
 

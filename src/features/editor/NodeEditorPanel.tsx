@@ -325,7 +325,7 @@ export function NodeEditorPanel({
     const DOCK_WIDTH = 340;
     return createPortal(
       <div
-        className="fixed top-16 bottom-0 z-[100] flex w-[340px] flex-col border-l border-t border-gray-700 bg-background"
+        className="fixed top-0 bottom-0 z-[100] flex w-[340px] flex-col border-l border-gray-700 bg-background"
         style={{ right: dockIndex * DOCK_WIDTH }}
         // portal이지만 React 합성 이벤트는 React 트리(노드 컴포넌트)로 버블한다 — 막지 않으면
         // 패널 클릭이 React Flow onNodeClick을 재발화해 방금 닫은 패널이 다시 열린다.
