@@ -236,6 +236,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         onLogout={handleLogout}
         workspaceId={workspaceId}
         onOpenArchive={() => setIsArchiveOpen(true)}
+        onSettings={() => router.push('/settings')}
       />
 
       <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setChatOpen(true)} />

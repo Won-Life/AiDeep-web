@@ -5,12 +5,14 @@ import axios, {
 } from 'axios';
 import type { ApiResponse } from './types';
 import { ApiError } from './types';
+import { isRefreshExcludedForError } from './authRefreshPolicy';
 import { REFRESH_TOKEN_KEY, readRefreshToken, readPersistence, writeRefreshToken, type TokenPersistence } from './tokenStorage';
 import { clearAuthSession, getAuthSessionId, startAuthSession } from './tokenStorage';
 
 declare module 'axios' {
   interface AxiosRequestConfig {
     skipAuthRefresh?: boolean;
+    skipAuthRefreshForErrorCodes?: readonly string[];
   }
 }
 
@@ -101,9 +103,14 @@ client.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // Non-401 or already retried → reject immediately
-    if (error.response?.status !== 401 || !originalRequest || originalRequest._retry || originalRequest.skipAuthRefresh) {
-      const body = error.response?.data as ApiResponse<unknown> | undefined;
+    const body = error.response?.data as ApiResponse<unknown> | undefined;
+    // Password validation 401 must not rotate refresh tokens; expired tokens still refresh.
+    const excluded = isRefreshExcludedForError(
+      body?.resultType === 'FAIL' ? body.error.errorCode : undefined,
+      originalRequest?.skipAuthRefreshForErrorCodes,
+    );
+    // Non-401, domain validation, or already retried → reject immediately
+    if (error.response?.status !== 401 || !originalRequest || originalRequest._retry || originalRequest.skipAuthRefresh || excluded) {
       if (body?.resultType === 'FAIL') {
         return Promise.reject(
           new ApiError(body.error.errorCode, body.error.reason, body.error.data),
