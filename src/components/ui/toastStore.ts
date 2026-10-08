@@ -10,7 +10,9 @@
  * - Edge Case    : SSR에는 리스너가 없어 no-op. 자동 소멸 타이머는 showToast 시점에 건다.
  */
 
-export type ToastItem = { id: number; message: string };
+/** info = 저장 실패 등 안내(어두운 필), announce = 회의 노드 생성 등 알림(파란 확성기 필, Figma 08) */
+export type ToastVariant = 'info' | 'announce';
+export type ToastItem = { id: number; message: string; variant: ToastVariant };
 
 let toasts: ToastItem[] = [];
 const listeners = new Set<() => void>();
@@ -23,14 +25,14 @@ function emit() {
 }
 
 /** 토스트 표시 (4초 후 자동 소멸). 동일 메시지 1초 내 재발행은 무시. */
-export function showToast(message: string): void {
+export function showToast(message: string, variant: ToastVariant = 'info'): void {
   const now = Date.now();
   if (message === lastMessage && now - lastAt < 1000) return;
   lastMessage = message;
   lastAt = now;
 
   const id = nextId++;
-  toasts = [...toasts, { id, message }];
+  toasts = [...toasts, { id, message, variant }];
   emit();
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);

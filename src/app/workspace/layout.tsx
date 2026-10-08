@@ -7,6 +7,7 @@ import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar'
 import ChipHeader from '@/components/layout/ChipHeader';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
+import { showToast } from '@/components/ui/toastStore';
 import DropDown from '@/components/ui/DropDown';
 import AiChatPanel, {
   AI_CHAT_HANDLE_WIDTH,
@@ -170,6 +171,12 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
           setNodes((prev) => {
             const have = new Set(prev.map((n) => n.id));
             const add = fresh.filter((n) => !have.has(n.id));
+            if (add.length) {
+              // 이 경로로 들어오는 새 노드는 사실상 Meet Scribe가 만든 회의 노드(위 주석).
+              // updater 안의 호출이라 StrictMode에서 2회 실행될 수 있지만,
+              // showToast의 동일 메시지 1초 dedup이 흡수한다.
+              showToast(`회의 노드 ${add.length}개가 만들어졌어요`, 'announce');
+            }
             return add.length ? [...prev, ...add] : prev;
           });
           setEdges((prev) => {
