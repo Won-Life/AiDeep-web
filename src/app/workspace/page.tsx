@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
 import FestivalPopup from "@/features/festival/components/FestivalPopup";
+import MeetingBotWidget from "@/features/meeting-bot/MeetingBotWidget";
+import { getDefaultMeetingTarget } from "@/features/meeting-bot/meetingTargets";
+import { inviteMeetingBot } from "@/api/meeting";
 import { useFestivalPopup } from "@/features/festival/useFestivalPopup";
 import WorkspaceLoading from "@/components/ui/WorkspaceLoading";
 import GraphLoadError from "@/components/ui/GraphLoadError";
@@ -85,6 +88,12 @@ export default function WorkspacePage() {
         onNodeVisited={festivalPopup.handleNodeVisited}
       />
       <FestivalPopup isOpen={festivalPopup.isOpen} onClose={festivalPopup.close} />
+      {/* 타이틀 노드의 회의 버튼이 대상 노드를 넘겨주기 전까지는 첫 타이틀을 기본 대상으로 쓴다 */}
+      <MeetingBotWidget
+        workspaceId={workspaceId}
+        target={getDefaultMeetingTarget(nodes, edges)}
+        requestMeetingBot={inviteMeetingBot}
+      />
       {!overlayGone && (
         <div
           className={`absolute inset-0 z-50 transition-opacity duration-300 ${

@@ -103,15 +103,23 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     getWorkspaces()
       .then((list) => {
         if (!list.length) return Promise.reject('no workspace');
-        // 우선순위: ① 사이드바 스위처로 전환한 현재 workspaceId ② 마지막으로 보던
-        // 워크스페이스(localStorage — 새로고침 시 첫 번째로 돌아가는 문제 방지) ③ 첫 번째
+        // 우선순위: ① 온보딩 등에서 넘긴 ?workspaceId ② 사이드바 스위처로 전환한 현재 workspaceId
+        // ③ 마지막으로 보던 워크스페이스(localStorage — 새로고침 시 첫 번째로 돌아가는 문제 방지) ④ 첫 번째
+        const requestedId = new URLSearchParams(window.location.search).get('workspaceId');
         const lastViewedId = localStorage.getItem(LAST_WORKSPACE_KEY);
         const ws =
+          (requestedId && list.find((w) => w.workspaceId === requestedId)) ||
           (workspaceId && list.find((w) => w.workspaceId === workspaceId)) ||
           (lastViewedId &&
             list.find((w) => w.workspaceId === lastViewedId)) ||
           list[0];
         localStorage.setItem(LAST_WORKSPACE_KEY, ws.workspaceId);
+        if (requestedId) {
+          const params = new URLSearchParams(window.location.search);
+          params.delete('workspaceId');
+          const rest = params.toString();
+          window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
+        }
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
 
@@ -237,6 +245,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         onLogout={handleLogout}
         workspaceId={workspaceId}
         onOpenArchive={() => setIsArchiveOpen(true)}
+        onSettings={() => router.push('/settings')}
       />
 
       <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setChatOpen(true)} />

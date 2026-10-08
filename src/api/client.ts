@@ -6,11 +6,20 @@ import axios, {
 import type { ApiResponse } from './types';
 import { ApiError } from './types';
 import { showToast } from '@/components/ui/toastStore';
+import { isRefreshExcludedForError } from './authRefreshPolicy';
+import { REFRESH_TOKEN_KEY, readRefreshToken, readPersistence, writeRefreshToken, type TokenPersistence } from './tokenStorage';
+import { clearAuthSession, getAuthSessionId, startAuthSession } from './tokenStorage';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    skipAuthRefresh?: boolean;
+    skipAuthRefreshForErrorCodes?: readonly string[];
+  }
+}
 
 // ─── Token helpers ───────────────────────────────────────────────────
 
 const TOKEN_KEY = 'aideep_access_token';
-const REFRESH_TOKEN_KEY = 'aideep_refresh_token';
 
 // Access token은 XSS 표면 축소를 위해 JS 메모리에만 보관 (OWASP 권고 1단계).
 // 새로고침 시 비어 있으면 첫 요청 401 → 아래 refresh queue가 재발급해 채운다.
@@ -27,12 +36,14 @@ export function getAccessToken(): string | null {
 
 export function getRefreshToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+  return readRefreshToken(localStorage, sessionStorage);
 }
 
-export function setTokens(accessToken: string, refreshToken: string) {
+export function setTokens(accessToken: string, refreshToken: string, persistence?: TokenPersistence) {
+  if (typeof window === 'undefined') return;
+  writeRefreshToken(refreshToken, persistence ?? readPersistence(localStorage, sessionStorage), localStorage, sessionStorage);
+  if (persistence !== undefined || !getAuthSessionId()) startAuthSession();
   accessTokenInMemory = accessToken;
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 export function clearTokens() {
@@ -40,6 +51,9 @@ export function clearTokens() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  clearAuthSession();
 }
 
 // ─── Axios instance ──────────────────────────────────────────────────
@@ -90,8 +104,14 @@ client.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // Non-401 or already retried → reject immediately
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    const body = error.response?.data as ApiResponse<unknown> | undefined;
+    // Password validation 401 must not rotate refresh tokens; expired tokens still refresh.
+    const excluded = isRefreshExcludedForError(
+      body?.resultType === 'FAIL' ? body.error.errorCode : undefined,
+      originalRequest?.skipAuthRefreshForErrorCodes,
+    );
+    // Non-401, domain validation, or already retried → reject immediately
+    if (error.response?.status !== 401 || !originalRequest || originalRequest._retry || originalRequest.skipAuthRefresh || excluded) {
       // 저장 실패 토스트 (Figma L3): 노드·엣지 변경 저장(POST/PATCH/DELETE)이 네트워크
       // 끊김이나 서버 오류(5xx)로 실패하면 알린다. 검증 오류(4xx)·auth 등은 제외.
       const method = originalRequest?.method?.toUpperCase();
@@ -105,7 +125,6 @@ client.interceptors.response.use(
       ) {
         showToast('변경사항을 저장하지 못했어요. 네트워크를 확인해주세요');
       }
-      const body = error.response?.data as ApiResponse<unknown> | undefined;
       if (body?.resultType === 'FAIL') {
         return Promise.reject(
           new ApiError(body.error.errorCode, body.error.reason, body.error.data),
@@ -114,6 +133,7 @@ client.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    originalRequest._retry = true;
     // Queue concurrent requests while refresh is in-flight
     if (isRefreshing) {
       return new Promise<string>((resolve, reject) => {
@@ -124,7 +144,6 @@ client.interceptors.response.use(
       });
     }
 
-    originalRequest._retry = true;
     isRefreshing = true;
 
     try {

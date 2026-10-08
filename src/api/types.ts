@@ -34,8 +34,9 @@ export interface LoginResponse {
 export interface SignupRequest {
   email: string;
   password: string;
-  name: string;
-  phone: string;
+  termsOfService: boolean;
+  privacyPolicy: boolean;
+  marketing: boolean;
 }
 
 export interface EmailSendRequest {
@@ -43,7 +44,7 @@ export interface EmailSendRequest {
 }
 
 export interface EmailSendResponse {
-  code: number;
+  ok: boolean;
 }
 
 export interface EmailVerifyRequest {
@@ -61,8 +62,10 @@ export interface IssueMasterRequest {
 
 export interface OAuthSignupCompleteRequest {
   ticket: string;
-  username: string;
-  agreedToTerms: boolean;
+  username?: string;
+  terms: boolean;
+  privacy: boolean;
+  marketing: boolean;
 }
 
 // ─── User ────────────────────────────────────────────────────────────
