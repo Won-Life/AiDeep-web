@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 
 import { uploadFile } from "@/api/upload";
+import { useWorkspaceLayout } from "@/app/workspace/context";
 import { updateUsername } from "@/api/user";
 import { ApiError } from "@/api/types";
 import { isNicknameValid } from "@/features/settings/settingsRules";
@@ -90,6 +91,7 @@ export default function UserMenu({
   onSettings,
   onOpenArchive,
 }: UserMenuProps) {
+  const { workspaceId } = useWorkspaceLayout();
   const [isOpen, setIsOpen] = useState(false);
   const [username, setUsername] = useState(initialUsername);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -163,16 +165,14 @@ export default function UserMenu({
     const file = e.target.files?.[0];
 
     if (!file) return;
+    if (!workspaceId) return; // 서버 /upload는 workspaceId(멤버십) 필수 — 없으면 업로드 불가
     try {
-      // TODO: 현재 서버의 POST /upload 엔드포인트가 미완성 상태
-      // - upload.controller.ts의 uploadSingle()이 console.log만 하고 아무것도 반환하지 않음
-      // - S3 업로드 로직도 미구현 상태
-      // 백엔드에서 S3 업로드 후 { key, url, originalName, mimeType, size } 형태로 응답하면
-      // 아래 result.url이 S3 URL이 되어 프로필 이미지가 정상적으로 표시됨
-      const result = await uploadFile(file);
-      setProfileImageUrl(result.url);
+      // 서버 POST /upload는 multipart file + workspaceId를 받아 S3 업로드 후
+      // { fileId, fileUrl, ... }를 반환한다. 아바타는 현재 워크스페이스 업로드 경로를 재사용.
+      const result = await uploadFile(file, workspaceId);
+      setProfileImageUrl(result.fileUrl);
     } catch {
-      // 업로드 실패 (서버 미완성으로 인해 현재 항상 실패)
+      // 업로드 실패 — 조용히 무시 (아바타는 선택 기능)
     }
     // input 초기화 (같은 파일 재선택 가능하게)
     e.target.value = "";

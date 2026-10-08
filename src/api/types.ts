@@ -209,11 +209,12 @@ export interface SyncResponse {
 // ─── Upload ──────────────────────────────────────────────────────────
 
 export interface UploadResponse {
-  key: string;
-  url: string;
-  originalName: string;
+  fileId: string;
+  fileUrl: string;
   mimeType: string;
   size: number;
+  originalName: string;
+  createdAt: string;
 }
 
 // ─── WS (WebSocket Events) ───────────────────────────────────────────

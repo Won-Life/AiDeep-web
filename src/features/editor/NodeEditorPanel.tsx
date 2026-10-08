@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { NotionEditor, ToolbarPlugin } from "./NotionEditor";
 import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 import { uploadFile } from "@/api/upload";
+import { showToast } from "@/components/ui/toastStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,12 +49,14 @@ function AttachmentSection({
   onAddFile,
   onCaptionChange,
   onRemove,
+  workspaceId,
 }: {
   attachments: Attachment[];
   onAddImage: (src: string) => void;
   onAddFile: (name: string, size: number, dataUrl: string) => void;
   onCaptionChange: (id: string, caption: string) => void;
   onRemove: (id: string) => void;
+  workspaceId: string;
 }) {
   const imageRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -66,12 +69,14 @@ function AttachmentSection({
     const id = generateId();
     setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
-      const { url } = await uploadFile(file);
-      onAddImage(url);
-    } catch { /* silent */ }
+      const { fileUrl } = await uploadFile(file, workspaceId);
+      onAddImage(fileUrl);
+    } catch {
+      showToast("사진 업로드에 실패했어요");
+    }
     setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
-  }, [onAddImage]);
+  }, [onAddImage, workspaceId]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,12 +84,14 @@ function AttachmentSection({
     const id = generateId();
     setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
-      const { url, originalName, size } = await uploadFile(file);
-      onAddFile(originalName, size, url);
-    } catch { /* silent */ }
+      const { fileUrl, originalName, size } = await uploadFile(file, workspaceId);
+      onAddFile(originalName, size, fileUrl);
+    } catch {
+      showToast("파일 업로드에 실패했어요");
+    }
     setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
-  }, [onAddFile]);
+  }, [onAddFile, workspaceId]);
 
   return (
     <div className="border-t border-gray-900">
@@ -224,6 +231,8 @@ interface NodeEditorPanelProps {
   cursorColor?: string;
   onFirstLineChange?: (text: string) => void;
   onContentChange?: (content: { markdownBody: string; jsonBody: string }) => void;
+  /** 첨부 파일 S3 업로드 시 서버가 요구하는 워크스페이스 ID (필수) */
+  workspaceId?: string;
 }
 
 export function NodeEditorPanel({
@@ -244,6 +253,7 @@ export function NodeEditorPanel({
   cursorColor,
   onFirstLineChange,
   onContentChange,
+  workspaceId = "",
 }: NodeEditorPanelProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
@@ -392,6 +402,7 @@ export function NodeEditorPanel({
               onAddFile={handleAddFile}
               onCaptionChange={handleCaptionChange}
               onRemove={handleRemove}
+              workspaceId={workspaceId}
             />
             {updatedAt && (
               <div className="shrink-0 border-t border-gray-900 px-4 py-2 text-[12px] text-gray-500">
@@ -450,6 +461,7 @@ export function NodeEditorPanel({
           onAddFile={handleAddFile}
           onCaptionChange={handleCaptionChange}
           onRemove={handleRemove}
+          workspaceId={workspaceId}
         />
 
         {updatedAt && (
