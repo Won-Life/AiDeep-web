@@ -315,6 +315,14 @@ function GraphCanvasInner({
     null,
   );
   // 인라인 이름 편집(G5·G7 "이름 바꾸기") 중인 노드 — 해당 노드 제목이 input으로 전환
+  /*
+   * CONTEXT
+   * - Problem      : 핸들 드롭 생성 직후 확정 노드와 이름 입력 중인 노드를 구분할 수 없다.
+   * - Why          : 로컬 draft ID로 입력 중 색상·점선을 표시하고 편집 종료 시 해제한다.
+   * - Alternatives : 임시 색상을 서버에 저장하면 협업 데이터에 UI 상태가 섞인다.
+   * - Trade-offs   : 입력 중 표현은 생성한 사용자에게만 표시된다.
+   * - Edge Case    : Enter·Escape·blur 모두 기존 이름 저장 방식대로 편집을 끝낸다.
+   */
   const [draftNodeId, setDraftNodeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
@@ -1757,10 +1765,17 @@ function GraphCanvasInner({
     [],
   );
 
-  /* =========================
-     Node click → toggle input box
-     ========================= */
+  /*
+   * CONTEXT
+   * - Problem      : main·타이틀 노드 클릭도 우측 본문 에디터를 열어 제목 편집과 혼동된다.
+   * - Why          : 렌더링에 사용하는 isContentNode 판정으로 콘텐츠 노드에만 에디터를 연다.
+   * - Alternatives : 더블 클릭 시 패널을 닫으면 첫 클릭에서 패널이 잠깐 열리므로 제외한다.
+   * - Trade-offs   : main·타이틀의 본문 패널 접근은 막고 더블 클릭 제목 편집은 유지한다.
+   * - Edge Case    : 부모 없는 일반 노드도 타이틀로 취급하며 방문 기록은 모든 노드에 유지한다.
+   */
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    onNodeVisited?.(node.id);
+    if (node.data.isMain || !node.data.isContentNode) return;
     setMyOpenEditorNodeIds((prev) => {
       if (prev.includes(node.id)) {
         // 이미 열려 있으면 포커스만 이동
@@ -1769,7 +1784,6 @@ function GraphCanvasInner({
       return [...prev, node.id];
     });
     setWorkingOnEditorNodeId(node.id);
-    onNodeVisited?.(node.id);
   }, [onNodeVisited]);
 
   /* =========================

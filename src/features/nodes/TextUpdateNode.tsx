@@ -172,7 +172,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
     minWidth: 14,
     minHeight: 14,
     background: '#ffffff',
-    border: '2px solid #727272',
+    border: `2px ${nodeData.isDraft ? 'dashed' : 'solid'} #727272`,
     borderRadius: '50%',
   } as const;
 
@@ -327,6 +327,14 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         />
       )}
 
+      {/*
+        CONTEXT
+        - Problem      : main·타이틀 노드의 제목을 바로 편집하려면 컨텍스트 메뉴를 거쳐야 한다.
+        - Why          : 노드 본체의 더블 클릭을 기존 인라인 이름 편집에 연결해 저장 동작을 재사용한다.
+        - Alternatives : 별도 편집 상태와 저장 API를 추가하면 기존 이름 바꾸기와 동작이 중복된다.
+        - Trade-offs   : main·타이틀은 제목 편집에 집중하고 본문 에디터는 콘텐츠 노드에서만 연다.
+        - Edge Case    : 콘텐츠 노드·버튼·연결 핸들·편집 중 입력창은 더블 클릭으로 편집을 시작하지 않는다.
+      */}
       {/* 노드 - 입력박스보다 앞에 배치 */}
       <div
         ref={contentBoxRef}
@@ -355,6 +363,12 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           setHoverSide(event.clientX < rect.left + rect.width / 2 ? 'left' : 'right');
         }}
         onMouseLeave={() => setIsNodeHovered(false)}
+        onDoubleClick={(event) => {
+          if (isContent || isRenaming) return;
+          if ((event.target as HTMLElement).closest('button, .react-flow__handle')) return;
+          event.stopPropagation();
+          nodeData.onStartRename?.(id);
+        }}
       >
         {/*
           CONTEXT
@@ -445,6 +459,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               else if (e.key === 'Escape') nodeData.onFinishRename?.(id);
             }}
             onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
             className={`nodrag w-full bg-transparent outline-none ${
               isContent ? 'text-left' : 'text-center'
             }`}
