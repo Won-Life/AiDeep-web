@@ -25,6 +25,8 @@
 - sessionStorage는 HttpOnly 세션 쿠키가 아니다. Web Storage의 XSS 위험은 유지되며 쿠키 전환은 별도 FE/BE 작업이다.
 - OAuth 선택은 토큰이 아닌 저장 선호만 sessionStorage에 전달한다. 콜백이 다른 origin에 도착하면 전달할 수 없으므로 기존 기본값(localStorage)으로 처리된다. OAuth 리다이렉션 주소는 변경하지 않는다.
 - 공개 인증 요청의 401은 refresh하지 않고 호출부에 반환한다. 보호된 API의 refresh queue는 유지한다.
+- 갱신의 네트워크·서버 오류는 토큰을 지우지 않는다. 로그인·루트·워크스페이스의 세션 조회 실패는 재시도 화면으로 복구한다. 워크스페이스는 online 이벤트에서도 사용자 정보를 다시 조회한다.
+- 같은 탭의 갱신은 Promise를 공유하고 늦은 401은 최신 access token을 재사용한다. Web Locks 지원 환경의 localStorage 공유 탭들은 갱신 요청을 직렬화한다. 다른 기기 로그인에 의한 서버의 기존 토큰 무효화는 별도 서버 정책이다.
 
 ## 의도적으로 구현하지 않는 정책
 

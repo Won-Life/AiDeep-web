@@ -376,12 +376,13 @@ node_position_live 수신 (별도, 50ms throttle)
 ### HTTP 에러
 | 상황 | 처리 |
 |------|------|
-| 401 (최초) | `pendingQueue` 대기 → 토큰 갱신 후 원 요청 재시도 |
-| 401 (refresh 실패) | `clearTokens()` → `window.location.href = '/login'` |
+| 401 (최초) | 공유 `refreshPromise` 대기 → 토큰 갱신 후 원 요청 재시도. 이전 토큰의 늦은 401은 최신 메모리 토큰 재사용 |
+| refresh 인증 거절 / 토큰 없음 | 해당 저장소의 토큰 삭제 → `window.location.href = '/login'` |
+| refresh 네트워크·timeout·429·5xx | 토큰 보존, 호출부에서 재시도 UI 제공 |
 | 401 (이미 retry) | 즉시 reject |
 | FAIL envelope | `ApiError(errorCode, reason, data)` throw |
 | 기타 4xx/5xx | `console.error` + 로컬 state 유지 (롤백 없음) |
-| 동시 401 다수 | `pendingQueue`에 누적 → 갱신 후 일괄 재시도. `isRefreshing` 플래그로 중복 방지 |
+| 동시 401 다수 | 탭 내부 `refreshPromise` 공유, Web Locks 지원 시 탭 간 직렬화 후 최신 저장 토큰으로 갱신 |
 | refresh 요청 자체에 interceptor 재적용 방지 | raw `axios.post` 사용 (interceptor 루프 차단) |
 
 ### WebSocket 에러

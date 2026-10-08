@@ -6,7 +6,7 @@ import axios, {
 import type { ApiResponse } from './types';
 import { ApiError } from './types';
 import { showToast } from '@/components/ui/toastStore';
-import { isRefreshExcludedForError } from './authRefreshPolicy';
+import { isRefreshExcludedForError, isRefreshTokenRejected } from './authRefreshPolicy';
 import { REFRESH_TOKEN_KEY, readRefreshToken, readPersistence, writeRefreshToken, type TokenPersistence } from './tokenStorage';
 import { clearAuthSession, getAuthSessionId, startAuthSession } from './tokenStorage';
 
@@ -14,6 +14,7 @@ declare module 'axios' {
   interface AxiosRequestConfig {
     skipAuthRefresh?: boolean;
     skipAuthRefreshForErrorCodes?: readonly string[];
+    _authSessionVersion?: number;
   }
 }
 
@@ -24,6 +25,7 @@ const TOKEN_KEY = 'aideep_access_token';
 // Access token은 XSS 표면 축소를 위해 JS 메모리에만 보관 (OWASP 권고 1단계).
 // 새로고침 시 비어 있으면 첫 요청 401 → 아래 refresh queue가 재발급해 채운다.
 let accessTokenInMemory: string | null = null;
+let sessionVersion = 0;
 
 // 마이그레이션: 구버전이 localStorage에 남긴 access token 잔존값 제거 (1회)
 if (typeof window !== 'undefined') {
@@ -44,9 +46,11 @@ export function setTokens(accessToken: string, refreshToken: string, persistence
   writeRefreshToken(refreshToken, persistence ?? readPersistence(localStorage, sessionStorage), localStorage, sessionStorage);
   if (persistence !== undefined || !getAuthSessionId()) startAuthSession();
   accessTokenInMemory = accessToken;
+  if (persistence !== undefined) sessionVersion += 1;
 }
 
 export function clearTokens() {
+  sessionVersion += 1;
   accessTokenInMemory = null;
   if (typeof window === 'undefined') return;
   localStorage.removeItem(TOKEN_KEY);
@@ -65,6 +69,7 @@ const client: AxiosInstance = axios.create({
 
 // Attach JWT on every request
 client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  config._authSessionVersion ??= sessionVersion;
   const token = getAccessToken();
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -74,18 +79,72 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 // ─── 401 refresh queue ───────────────────────────────────────────────
 
-let isRefreshing = false;
-let pendingQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (err: unknown) => void;
-}> = [];
+let refreshPromise: Promise<string> | null = null;
+let refreshVersion = 0;
 
-function processQueue(error: unknown, token: string | null): void {
-  pendingQueue.forEach(({ resolve, reject }) => {
-    if (error) reject(error);
-    else resolve(token!);
+/*
+ * CONTEXT
+ * - Problem      : 탭별 큐만으로는 공유 refresh token 회전이 충돌하고 장애 때 정상 세션도 지워졌다.
+ * - Why          : Web Lock 안에서 최신 저장 토큰을 읽고, 인증 거절 때만 해당 세션을 종료한다.
+ * - Alternatives : access token localStorage 공유 → 메모리 보관 원칙 위반; 무조건 재시도 → 회전 응답 유실을 해결하지 못한다.
+ * - Trade-offs   : Web Locks 미지원 환경은 탭 내부 큐만 보장하며, 탭마다 순차 갱신해 access token을 메모리에 받는다.
+ * - Edge Case    : 늦은 401, 갱신 중 로그인·로그아웃, 다른 탭의 토큰 변경, timeout·5xx.
+ */
+function endExpiredSession(persistence: TokenPersistence) {
+  accessTokenInMemory = null;
+  sessionVersion += 1;
+  const storage = persistence === 'local' ? localStorage : sessionStorage;
+  storage.removeItem(REFRESH_TOKEN_KEY);
+  clearAuthSession();
+  if (window.location.pathname !== '/login') window.location.href = '/login';
+}
+
+async function rotateRefreshToken(version: number): Promise<string> {
+  if (version !== sessionVersion) throw new Error('Auth session changed');
+  const refreshToken = getRefreshToken();
+  const persistence = readPersistence(localStorage, sessionStorage);
+  if (!refreshToken) {
+    endExpiredSession(persistence);
+    throw new Error('No refresh token');
+  }
+  const isCurrent = () => version === sessionVersion && getRefreshToken() === refreshToken;
+  try {
+    // Raw axios prevents recursive refresh interception. Read storage only after acquiring the lock.
+    const { data, status } = await axios.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
+      '/api/auth/refresh', { refreshToken },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 15_000 },
+    );
+    if (!isCurrent()) throw new Error('Auth session changed');
+    if (data.resultType === 'FAIL') {
+      if (isRefreshTokenRejected(status, data.error.errorCode)) endExpiredSession(persistence);
+      throw new ApiError(data.error.errorCode, data.error.reason, data.error.data);
+    }
+    if (!data.success?.accessToken || !data.success?.refreshToken) {
+      throw new Error('Invalid refresh response');
+    }
+    setTokens(data.success.accessToken, data.success.refreshToken);
+    return data.success.accessToken;
+  } catch (error) {
+    if (isCurrent() && axios.isAxiosError(error) && isRefreshTokenRejected(error.response?.status)) {
+      endExpiredSession(persistence);
+    }
+    throw error;
+  }
+}
+
+function refreshAccessToken(): Promise<string> {
+  if (refreshPromise && refreshVersion === sessionVersion) return refreshPromise;
+  const version = sessionVersion;
+  refreshVersion = version;
+  const rotate = () => rotateRefreshToken(version);
+  const operation = typeof navigator !== 'undefined' && navigator.locks
+    ? navigator.locks.request('aideep-auth-refresh', rotate)
+    : rotate();
+  const pending = Promise.resolve(operation).finally(() => {
+    if (refreshPromise === pending) refreshPromise = null;
   });
-  pendingQueue = [];
+  refreshPromise = pending;
+  return pending;
 }
 
 // ─── Response interceptor: unwrap envelope + 401 refresh ─────────────
@@ -105,6 +164,10 @@ client.interceptors.response.use(
     };
 
     const body = error.response?.data as ApiResponse<unknown> | undefined;
+    // A request from before logout/new login must never refresh or retry as the new user.
+    if (originalRequest && originalRequest._authSessionVersion !== sessionVersion) {
+      return Promise.reject(error);
+    }
     // Password validation 401 must not rotate refresh tokens; expired tokens still refresh.
     const excluded = isRefreshExcludedForError(
       body?.resultType === 'FAIL' ? body.error.errorCode : undefined,
@@ -134,51 +197,15 @@ client.interceptors.response.use(
     }
 
     originalRequest._retry = true;
-    // Queue concurrent requests while refresh is in-flight
-    if (isRefreshing) {
-      return new Promise<string>((resolve, reject) => {
-        pendingQueue.push({ resolve, reject });
-      }).then((newToken) => {
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        return client(originalRequest);
-      });
-    }
-
-    isRefreshing = true;
-
-    try {
-      const refreshToken = getRefreshToken();
-      if (!refreshToken) throw new Error('No refresh token');
-
-      // Use raw axios to bypass our interceptors
-      const { data } = await axios.post<
-        ApiResponse<{ accessToken: string; refreshToken: string }>
-      >('/api/auth/refresh', { refreshToken }, {
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (data.resultType === 'FAIL') {
-        throw new ApiError(data.error.errorCode, data.error.reason, data.error.data);
-      }
-
-      const { accessToken: newAccess, refreshToken: newRefresh } = data.success;
-      setTokens(newAccess, newRefresh);
-      processQueue(null, newAccess);
-
-      originalRequest.headers.Authorization = `Bearer ${newAccess}`;
-      return client(originalRequest);
-    } catch (refreshError) {
-      processQueue(refreshError, null);
-      clearTokens();
-      // 이미 /login이면 재이동 생략 — 안 그러면 이 페이지 자체의 getMe() 호출이
-      // 401 → refresh 실패 → 리다이렉트 → 재마운트 → 401을 반복하는 새로고침 루프가 된다.
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-      return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
-    }
+    // A late 401 may belong to the old token after another request already refreshed it.
+    const currentToken = getAccessToken();
+    const requestToken = originalRequest.headers.Authorization;
+    const newToken = currentToken && requestToken !== `Bearer ${currentToken}`
+      ? currentToken
+      : await refreshAccessToken();
+    if (originalRequest._authSessionVersion !== sessionVersion) throw new Error('Auth session changed');
+    originalRequest.headers.Authorization = `Bearer ${newToken}`;
+    return client(originalRequest);
   },
 );
 

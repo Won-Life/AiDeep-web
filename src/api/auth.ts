@@ -59,9 +59,13 @@ export async function refresh(data: RefreshRequest): Promise<LoginResponse> {
 }
 
 export async function logout(): Promise<string> {
-  const { data: result } = await client.delete<string>('/auth/logout');
-  clearTokens();
-  return result;
+  // Explicit logout must end the local session even when the server is unavailable.
+  try {
+    const { data: result } = await client.delete<string>('/auth/logout');
+    return result;
+  } finally {
+    clearTokens();
+  }
 }
 
 /*
