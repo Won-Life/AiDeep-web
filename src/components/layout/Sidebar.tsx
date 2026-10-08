@@ -61,15 +61,15 @@ export const RAIL_WIDTH = 72; // Figma X4 레일 폭
  *                  바뀌어도 막대 비율이 일정하게 유지된다.
  */
 
-/** On:Node 브랜드 마크 — 파란 라운드 사각형 + 흰 이퀄라이저(음파) 막대 */
-function OnNodeMark({ size = 28 }: { size?: number }) {
+/** On:Node 브랜드 마크 — 파란 라운드 사각형(레일에서는 원형) + 흰 이퀄라이저(음파) 막대 */
+function OnNodeMark({ size = 28, round = false }: { size?: number; round?: boolean }) {
   return (
     <span
       className="flex shrink-0 items-center justify-center"
       style={{
         width: size,
         height: size,
-        borderRadius: Math.round(size * 0.3),
+        borderRadius: round ? '50%' : Math.round(size * 0.3),
         backgroundColor: 'rgb(var(--ds-main-blue))',
       }}
       aria-hidden="true"
@@ -129,7 +129,7 @@ function WorkspaceIcon({
 function Avatar({ name, size = 28 }: { name: string; size?: number }) {
   return (
     <span
-      className="flex shrink-0 items-center justify-center rounded-full bg-surface-hover font-semibold text-foreground"
+      className="flex shrink-0 items-center justify-center rounded-full bg-[var(--onnode-primary-200)] font-semibold text-[var(--onnode-primary-700)]"
       style={{ width: size, height: size, fontSize: size * 0.45 }}
     >
       {name.trim().charAt(0) || '?'}
@@ -142,11 +142,13 @@ function MenuItem({
   onClick,
   disabled,
   title,
+  className = 'text-foreground',
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   title?: string;
+  className?: string;
 }) {
   return (
     <button
@@ -154,7 +156,7 @@ function MenuItem({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-surface disabled:opacity-50 disabled:hover:bg-transparent"
+      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition-colors hover:bg-surface disabled:opacity-50 disabled:hover:bg-transparent ${className}`}
     >
       {children}
     </button>
@@ -280,10 +282,12 @@ function WorkspaceSwitcher({
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute top-full left-0 z-50 mt-1 w-[200px] rounded-[10px] border border-gray-700 bg-background py-1.5 shadow-md">
-        <p className="px-3 pt-1 pb-1.5 text-[11px] text-gray-500">워크스페이스</p>
+      <div className="absolute top-full left-0 z-50 mt-1 w-[232px] overflow-hidden rounded-[16px] border border-main-blue-light bg-background pb-1 shadow-md">
+        <p className="border-b border-main-blue-pale px-4 pt-3 pb-2 text-[12px] text-main-blue-light">
+          워크스페이스
+        </p>
         {list === null ? (
-          <p className="px-3 py-2 text-[12px] text-muted">불러오는 중…</p>
+          <p className="px-4 py-2.5 text-[12px] text-muted">불러오는 중…</p>
         ) : (
           list.map((ws) => {
             const isCurrent = ws.workspaceId === currentId;
@@ -295,35 +299,38 @@ function WorkspaceSwitcher({
                   onClose();
                   if (!isCurrent) onSwitch(ws);
                 }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition-colors ${
+                className={`flex w-full items-center gap-3 border-b border-main-blue-pale px-4 py-2.5 text-left text-[13px] transition-colors ${
                   isCurrent
-                    ? 'bg-main-blue-pale font-semibold text-main-blue-deep shadow-[inset_3px_0_0_0_rgb(var(--ds-main-blue))]'
-                    : 'text-foreground hover:bg-surface'
+                    ? 'bg-main-blue-pale font-semibold text-foreground shadow-[inset_3px_0_0_0_rgb(var(--ds-main-blue))]'
+                    : 'text-main-blue-light hover:bg-surface'
                 }`}
               >
-                <WorkspaceIcon name={ws.title} size={18} muted={!isCurrent} />
+                <WorkspaceIcon name={ws.title} size={28} muted={!isCurrent} />
                 <span className="min-w-0 flex-1 truncate">{ws.title}</span>
               </button>
             );
           })
         )}
-        <div className="my-1 border-t border-border" />
-        <MenuItem
-          onClick={() => {
-            onClose();
-            onNewWorkspace();
-          }}
-        >
-          + 새 워크스페이스
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            onClose();
-            onSettings();
-          }}
-        >
-          워크스페이스 설정
-        </MenuItem>
+        <div className="pt-1">
+          <MenuItem
+            className="font-medium text-main-blue-deep"
+            onClick={() => {
+              onClose();
+              onNewWorkspace();
+            }}
+          >
+            + 새 워크스페이스
+          </MenuItem>
+          <MenuItem
+            className="font-medium text-main-blue-deep"
+            onClick={() => {
+              onClose();
+              onSettings();
+            }}
+          >
+            워크스페이스 설정
+          </MenuItem>
+        </div>
       </div>
     </>
   );
@@ -902,20 +909,55 @@ function ProjectTreeSection({
 
 // ─── 접힘 레일 (X4) ──────────────────────────────────────────────────────────
 
-/** 레일 아이콘을 파란 사각형에 흰색으로 담는 래퍼 (그래프·프로젝트) */
-function RailBlueIcon({ children }: { children: ReactNode }) {
+/** hover 위치를 따라다니는 펼치기/접기 필 — 원형 셰브런 + 라운드 라벨 버튼 (X4) */
+function HoverTogglePill({
+  y,
+  chevron,
+  label,
+  onActivate,
+}: {
+  y: number;
+  chevron: '›' | '‹';
+  label: string;
+  onActivate: () => void;
+}) {
   return (
-    <span
-      className="flex h-6 w-6 items-center justify-center rounded-[7px]"
-      style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
-      aria-hidden="true"
+    <div
+      className="absolute left-full z-50 flex -translate-y-1/2 items-center"
+      style={{ top: y, marginLeft: -14 }}
     >
-      {children}
-    </span>
+      <button
+        type="button"
+        onClick={onActivate}
+        title={`${label} ⌘\\`}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-background text-[13px] text-main-blue shadow-sm hover:bg-main-blue-pale"
+        style={{ borderColor: 'rgb(var(--ds-main-blue))' }}
+      >
+        {chevron}
+      </button>
+      {/* 원형 버튼과 라벨 필 사이 간격은 padding으로 채운다 — 사이가 비면
+          mouseleave가 발생해 필이 사라져 클릭할 수 없다 */}
+      <span className="pl-2">
+        <button
+          type="button"
+          onClick={onActivate}
+          className="whitespace-nowrap rounded-full border bg-background px-4 py-1.5 text-[12px] font-medium text-main-blue shadow-sm hover:bg-main-blue-pale"
+          style={{ borderColor: 'rgb(var(--ds-main-blue))' }}
+        >
+          {label}
+        </button>
+      </span>
+    </div>
   );
 }
 
-/** 레일 네비 항목 — 아이콘 + 하단 라벨, active면 Main Blue 0.25 배경 */
+/** hover한 화면 Y좌표를 필이 화면 밖으로 잘리지 않게 보정 — 레일·사이드바가
+ *  화면 최상단(top 0) 고정이라 clientY가 곧 컨테이너 좌표다 */
+function clampHoverY(clientY: number): number {
+  return Math.min(Math.max(clientY, 28), window.innerHeight - 28);
+}
+
+/** 레일 네비 항목 — 아이콘 + 하단 라벨, active면 Main Blue 0.25 배경 + 좌측 액센트 탭 */
 function RailItem({
   label,
   active,
@@ -932,14 +974,23 @@ function RailItem({
       type="button"
       onClick={onClick}
       title={label}
-      className={`flex w-full flex-col items-center gap-1 py-2 transition-colors ${
+      className={`relative flex w-full flex-col items-center gap-1.5 py-2.5 transition-colors ${
         active ? 'bg-main-blue-pale' : 'hover:bg-surface'
       }`}
     >
+      {active && (
+        <span
+          className="absolute top-1/2 left-0 h-9 w-[5px] -translate-y-1/2 rounded-r-full"
+          style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
+          aria-hidden="true"
+        />
+      )}
       {children}
       <span
-        className={`text-[9px] leading-none ${
-          active ? 'font-semibold text-main-blue-deep' : 'text-gray-500'
+        className={`text-[10px] leading-none ${
+          active
+            ? 'font-semibold text-main-blue-deep'
+            : 'font-medium text-main-blue-light'
         }`}
       >
         {label}
@@ -955,74 +1006,101 @@ function CollapsedRail({
   onExpand: () => void;
   onExpandToSearch: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
+  // hover한 Y좌표 — null이면 펼치기 필 숨김
+  const [hoverY, setHoverY] = useState<number | null>(null);
 
   return (
     <div
       className="relative flex h-full flex-col"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => setHoverY(null)}
     >
-      {/* 로고 (On:Node 마크) → 클릭 시 펼침 */}
-      <button
-        type="button"
-        onClick={onExpand}
-        title="사이드바 펼치기 ⌘\"
-        className="flex justify-center py-3"
+      {/* mousemove 추적은 레일 본체에만 건다 — 바깥에 뜬 필 위에서는 위치가
+          고정돼야 하고, 필은 이 컨테이너의 자손이라 hover가 유지된다 */}
+      <div
+        className="flex h-full flex-col"
+        onMouseMove={(e) => setHoverY(clampHoverY(e.clientY))}
       >
-        <OnNodeMark size={36} />
-      </button>
-      <div className="mx-3 border-t border-border" />
+        {/* 로고 (On:Node 마크) → 클릭 시 펼침 */}
+        <button
+          type="button"
+          onClick={onExpand}
+          title="사이드바 펼치기 ⌘\"
+          className="flex justify-center pt-4 pb-3"
+        >
+          <OnNodeMark size={40} round />
+        </button>
+        <div className="mx-3.5 border-t border-border" />
 
-      {/* 네비: 그래프(현재 뷰)·검색·프로젝트 */}
-      <div className="flex flex-col pt-2">
-        <RailItem label="그래프" active onClick={onExpand}>
-          <RailBlueIcon>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M4 5.5C6 4.5 9 4.5 11 6v12c-2-1.5-5-1.5-7-1V5.5Z" />
-              <path d="M20 5.5C18 4.5 15 4.5 13 6v12c2-1.5 5-1.5 7-1V5.5Z" />
+        {/* 네비: 그래프(현재 뷰)·검색·프로젝트 */}
+        <div className="flex flex-col pt-2.5">
+          <RailItem label="그래프" active onClick={onExpand}>
+            {/* 겹친 사각형 — 뒤 외곽선 + 앞 채움 */}
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="8.5" y="3.5" width="12" height="12" rx="3" stroke="rgb(var(--ds-main-blue-deep))" strokeWidth="2" />
+              <rect x="3" y="8" width="13" height="13" rx="3" fill="rgb(var(--ds-main-blue-deep))" />
             </svg>
-          </RailBlueIcon>
-        </RailItem>
-        <RailItem label="검색" onClick={onExpandToSearch}>
-          <span className="flex h-6 w-6 items-center justify-center text-main-blue" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m21 21-4.3-4.3" />
+          </RailItem>
+          <RailItem label="검색" onClick={onExpandToSearch}>
+            {/* 돋보기 + 내부 플러스(줌 인) */}
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgb(var(--ds-main-blue-light))" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m20.5 20.5-5.3-5.3" />
+              <path d="M10.5 8.2v4.6M8.2 10.5h4.6" />
             </svg>
-          </span>
-        </RailItem>
-        <RailItem label="프로젝트" onClick={onExpand}>
-          <RailBlueIcon>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
-              <rect x="4" y="12" width="3.5" height="8" rx="1" />
-              <rect x="10.25" y="6.5" width="3.5" height="13.5" rx="1" />
-              <rect x="16.5" y="9.5" width="3.5" height="10.5" rx="1" />
+          </RailItem>
+          <RailItem label="프로젝트" onClick={onExpand}>
+            {/* 막대 차트 + 우상단 플러스 */}
+            <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+              <g fill="rgb(var(--ds-main-blue))">
+                <rect x="3" y="13" width="4" height="8" rx="1.5" />
+                <rect x="9.5" y="8" width="4" height="13" rx="1.5" />
+                <rect x="16" y="13" width="4" height="8" rx="1.5" />
+              </g>
+              <path d="M19.2 2.2v5.6M16.4 5h5.6" stroke="rgb(var(--ds-main-blue))" strokeWidth="1.8" strokeLinecap="round" fill="none" />
             </svg>
-          </RailBlueIcon>
-        </RailItem>
+          </RailItem>
+        </div>
+
+        <div className="flex-1" />
+
+        <ProfileRow collapsed />
       </div>
 
-      <div className="flex-1" />
-
-      {/* hover 시 펼치기 핸들 + 툴팁 (X4 "레일 hover (펼치기 핸들)") */}
-      {hovered && (
-        <>
-          <button
-            type="button"
-            onClick={onExpand}
-            className="absolute top-[86px] -right-3 z-50 flex h-7 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-gray-700 bg-background text-[12px] text-main-blue shadow-md hover:bg-surface"
-            title="사이드바 펼치기 ⌘\"
-          >
-            ›
-          </button>
-          <span className="absolute top-[86px] left-full z-50 ml-4 -translate-y-1/2 whitespace-nowrap rounded-[6px] bg-foreground px-2 py-1 text-[11px] text-background shadow-md">
-            사이드바 펼치기
-          </span>
-        </>
+      {/* hover 위치 추종 펼치기 필 (X4) */}
+      {hoverY !== null && (
+        <HoverTogglePill
+          y={hoverY}
+          chevron="›"
+          label="사이드바 펼치기"
+          onActivate={onExpand}
+        />
       )}
+    </div>
+  );
+}
 
-      <ProfileRow collapsed />
+/** 펼친 사이드바 우측 경계의 hover 감지 띠 — hover 위치에 접기 필을 띄운다.
+ *  상시 토글 버튼(«)을 대체한다. 띠는 경계에 반씩 걸쳐 트리 스크롤 영역 가림을 최소화. */
+function CollapseEdgeStrip({ onCollapse }: { onCollapse: () => void }) {
+  const [hoverY, setHoverY] = useState<number | null>(null);
+
+  return (
+    <div
+      className="absolute inset-y-0 -right-[5px] z-50 w-[10px]"
+      onMouseLeave={() => setHoverY(null)}
+    >
+      <div
+        className="h-full w-full"
+        onMouseMove={(e) => setHoverY(clampHoverY(e.clientY))}
+      />
+      {hoverY !== null && (
+        <HoverTogglePill
+          y={hoverY}
+          chevron="‹"
+          label="사이드바 접기"
+          onActivate={onCollapse}
+        />
+      )}
     </div>
   );
 }
@@ -1161,17 +1239,9 @@ export default function Sidebar({
         <>
           {/* 헤더 (X1·X6): On:Node 로고 행 + 워크스페이스 스위처 행 */}
           <div className="shrink-0 px-3 pt-3">
-            <div className="flex items-center justify-between pb-2">
+            {/* 접기는 우측 경계 hover 필(CollapseEdgeStrip)·⌘\ 로 — 상시 버튼 없음 */}
+            <div className="pb-2">
               <OnNodeLogo />
-              <button
-                type="button"
-                onClick={onToggle}
-                aria-label="사이드바 접기"
-                title="사이드바 접기 ⌘\"
-                className="shrink-0 px-1 text-[14px] text-gray-500 hover:text-foreground"
-              >
-                «
-              </button>
             </div>
             <div className="relative">
               <button
@@ -1229,6 +1299,8 @@ export default function Sidebar({
           />
 
           <ProfileRow />
+
+          <CollapseEdgeStrip onCollapse={onToggle} />
         </>
       ) : (
         <CollapsedRail
