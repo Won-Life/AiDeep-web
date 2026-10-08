@@ -21,21 +21,27 @@ describe("normalizeMeetingTarget", () => {
   });
 
   it("uses the chosen platform when creating a request", () => {
-    expect(createMeetingBotRequest("123-4567-8901", "w1", "ZOOM")).toEqual({
+    expect(createMeetingBotRequest("123-4567-8901", "w1", "n1", "ZOOM")).toEqual({
       url: "https://zoom.us/j/12345678901",
       type: "ZOOM",
       workspaceId: "w1",
+      nodeId: "n1",
     });
-    expect(() => createMeetingBotRequest("zoom.us/j/123456789", "w1", "GOOGLE_MEET")).toThrow();
+    expect(() => createMeetingBotRequest("zoom.us/j/123456789", "w1", "n1", "GOOGLE_MEET")).toThrow();
+  });
+
+  it("requires the node the bot is attached to", () => {
+    expect(() => createMeetingBotRequest("https://zoom.us/j/123456789", "w1", "")).toThrow();
   });
 });
 
 describe("createMeetingBotRequest", () => {
   it("pairs the entered meeting URL with the active workspace ID", () => {
-    expect(createMeetingBotRequest("  https://zoom.us/j/123456789  ", "workspace-123")).toEqual({
+    expect(createMeetingBotRequest("  https://zoom.us/j/123456789  ", "workspace-123", "node-1")).toEqual({
       url: "https://zoom.us/j/123456789",
       type: "ZOOM",
       workspaceId: "workspace-123",
+      nodeId: "node-1",
     });
   });
 
@@ -49,6 +55,6 @@ describe("createMeetingBotRequest", () => {
     expect(getMeetingPlatformFromUrl("https://zoom.us.evil.example/j/123")).toBeNull();
     expect(getMeetingPlatformFromUrl("http://meet.google.com/abc-defg-hij")).toBeNull();
     expect(getMeetingPlatformFromUrl("https://example.com/meeting")).toBeNull();
-    expect(() => createMeetingBotRequest("https://example.com/meeting", "workspace-123")).toThrow();
+    expect(() => createMeetingBotRequest("https://example.com/meeting", "workspace-123", "node-1")).toThrow();
   });
 });
