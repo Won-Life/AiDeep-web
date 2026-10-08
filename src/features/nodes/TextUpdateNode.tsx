@@ -62,10 +62,11 @@ export type NodeView = {
   workspaceId?: string; // 전체화면 이동 시 query param으로 사용
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
   isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
+  isDraft?: boolean;
   isRenaming?: boolean; // 인라인 이름 편집 중(G5·G7 "이름 바꾸기")
   onStartRename?: (nodeId: string) => void; // 인라인 이름 편집 시작
   onFinishRename?: (nodeId: string) => void; // 인라인 이름 편집 종료
-  onAddChild?: (nodeId: string) => void; // G4·C1 hover "+" 자식 노드 추가
+  onAddChild?: (nodeId: string, side?: 'left' | 'right') => void; // G4·C1 hover "+" 자식 노드 추가
   collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
   onDeleteNode?: (nodeId: string) => void; // 노드 삭제 (확인 모달 경유)
@@ -94,6 +95,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
 
   const [isNodeHovered, setIsNodeHovered] = useState(false);
+  const [hoverSide, setHoverSide] = useState<'left' | 'right'>('right');
   // 콘텐츠 배너 SVG를 노드 실제 px 크기에 맞춰 그리기 위한 측정
   const contentBoxRef = useRef<HTMLDivElement>(null);
   const [contentSize, setContentSize] = useState({ w: 0, h: 0 });
@@ -116,19 +118,20 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const sideRelativeToParent = (nodeData.handleSide ?? 'right') as
     | 'left'
     | 'right';
+  const addSide = isMain ? hoverSide : sideRelativeToParent;
   const sourceHandlePosition =
     sideRelativeToParent === 'left' ? Position.Left : Position.Right;
   const viewers = (nodeData.viewers ?? []) as NodeViewer[];
   const isHovered = nodeData.isHovered ?? false;
 
   // 플레이스홀더는 온보딩·사용법과 동일한 "주제" 어휘로 통일 (#204 용어 정리)
-  const PLACEHOLDER = isMain ? '중심 주제' : '서브 주제';
+  const PLACEHOLDER = isMain ? '중심 주제' : isTitle ? '타이틀 이름 입력' : '콘텐츠 이름 입력';
 
   const label = nodeData.title || '';
   const isEmpty = label === '';
   const isRenaming = nodeData.isRenaming ?? false;
   // 채워진 글자색(인라인 input·비어있지 않은 라벨 공용): 타이틀은 Deep 대비색, 그 외는 계열색
-  const filledTextColor = isTitle
+  const filledTextColor = isMain ? '#363636' : nodeData.isDraft ? (nodeData.textColor || '#4B4B4B') : isTitle
     ? (titleTextOnDeep(fig?.deep) ??
       nodeData.textColor ??
       'rgb(var(--foreground))')
@@ -137,7 +140,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
   const containerClasses = isMain
-    ? 'text-updater-node rounded-[16px]'
+    ? 'text-updater-node rounded-[14px]'
     : isContent
       ? 'text-updater-node' // 모양은 아래 clip-path 배경 레이어가 그린다(오른쪽 뾰족 배너)
       : 'text-updater-node rounded-full';
@@ -178,11 +181,12 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   // 콘텐츠 노드 = 자식(엣지가 나가는) 방향으로 뾰족한 배너. 모양은 SVG path로 그리고
   // 컨테이너는 투명 유지 → 핸들(컨테이너 직속)이 안 잘린다(React Flow #008 회피).
   const pointRight = sideRelativeToParent === 'right';
-  const contentFill = fig?.light ?? nodeData.color ?? 'rgb(var(--ds-sub-gray))';
+  const baseContentFill = fig?.light ?? nodeData.color ?? 'rgb(var(--ds-sub-gray))';
+  const contentFill = nodeData.isDraft ? `color-mix(in srgb, ${baseContentFill} 55%, white)` : baseContentFill;
   const contentRing = isHovered
     ? '#93C5FD'
     : selected
-      ? 'rgb(var(--ds-main))'
+      ? 'var(--onnode-selection)'
       : (viewerBorderColor ?? '#ffffff');
 
   // main 노드 기본 테두리는 자기 그래프 색 — 흰 배경 유지 규칙 안에서 소속 그래프를 드러낸다.
@@ -197,11 +201,11 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         // 소속 그래프를 드러낸다 → 기존 '색 테두리'를 폴더 탭(mainOwnBorderColor)으로 대체,
         // 기본 테두리 없음. hover/selected/viewer만 테두리로 표시.
         backgroundColor: MAIN_NODE_COLOR.bg,
-        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0 3px 4px rgba(53, 62, 112, 0.24)',
         border: isHovered
           ? '2px solid #93C5FD'
           : selected
-            ? '2px solid rgb(var(--ds-main))'
+            ? '2px solid var(--onnode-selection)'
             : viewerBorderColor
               ? `2px solid ${viewerBorderColor}`
               : 'none',
@@ -217,13 +221,13 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           // 타이틀 노드(main 직계 자손): Node Deep fill + 흰 테두리 4px + 소프트 섀도 + 흰 꽁다리(아래).
           // 글자는 어두운 Deep(파랑)만 흰색, 밝은 Deep은 계열 어두운색. (Figma 08 실측)
           backgroundColor:
-            fig?.deep ??
+            (nodeData.isDraft ? fig?.light : fig?.deep) ??
             `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
           boxShadow: '0 4px 14px rgba(0, 0, 0, 0.10)',
           border: isHovered
             ? '4px solid #93C5FD'
             : selected
-              ? '4px solid rgb(var(--ds-main))'
+              ? '4px solid var(--onnode-selection)'
               : viewerBorderColor
                 ? `4px solid ${viewerBorderColor}`
                 : '4px solid #ffffff',
@@ -333,10 +337,11 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           zIndex: 40,
           // 타이틀(main 직계 자손)은 사진처럼 넓은 pill — 짧은 제목도 넓게, 더 길면 확장(최대 300)
           maxWidth: isTitle ? '300px' : '200px',
-          minWidth: isTitle ? '200px' : `${PLACEHOLDER.length}em`,
+          minWidth: isMain ? '200px' : isTitle ? '200px' : `${PLACEHOLDER.length}em`,
+          minHeight: isMain ? 140 : undefined,
           // 콘텐츠는 뾰족한 쪽에 여유 패딩(글자가 점에 안 겹치게)
           padding: isMain
-            ? '26px 36px'
+            ? '48px 24px'
             : isContent
               ? pointRight
                 ? '6px 24px 6px 14px'
@@ -344,8 +349,29 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               : '6px 12px',
         }}
         onMouseEnter={() => setIsNodeHovered(true)}
+        onMouseMove={(event) => {
+          if (!isMain) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          setHoverSide(event.clientX < rect.left + rect.width / 2 ? 'left' : 'right');
+        }}
         onMouseLeave={() => setIsNodeHovered(false)}
       >
+        {/*
+          CONTEXT
+          - Problem      : 프로젝트의 양쪽 추가 방향을 하나의 hover 버튼으로 구분할 수 없다.
+          - Why          : 포인터가 위치한 절반을 강조하고 해당 방향으로 생성 요청을 전달한다.
+          - Alternatives : 양쪽 버튼 상시 노출은 시안보다 캔버스 조작 요소가 많아진다.
+          - Trade-offs   : 절반 강조는 프로젝트에만 적용하며 기존 타이틀 생성은 유지한다.
+          - Edge Case    : 버튼으로 이동해도 마지막 hover 방향을 유지한다.
+        */}
+        {isMain && isNodeHovered && (
+          <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[14px]" style={{
+            border: '3px solid #C4CCFF', overflow: 'hidden', zIndex: -1,
+          }}>
+            <div style={{ position: 'absolute', top: 0, bottom: 0,
+              [hoverSide]: 0, width: '50%', backgroundColor: '#EAEDFF' }} />
+          </div>
+        )}
         {/* 콘텐츠 노드 뾰족 배너 — SVG path를 연한 fill + 흰색 uniform stroke로 그린다.
             stroke는 어느 변에서도 두께가 균일(점 쪽도). 핸들은 컨테이너 직속이라 안 잘린다. */}
         {isContent && contentSize.w > 0 && (
@@ -369,23 +395,40 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             />
           </svg>
         )}
-        {/* 좌상단 폴더 탭(꽁다리) — 프로젝트는 Deep색, 타이틀은 흰색(흰 테두리와 연결). (Figma 08) */}
-        {(isMain || isTitle) && (
+        {/*
+          CONTEXT
+          - Problem      : 프로젝트 탭이 단색 돌출부라 참고 이미지의 흰 폴더 외곽이 없다.
+          - Why          : 흰 외곽과 색상 탭을 겹쳐 기존 카드와 하나의 폴더로 보이게 한다.
+          - Alternatives : 이미지 배경은 제목 길이와 그래프 색상 변화에 대응하기 어렵다.
+          - Trade-offs   : 카드 밖 탭은 시각 장식이며 연결 핸들은 카드 중심을 유지한다.
+          - Edge Case    : 선택·협업 강조는 탭에도 반영하고 긴 제목은 기존 두 줄 제한을 유지한다.
+        */}
+        {isMain && (
           <div
             aria-hidden
-            className="absolute"
+            className="absolute pointer-events-none"
             style={{
-              // 꽁다리는 노드 길이와 무관한 고정 크기. 타이틀은 프로젝트보다 작게.
-              top: isMain ? -22 : -14,
-              left: isMain ? 20 : 22,
-              width: isMain ? 56 : 38,
-              height: isMain ? 22 : 14,
-              backgroundColor: isMain
-                ? (fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR)
-                : '#ffffff',
-              borderRadius: '8px 8px 0 0',
+              top: -12, left: 0, width: 74, height: 28,
+              backgroundColor: MAIN_NODE_COLOR.bg,
+              borderRadius: '18px 18px 0 0',
+              outline: isHovered ? '2px solid #93C5FD' : selected
+                ? '2px solid var(--onnode-selection)' : viewerBorderColor
+                  ? `2px solid ${viewerBorderColor}` : undefined,
+              zIndex: -1,
             }}
-          />
+          >
+            <div style={{
+              position: 'absolute', top: 5, left: 7, width: 59, height: 16,
+              borderRadius: '12px 12px 0 0',
+              backgroundColor: fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR,
+            }} />
+          </div>
+        )}
+        {isTitle && (
+          <div aria-hidden className="absolute" style={{
+            top: -14, left: 22, width: 38, height: 14,
+            backgroundColor: '#ffffff', borderRadius: '8px 8px 0 0',
+          }} />
         )}
         {isRenaming ? (
           // 인라인 이름 편집(G5·G7) — input onChange가 handleTitleChange로 즉시+디바운스 저장,
@@ -393,6 +436,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           <input
             autoFocus
             defaultValue={label}
+            placeholder={PLACEHOLDER}
             onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => nodeData.onChange?.(id, e.currentTarget.value)}
             onBlur={() => nodeData.onFinishRename?.(id)}
@@ -407,7 +451,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             style={{
               color: filledTextColor,
               fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
-              fontSize: isMain ? '20px' : undefined,
+              fontSize: isMain ? '30px' : undefined,
               lineHeight: '1.4em',
             }}
           />
@@ -419,7 +463,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               // 콘텐츠/프로젝트: 계열 어두운색(--ds-text-*). (Figma 08 실측)
               color: isEmpty ? 'rgb(var(--ds-gray-500))' : filledTextColor,
               fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
-              fontSize: isMain ? '20px' : undefined,
+              fontSize: isMain ? '30px' : undefined,
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
@@ -437,7 +481,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           <div
             className="nodrag absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5"
             style={{
-              ...(sideRelativeToParent === 'left'
+              ...(addSide === 'left'
                 ? {
                     right: '100%',
                     paddingRight: 10,
@@ -452,7 +496,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               aria-label="자식 노드 추가"
               onClick={(event) => {
                 event.stopPropagation();
-                nodeData.onAddChild?.(id);
+                nodeData.onAddChild?.(id, addSide);
               }}
               className="flex items-center justify-center rounded-full text-white shadow-sm transition-opacity hover:opacity-90"
               style={{ width: 22, height: 22, backgroundColor: '#748DFD' }}

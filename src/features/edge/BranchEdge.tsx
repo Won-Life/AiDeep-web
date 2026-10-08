@@ -34,7 +34,7 @@ export function BranchEdge(props: EdgeProps) {
         id={id}
         path={mergedPath}
         markerEnd={markerEnd}
-        style={{ stroke: "#727272", strokeWidth: 2 }}
+        style={{ stroke: "#727272", strokeWidth: 2, ...props.style }}
       />
     </>
   );

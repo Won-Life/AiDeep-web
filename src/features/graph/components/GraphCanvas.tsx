@@ -11,7 +11,6 @@ import {
 } from 'react';
 import {
   ReactFlow,
-  MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
   type NodeChange,
@@ -29,7 +28,7 @@ import {
   type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import ZoomControl from '@/components/ui/ZoomControl';
+import GraphMiniMap from './GraphMiniMap';
 import HelpMenu from '@/components/ui/HelpMenu';
 import GraphOnboardingModal, {
   useGraphOnboardingSeen,
@@ -316,6 +315,7 @@ function GraphCanvasInner({
     null,
   );
   // 인라인 이름 편집(G5·G7 "이름 바꾸기") 중인 노드 — 해당 노드 제목이 input으로 전환
+  const [draftNodeId, setDraftNodeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isArchiveDeleting, setIsArchiveDeleting] = useState(false);
@@ -635,19 +635,24 @@ function GraphCanvasInner({
     setRenamingNodeId(nodeId);
     setContextMenuNodeId(null);
   }, []);
-  const handleFinishRename = useCallback(() => setRenamingNodeId(null), []);
+  const handleFinishRename = useCallback(() => {
+    setRenamingNodeId(null);
+    setDraftNodeId(null);
+  }, []);
 
   // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 빈 자식 노드 생성 + 엣지 + 색 상속 후
   // 바로 인라인 이름 편집(G5). onConnectEnd(핸들 드래그 생성)과 동일한 생성 규칙을 노드 기준으로
   // 재사용한다. 겹침 bail 없이 source 높이에 놓고 D3 rectCollide가 분리하도록 맡긴다.
   const handleAddChild = useCallback(
-    async (parentId: string) => {
+    async (parentId: string, requestedSide?: 'left' | 'right') => {
       const sourceNode = nodes.find((n) => n.id === parentId);
       if (!sourceNode) return;
 
       const forced = getForcedOutboundSideForSubNode(sourceNode, nodes, edges);
       let side: 'left' | 'right';
-      if (forced) {
+      if (sourceNode.data.isMain && requestedSide) {
+        side = requestedSide;
+      } else if (forced) {
         side = forced;
       } else {
         const parentOfSource = getParentId(sourceNode.id, edges);
@@ -893,6 +898,7 @@ function GraphCanvasInner({
         dockIndex: isEditorOpen ? myOpenEditorNodeIds.indexOf(node.id) : undefined, // C3/C4 우측 도크 순번
         editorBreadcrumb, // 도크 헤더 경로
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
+        isDraft: draftNodeId === node.id,
         isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
         onStartRename: handleStartRename,
         onFinishRename: handleFinishRename,
@@ -1096,12 +1102,13 @@ function GraphCanvasInner({
     () =>
       edges.map((edge) => ({
         ...buildEdgePresentation(edge, nodes, edges),
+        style: { ...edge.style, strokeDasharray: edge.target === draftNodeId ? '4 4' : edge.style?.strokeDasharray },
         // 양 끝 중 하나라도 숨겨진 노드면 엣지도 숨김
         hidden:
           collapseState.hiddenIds.has(edge.source) ||
           collapseState.hiddenIds.has(edge.target),
       })),
-    [nodes, edges, collapseState],
+    [nodes, edges, collapseState, draftNodeId],
   );
 
   const onEdgesChange = useCallback(
@@ -1663,6 +1670,9 @@ function GraphCanvasInner({
               textColor: colorPair.text,
             },
           );
+
+          setDraftNodeId(nodeId);
+          setRenamingNodeId(nodeId);
 
           // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
           // 본인 생성 노드의 WS 이벤트는 무시되므로 REST 응답이 항상 최초 삽입.
@@ -2937,40 +2947,13 @@ function GraphCanvasInner({
         connectionLineType={ConnectionLineType.SmoothStep}
         proOptions={{ hideAttribution: true }}
       >
-        {/* Figma 08(G1) 우하단 미니맵 — 라운드 카드. 줌 컨트롤 위에 오도록 bottom 오프셋.
-            노드 색은 프로젝트=흰색, 그 외=그래프 색으로 실제 그래프와 동일하게 표시 */}
-        <MiniMap
-          position="bottom-right"
-          pannable
-          zoomable
-          nodeColor={(n) =>
-            (n.data as { isMain?: boolean; color?: string })?.isMain
-              ? '#ffffff'
-              : ((n.data as { color?: string })?.color ?? '#E5E5E5')
-          }
-          nodeStrokeColor="#D9D9D9"
-          nodeBorderRadius={6}
-          maskColor="rgba(240, 242, 248, 0.6)"
-          bgColor="#ffffff"
-          style={{
-            width: 220,
-            height: 148,
-            bottom: 52,
-            right: 12,
-            margin: 0,
-            borderRadius: 12,
-            border: '1px solid rgb(var(--ds-gray-800))',
-            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
-            overflow: 'hidden',
-          }}
-        />
+        <GraphMiniMap />
       </ReactFlow>
       {!savedViewport && <InitialViewport mainNodeId={mainNodeId} />}
       {onFirstPaint && (
         <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
       )}
       <CursorOverlay cursors={cursors} />
-      <ZoomControl />
       {/* 빈 캔버스 empty state (G2) — 프로젝트 노드부터 만들도록 첫 행동을 안내하고,
           프로젝트 → 타이틀 → 회의 녹음으로 이어지는 핵심 흐름을 단계로 보여준다 */}
       {nodes.length === 0 && (

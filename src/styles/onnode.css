@@ -13,6 +13,7 @@
   --onnode-neutral-600: #727272; --onnode-neutral-700: #4d4d4d;
   --onnode-neutral-800: #383838; --onnode-neutral-900: #111;
   --onnode-primary: var(--onnode-primary-400);
+  --onnode-selection: #4597f7; /* 노드 선택 테두리 — Figma 08 하늘색 (primary 계열과 별도 hue) */
   --onnode-secondary: var(--onnode-secondary-500);
   --onnode-surface: var(--onnode-neutral-white);
   --onnode-surface-subtle: var(--onnode-neutral-100);
