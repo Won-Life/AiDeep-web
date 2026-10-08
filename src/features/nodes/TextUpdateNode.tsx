@@ -309,6 +309,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         <NodeEditorPanel
           nodeId={id}
           handleSide={sideRelativeToParent}
+          workspaceId={nodeData.workspaceId}
           dockIndex={nodeData.dockIndex}
           title={label}
           breadcrumb={nodeData.editorBreadcrumb}
