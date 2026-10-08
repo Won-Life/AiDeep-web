@@ -13,6 +13,7 @@ export type MeetingBotRequest = {
   url: string;
   type: MeetingBotPlatform;
   workspaceId: string;
+  nodeId: string;
 };
 
 export function getMeetingPlatformFromUrl(value: string): MeetingBotPlatform | null {
@@ -47,10 +48,11 @@ export function normalizeMeetingTarget(input: string, platform: MeetingBotPlatfo
 export function createMeetingBotRequest(
   input: string,
   workspaceId: string,
+  nodeId: string,
   platform?: MeetingBotPlatform,
 ): MeetingBotRequest {
   const type = platform ?? getMeetingPlatformFromUrl(input);
   const url = type ? normalizeMeetingTarget(input, type) : null;
-  if (!type || !url) throw new Error("Unsupported meeting URL");
-  return { url, type, workspaceId };
+  if (!type || !url || !nodeId) throw new Error("Unsupported meeting request");
+  return { url, type, workspaceId, nodeId };
 }

@@ -27,8 +27,9 @@ function Dot({ color }: { color: string }) {
 const PRIMARY_BUTTON =
   "h-[46px] w-full rounded-[10px] bg-[var(--meeting-primary)] text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)]";
 
-export function MeetingBotStatusActions({ view, onRetry, onEditLink, onViewGraph }: {
+export function MeetingBotStatusActions({ view, failureMessage, onRetry, onEditLink, onViewGraph }: {
   view: Exclude<MeetingBotView, "form" | "limit">;
+  failureMessage?: string;
   onRetry: () => void;
   onEditLink: () => void;
   onViewGraph: () => void;
@@ -67,7 +68,7 @@ export function MeetingBotStatusActions({ view, onRetry, onEditLink, onViewGraph
         <Dot color="var(--meeting-error)" />봇이 회의에 입장하지 못했어요
       </p>
       <p className="mt-2 text-center text-[11px] text-[var(--meeting-muted)]/80">
-        호스트가 입장을 승인하지 않았거나, 회의가 아직 시작되지 않았을 수 있어요
+        {failureMessage || "호스트가 입장을 승인하지 않았거나, 회의가 아직 시작되지 않았을 수 있어요"}
       </p>
       <button type="button" onClick={onRetry} className={`${PRIMARY_BUTTON} mt-4`}>다시 시도</button>
       <div className="mt-4 text-center">

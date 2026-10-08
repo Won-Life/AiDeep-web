@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import { ApiError } from "@/api/types";
 import MeetingBotStatusBadge, { type MeetingBotStatus } from "./MeetingBotStatusBadge";
-import MeetingBotToast, { type MeetingBotToastKind } from "./MeetingBotToast";
+import MeetingBotTargetField from "./MeetingBotTargetField";
 import { MeetingBotLimitPanel, MeetingBotStatusActions, getMeetingBotView, type MeetingBotView } from "./MeetingBotStatusView";
 import { createMeetingBotRequest, normalizeMeetingTarget, type MeetingBotPlatform, type MeetingBotRequest } from "./meetingBotRequest";
+import type { MeetingTarget } from "./meetingTargets";
 import "./meeting-bot.css";
 
 /*
@@ -13,9 +15,11 @@ import "./meeting-bot.css";
  * - Problem      : 주력 기능인 회의 봇을 그래프에서 바로 발견하고 회의 링크 하나로 요청하는 화면이 필요하다.
  * - Why          : 그래프 위 버튼과 집중형 모달을 도메인 컴포넌트로 묶는다.
  * - Alternatives : 도구 메뉴 안에만 두면 주 진입점이 숨고, 별도 페이지는 그래프 맥락을 잃는다.
- * - Trade-offs   : 요청 알림은 내부 상태로 관리하고, 지속되는 봇 상태는 외부에서 전달받는다.
- * - Edge Case    : 무효한 URL, Escape/배경 닫기, 다른 모달 위 겹침, 화면이 좁은 경우를 처리한다.
+ * - Trade-offs   : 서버는 입장 결과를 조회할 수 없어 요청 직후엔 "입장 중"까지만 보이고 이후 상태는 외부 status로 받는다.
+ * - Edge Case    : 무효한 URL, Escape/배경 닫기, 같은 링크의 진행 중인 봇(MEETING-007), 추가할 타이틀 없음.
  */
+
+const DUPLICATE_BOT_CODE = "MEETING-007";
 
 const PLATFORM_COPY: Record<MeetingBotPlatform, { label: string; field: string; placeholder: string; error: string }> = {
   ZOOM: {
@@ -86,13 +90,16 @@ function keepTabInsideDialog(event: KeyboardEvent, dialog: HTMLElement | null) {
   target.focus();
 }
 
-function MeetingBotAddModal({ view, onClose, onRequest, onEditLink, onViewGraph }: {
+function MeetingBotAddModal({ view, target, failureMessage, onClose, onRequest, onEditLink, onViewGraph }: {
   view: MeetingBotView;
+  target: MeetingTarget | null;
+  failureMessage: string;
   onClose: () => void;
-  onRequest: (meetingTarget: string, platform: MeetingBotPlatform) => Promise<boolean>;
+  onRequest: (meetingTarget: string, platform: MeetingBotPlatform, nodeId: string) => Promise<string | null>;
   onEditLink: () => void;
   onViewGraph: () => void;
 }) {
+  const activeTargetId = target?.id ?? "";
   const [platform, setPlatform] = useState<MeetingBotPlatform>("ZOOM");
   const [meetingUrl, setMeetingUrl] = useState("");
   const [error, setError] = useState("");
@@ -128,16 +135,20 @@ function MeetingBotAddModal({ view, onClose, onRequest, onEditLink, onViewGraph 
       inputRef.current?.focus();
       return;
     }
+    if (!activeTargetId) return;
     setIsSubmitting(true);
-    const accepted = await onRequest(value, platform);
+    const message = await onRequest(value, platform, activeTargetId);
     setIsSubmitting(false);
-    if (accepted) onClose();
+    if (message) setError(message);
   }
 
   function handleRetry() {
     const value = meetingUrl.trim();
-    if (normalizeMeetingTarget(value, platform)) void onRequest(value, platform);
-    else onEditLink();
+    if (!normalizeMeetingTarget(value, platform) || !activeTargetId) {
+      onEditLink();
+      return;
+    }
+    void onRequest(value, platform, activeTargetId).then((message) => { if (message) setError(message); });
   }
 
   const copy = PLATFORM_COPY[platform];
@@ -171,7 +182,8 @@ function MeetingBotAddModal({ view, onClose, onRequest, onEditLink, onViewGraph 
         <p className="mt-2 text-center text-[13px] leading-5 text-[var(--meeting-muted)]">
           봇을 시작하면 회의를 녹음하고 자동으로 노드를 만들어드려요
         </p>
-        <form onSubmit={handleSubmit} noValidate className="mt-6">
+        <MeetingBotTargetField target={target} />
+        <form onSubmit={handleSubmit} noValidate className="mt-5">
           <div role="radiogroup" aria-label="플랫폼" className="grid grid-cols-2 gap-3">
             {(Object.keys(PLATFORM_COPY) as MeetingBotPlatform[]).map((value) => (
               <button
@@ -222,7 +234,7 @@ function MeetingBotAddModal({ view, onClose, onRequest, onEditLink, onViewGraph 
             <>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !target}
                 className="mt-6 h-[46px] w-full rounded-[10px] bg-[var(--meeting-primary)] text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)] disabled:cursor-wait disabled:opacity-60"
               >
                 {isSubmitting ? "요청 중..." : "회의 봇 추가하기"}
@@ -232,7 +244,7 @@ function MeetingBotAddModal({ view, onClose, onRequest, onEditLink, onViewGraph 
               </p>
             </>
           ) : (
-            <MeetingBotStatusActions view={view} onRetry={handleRetry} onEditLink={onEditLink} onViewGraph={onViewGraph} />
+            <MeetingBotStatusActions view={view} failureMessage={failureMessage} onRetry={handleRetry} onEditLink={onEditLink} onViewGraph={onViewGraph} />
           )}
         </form>
         </>)}
@@ -242,38 +254,36 @@ function MeetingBotAddModal({ view, onClose, onRequest, onEditLink, onViewGraph 
   );
 }
 
-export default function MeetingBotWidget({ workspaceId, status = null, limitReached = false, requestMeetingBot, onViewGraph }: {
+export default function MeetingBotWidget({ workspaceId, target, status = null, limitReached = false, requestMeetingBot, onViewGraph }: {
   workspaceId: string;
+  target: MeetingTarget | null;
   status?: MeetingBotStatus | null;
   limitReached?: boolean;
-  requestMeetingBot?: (request: MeetingBotRequest) => Promise<void>;
+  requestMeetingBot: (request: MeetingBotRequest) => Promise<unknown>;
   onViewGraph?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [requestPhase, setRequestPhase] = useState<"joining" | "failed" | null>(null);
+  const [failureMessage, setFailureMessage] = useState("");
   const [editedKey, setEditedKey] = useState<string | null>(null);
-  const viewKey = `${status}-${limitReached}`;
-  const view: MeetingBotView = editedKey === viewKey ? "form" : getMeetingBotView(status, limitReached);
-  const [toast, setToast] = useState<MeetingBotToastKind | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  const viewKey = `${status}-${limitReached}-${requestPhase}`;
+  const externalView = getMeetingBotView(status, limitReached);
+  const requestView: MeetingBotView = requestPhase ?? "form";
+  const view: MeetingBotView = editedKey === viewKey ? "form" : externalView !== "form" ? externalView : requestView;
 
   const closeModal = useCallback(() => setIsOpen(false), []);
-  const handleRequest = useCallback(async (meetingTarget: string, platform: MeetingBotPlatform) => {
-    if (!requestMeetingBot) {
-      setToast("pending");
-      return true;
-    }
+  const handleRequest = useCallback(async (meetingTarget: string, platform: MeetingBotPlatform, nodeId: string) => {
+    setRequestPhase(null);
+    setEditedKey(null);
     try {
-      await requestMeetingBot(createMeetingBotRequest(meetingTarget, workspaceId, platform));
-      setToast("success");
-      return true;
-    } catch {
-      setToast("error");
-      return false;
+      await requestMeetingBot(createMeetingBotRequest(meetingTarget, workspaceId, nodeId, platform));
+      setRequestPhase("joining");
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.errorCode === DUPLICATE_BOT_CODE) return error.reason;
+      setFailureMessage(error instanceof ApiError ? error.reason : "회의 봇 요청을 보내지 못했어요. 다시 시도해주세요.");
+      setRequestPhase("failed");
+      return null;
     }
   }, [requestMeetingBot, workspaceId]);
 
@@ -283,7 +293,7 @@ export default function MeetingBotWidget({ workspaceId, status = null, limitReac
         {status ? <MeetingBotStatusBadge status={status} /> : null}
         <button
           type="button"
-          onClick={() => { setToast(null); setIsOpen(true); }}
+          onClick={() => { setRequestPhase(null); setEditedKey(null); setIsOpen(true); }}
           aria-label="회의 봇 추가"
           className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-[var(--meeting-error)] bg-[var(--meeting-error-surface)] px-4 py-2 text-xs font-semibold text-[var(--meeting-ink)] shadow-md transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-error)]"
         >
@@ -294,10 +304,11 @@ export default function MeetingBotWidget({ workspaceId, status = null, limitReac
           회의 녹음 시작
         </button>
       </div>
-      {toast ? <MeetingBotToast kind={toast} onClose={() => setToast(null)} /> : null}
       {isOpen ? (
         <MeetingBotAddModal
           view={view}
+          target={target}
+          failureMessage={failureMessage}
           onClose={closeModal}
           onRequest={handleRequest}
           onEditLink={() => setEditedKey(viewKey)}
