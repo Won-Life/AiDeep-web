@@ -135,10 +135,8 @@ export function useEmailVerification() {
       );
       if (
         error instanceof ApiError &&
-        [
-          'AUTH_VERIFICATION_CODE_EXPIRED',
-          'AUTH_VERIFICATION_ATTEMPTS_EXCEEDED',
-        ].includes(error.errorCode)
+        // Spring: AUTH-003 인증번호 만료·없음, AUTH-004 인증 횟수 초과
+        ['AUTH-003', 'AUTH-004'].includes(error.errorCode)
       ) {
         setVerification(expireEmailVerification());
       }
