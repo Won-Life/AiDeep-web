@@ -29,7 +29,13 @@ export function BranchEdge(props: EdgeProps) {
 
   return (
     <>
-      <BaseEdge id={id} path={mergedPath} markerEnd={markerEnd} style={{ stroke: "rgb(var(--ds-gray-700))", strokeWidth: 1 }} />
+      {/* Figma 08 실측: 엣지선 #727272(진회색) 2px — 포트 링과 동일 색 */}
+      <BaseEdge
+        id={id}
+        path={mergedPath}
+        markerEnd={markerEnd}
+        style={{ stroke: "#727272", strokeWidth: 2 }}
+      />
     </>
   );
 }

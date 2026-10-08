@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { NotionEditor, ToolbarPlugin } from "./NotionEditor";
 import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 import { uploadFile } from "@/api/upload";
@@ -56,24 +57,32 @@ function AttachmentSection({
 }) {
   const imageRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // C4: 업로드 중 파일 — 완료 전까지 "업로드 중…" 칩으로 즉시 표시(기존엔 완료 후에야 나타남)
+  const [uploading, setUploading] = useState<{ id: string; name: string }[]>([]);
 
   const handleImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const id = generateId();
+    setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
       const { url } = await uploadFile(file);
       onAddImage(url);
     } catch { /* silent */ }
+    setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
   }, [onAddImage]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const id = generateId();
+    setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
       const { url, originalName, size } = await uploadFile(file);
       onAddFile(originalName, size, url);
     } catch { /* silent */ }
+    setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
   }, [onAddFile]);
 
@@ -82,7 +91,7 @@ function AttachmentSection({
       <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
       <input ref={fileRef} type="file" className="hidden" onChange={handleFileChange} />
 
-      {attachments.length > 0 && (
+      {(attachments.length > 0 || uploading.length > 0) && (
         <div className="px-3 pt-2 space-y-2">
           {attachments.map((att) =>
             att.type === "image" ? (
@@ -144,6 +153,23 @@ function AttachmentSection({
               </div>
             )
           )}
+          {/* C4: 업로드 중 파일 — 완료 전 "업로드 중…" 칩(흐린 상태, 배경 없음) */}
+          {uploading.map((u) => (
+            <div
+              key={u.id}
+              className="flex items-center gap-2.5 rounded-md"
+              style={{ padding: "9px 12px", opacity: 0.55 }}
+            >
+              <svg width="14" height="16" viewBox="0 0 15 18" fill="none">
+                <path d="M9 1H2C1.46957 1 0.960859 1.21071 0.585786 1.58579C0.210714 1.96086 0 2.46957 0 3V15C0 15.5304 0.210714 16.0391 0.585786 16.4142C0.960859 16.7893 1.46957 17 2 17H13C13.5304 17 14.0391 16.7893 14.4142 16.4142C14.7893 16.0391 15 15.5304 15 15V7L9 1Z" fill="rgb(var(--ds-gray-900))" stroke="rgb(var(--ds-gray-700))" strokeWidth="1" strokeLinejoin="round" />
+                <path d="M9 1V7H15" stroke="rgb(var(--ds-gray-700))" strokeWidth="1" strokeLinejoin="round" />
+              </svg>
+              <span className="flex-1 typo-cap2 text-foreground truncate">
+                {u.name}
+              </span>
+              <span className="text-[12px] text-muted shrink-0">업로드 중…</span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -181,6 +207,12 @@ interface NodeEditorPanelProps {
   nodeId: string;
   fullscreen?: boolean;
   inline?: boolean;
+  /** 우측 도크 모드(C3/C4) — 열린 패널들 중 이 패널의 순번(0부터). 넘기면 캔버스 우측에 도크된다. */
+  dockIndex?: number;
+  /** 도크 헤더 제목 — 노드명(첫 줄) */
+  title?: string;
+  /** 도크 헤더 경로 — "프로젝트 > 타이틀" */
+  breadcrumb?: string;
   updatedAt?: string;
   onExpandClick?: () => void;
   onClose?: () => void;
@@ -198,6 +230,9 @@ export function NodeEditorPanel({
   nodeId,
   fullscreen = false,
   inline = false,
+  dockIndex,
+  title,
+  breadcrumb,
   updatedAt,
   onExpandClick,
   onClose,
@@ -269,6 +304,112 @@ export function NodeEditorPanel({
   const handleRemove = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
+
+  // ── 우측 도크 모드 (C3/C4 — 콘텐츠 노드 클릭 → 캔버스 우측 내용 패널) ──────────
+  /*
+   * CONTEXT
+   * - Problem      : 기존 캔버스 패널은 노드에 붙어(absolute top:100%) 뜨는 작은 창이라,
+   *                  Figma C3/C4의 "우측 사이드바처럼 도크되는 내용 패널"과 달랐다.
+   * - Why          : React Flow 뷰포트는 transform이 걸려 있어 그 안에서 position:fixed가
+   *                  화면이 아니라 변환된 pane 기준이 된다. 그래서 createPortal로 패널을
+   *                  document.body로 빼내 진짜 화면 우측에 고정한다. provider·협업 배선은
+   *                  TextUpdateNode가 소유한 그대로 prop으로 받아 재사용 — 에디터 로직 불변.
+   * - Alternatives : 패널 내용(NotionEditor+AttachmentSection)을 인라인 모드가 이미 가지므로
+   *                  재사용. 별도 컴포넌트 신설은 provider·attachments 상태 중복이라 기각.
+   * - Trade-offs   : 여러 노드를 동시에 열면 dockIndex 순으로 좌측으로 타일링된다(C3는 1개
+   *                  기준). 화면이 좁으면 겹칠 수 있으나 다중 오픈은 드문 경로.
+   * - Edge Case    : SSR(document 없음) — 포털 전 가드. collabProvider null 시 로딩 표시.
+   */
+  if (typeof dockIndex === "number") {
+    if (typeof document === "undefined") return null;
+    const DOCK_WIDTH = 340;
+    return createPortal(
+      <div
+        className="fixed top-16 bottom-0 z-[100] flex w-[340px] flex-col border-l border-t border-gray-700 bg-background"
+        style={{ right: dockIndex * DOCK_WIDTH }}
+        // portal이지만 React 합성 이벤트는 React 트리(노드 컴포넌트)로 버블한다 — 막지 않으면
+        // 패널 클릭이 React Flow onNodeClick을 재발화해 방금 닫은 패널이 다시 열린다.
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          onFocus?.();
+        }}
+      >
+        {/* 헤더: 경로(프로젝트 > 타이틀) + 제목 + 확장/닫기 */}
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 pt-4 pb-3">
+          <div className="min-w-0 flex-1">
+            {breadcrumb && (
+              <p className="mb-0.5 truncate text-[11px] text-muted">{breadcrumb}</p>
+            )}
+            <h2 className="truncate text-[15px] font-bold text-foreground">
+              {title?.trim() || "제목 없음"}
+            </h2>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {onExpandClick && (
+              <button
+                type="button"
+                onClick={onExpandClick}
+                title="전체화면으로 보기"
+                className="flex h-[22px] w-[22px] items-center justify-center rounded text-muted transition-colors hover:bg-surface"
+              >
+                <ExpandIcon />
+              </button>
+            )}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                title="닫기"
+                className="flex h-[22px] w-[22px] items-center justify-center rounded text-muted transition-colors hover:bg-surface"
+              >
+                <CloseIcon />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!collabProvider ? (
+          <div className="flex flex-1 items-center justify-center text-muted typo-body1">
+            워크스페이스를 불러오는 중...
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <NotionEditor
+              nodeId={nodeId}
+              collabProvider={collabProvider}
+              username={username}
+              cursorColor={cursorColor}
+              onFirstLineChange={onFirstLineChange}
+              onContentChange={onContentChange}
+              noMediaDrop
+              autoGrow
+              minHeight={attachments.length > 0 ? 80 : 150}
+            />
+            <AttachmentSection
+              attachments={attachments}
+              onAddImage={handleAddImage}
+              onAddFile={handleAddFile}
+              onCaptionChange={handleCaptionChange}
+              onRemove={handleRemove}
+            />
+            {updatedAt && (
+              <div className="shrink-0 border-t border-gray-900 px-4 py-2 text-[12px] text-gray-500">
+                최종 수정일:{" "}
+                {new Date(updatedAt).toLocaleDateString("ko-KR", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  weekday: "short",
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>,
+      document.body,
+    );
+  }
 
   // ── 인라인 모드 (사이드바 리소스 패널) ─────────────────────────────────────
   if (inline) {

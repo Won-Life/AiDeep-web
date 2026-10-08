@@ -31,6 +31,7 @@ interface ChipHeaderProps {
   onLogout: () => void;
   workspaceId: string | null;
   onOpenArchive?: () => void;
+  onSettings?: () => void;
 }
 
 export default function ChipHeader({
@@ -42,6 +43,7 @@ export default function ChipHeader({
   onLogout,
   workspaceId,
   onOpenArchive,
+  onSettings,
 }: ChipHeaderProps) {
   const mainNodes: Node<NodeView>[] = useMemo(
     () => nodes.filter((node) => node.data.isMain),
@@ -211,6 +213,7 @@ export default function ChipHeader({
             email={user.email}
             onLogout={onLogout}
             onOpenArchive={onOpenArchive}
+            onSettings={onSettings}
           />
           <Tooltip label="AiDeep에 대하여" align="end">
             <a

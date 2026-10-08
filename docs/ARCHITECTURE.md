@@ -41,7 +41,7 @@ src/
 │   └── nodes/TextUpdateNode.tsx # 커스텀 노드 (메인/서브 형태 분기, 핸들 구성, 뷰어 뱃지)
 ├── components/
 │   ├── layout/
-│   │   ├── Sidebar.tsx          # 사이드바 (Workspaces + Resource 섹션, 인라인 에디터)
+│   │   ├── Sidebar.tsx          # 사이드바 (워크스페이스 헤더·스위처 + 노드 검색 ⌘K + 프로젝트 트리 + 프로필)
 │   │   ├── ChipHeader.tsx       # 상단 헤더 (PROJECT 노드 chip, 협업자, 유저 메뉴, 공유)
 │   │   ├── CollaboratorsList.tsx # presence 기반 접속자 아바타 목록
 │   │   ├── UserMenu.tsx         # 유저 이름/이메일 드롭다운 + 로그아웃
@@ -155,39 +155,25 @@ handleLogout()
   └── router.replace('/login')  — 항상 실행 (stuck session 방지)
 ```
 
-### 2. 사이드바 로컬 상태 구조
+### 2. 사이드바 구조 (Figma 08 X1~X7, #246)
 
-> **사이드바 Workspaces / Resource 데이터는 API 미연동.** `INITIAL_PROJECTS`와 `INITIAL_RESOURCES`는 `workspace/layout.tsx`에 하드코딩된 더미 데이터. 생성·수정이 로컬 React state(`useState`)에만 저장되고 새로고침 시 초기화된다.
+> 단일 워크스페이스 컨텍스트 구조. 데이터는 **WorkspaceLayoutContext의 nodes·edges에서 유도하는 읽기 전용 뷰**다 — 사이드바가 별도 REST 조회를 하지 않는다(그래프 단일 진실 소스 규칙).
 
-```typescript
-// workspace/layout.tsx 내 로컬 상태 (API 미연동)
-const [isSidebarOpen, setIsSidebarOpen] = useState(true)      // sessionStorage 초기화
-const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS)
-const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES)
-const [expanded, setExpanded] = useState<Set<string>>(...)    // 초기 확장 그룹 ID 집합
-
-// isSidebarOpen → sidebarWidth 계산 → setSidebarWidth (Context)
-const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH  // 260 or 40
-useEffect(() => setSidebarWidth(sidebarWidth), [sidebarWidth])
-```
-
-**사이드바 CRUD 로직 (로컬 전용)**:
-| 액션 | 함수 | 동작 |
-|------|------|------|
-| 프로젝트 추가 | `addProject()` | `{id: makeId(), name:'', isEditing:true}` push |
-| 프로젝트명 저장 | `saveProjectName(id, name)` | `isEditing: false`로 업데이트 |
-| 리소스 추가 | `addResource()` | `{id: makeId(), name:'', subItems:[], isEditing:true}` push |
-| 서브아이템 추가 | `addSubItem(resourceId)` | 해당 resource의 subItems에 추가 + expanded에 resourceId 추가 |
-| 서브아이템명 저장 | `saveSubItemName(resourceId, subItemId, name)` | 중첩 map으로 타겟 업데이트 |
-
-**ID 생성**: `makeId() = \`${Date.now()}_${Math.random().toString(36).slice(2, 6)}\``
+- **헤더**: 워크스페이스 아이콘(이름 첫 글자)+이름 → 클릭 시 스위처 드롭다운(X6: 목록 ✓ / + 새 워크스페이스 / 설정[비활성]). `«`로 접기.
+- **워크스페이스 전환**: `setNodes([]) → setEdges([]) → setWorkspaceId(대상) → setSynced(false)` — layout의 sync effect가 현재 workspaceId를 존중해 재fetch하고, `useWorkspaceWS`가 workspaceId dep으로 WS 룸을 재구독한다.
+- **새 워크스페이스 모달(X7)**: `POST /workspace` (`createWorkspace`) 후 위 전환 흐름 재사용.
+- **노드 검색(⌘K)**: 트리 in-place 필터 (프로젝트명 매칭 → 자식 전체 유지, 타이틀 매칭 → 해당 타이틀만). ⌘K 포커스·⌘\ 토글은 Sidebar 로컬 keydown — 전역 단축키 훅(#243) 도입 시 이관.
+- **프로젝트 트리**: `nodes.filter(isMain)` → 각 프로젝트의 직계 자식(edges.source 매칭) 2단, 캔버스 y좌표 순 정렬. 행 클릭 → `setFocusedNodeId` → GraphCanvas 기존 카메라 이동 effect 재사용. 섹션 `+`는 `createProjectNode` 후 생성 노드로 focus.
+- **회의 진행 중 배너(X5)**: `ActiveMeeting` 계약(titleNodeId·source·elapsedLabel) 기반 — 회의 기능이 상태를 제공하기 전까지 `meeting={null}` 스텁으로 숨김.
+- **접힘 레일(X4)**: 48px, 워크스페이스 아이콘·검색 아이콘·프로필, hover 시 펼치기 핸들.
+- 구 사이드바(Workspaces 더미 목록 + Resource 트리·인라인 에디터)는 `SHOW_TEMP_HIDDEN_UI=false`로 숨겨져 있던 것을 이 구조로 대체·삭제. GraphCanvas의 `application/resource-subitem` 드롭 수신부는 생산자(리소스 드래그)가 사라져 휴면 상태로 남아 있다.
 
 ### 3. sidebarWidth → ChipHeader 오프셋 흐름
 ```
 Sidebar 열림/닫힘 (handleToggleSidebar)
   → isSidebarOpen toggle
   → sessionStorage.setItem('sidebar_open', ...)
-  → sidebarWidth = isSidebarOpen ? 260 : 40
+  → sidebarWidth = isSidebarOpen ? 240 : 48  (SIDEBAR_WIDTH : RAIL_WIDTH)
   → setSidebarWidth(sidebarWidth)  (WorkspaceLayoutContext 업데이트)
   → ChipHeader: style.left = sidebarWidth + 'px'  (300ms transition)
   → DropDown: style 조정 (동일 sidebarWidth prop)
@@ -337,18 +323,12 @@ node_position_live 수신 (별도, 50ms throttle)
   → clearInterval(15초 heartbeat)
 ```
 
-### 13. 사이드바 리소스 → 캔버스 드래그 흐름
-```
-[드래그 시작] handleSubItemDragStart(event, item)
-  ├── isSelected(item.id) → editorContentRef.current로 최신 에디터 내용 참조
-  │     아니면 content = null → markdownBody/jsonBody 빈 문자열
-  ├── dragPreview div 생성: pill 스타일 (padding:4px 12px, rounded, ds-gray-800 bg)
-  │     position:absolute, top/left:-9999px → body.appendChild
-  ├── dataTransfer.setData('application/resource-subitem', JSON.stringify({id, name, markdownBody, jsonBody}))
-  ├── setDragImage(dragPreview, 10, 10)
-  ├── effectAllowed = 'copy'
-  └── requestAnimationFrame → document.body.removeChild(dragPreview)
+### 13. 사이드바 리소스 → 캔버스 드래그 흐름 (휴면 — #246)
 
+> 드래그 **생산자(구 사이드바 Resource 트리)가 #246 사이드바 개편으로 삭제**됐다.
+> 아래 GraphCanvas 수신부는 휴면 코드로 남아 있다 — 다른 드래그 소스를 붙이거나 제거 결정 시 참고.
+
+```
 [드래그 오버] onDragOver (GraphCanvas)
   ├── dataTransfer.types에 'application/resource-subitem' 없으면 return
   ├── screenToFlowPosition 변환
