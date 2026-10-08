@@ -9,7 +9,28 @@
 export type TokenPersistence = 'local' | 'session';
 export const REFRESH_TOKEN_KEY = 'aideep_refresh_token';
 const OAUTH_PERSISTENCE_KEY = 'onnode_oauth_persistence';
+const AUTH_SESSION_KEY = 'onnode_auth_session';
 type TokenStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+/*
+ * CONTEXT
+ * - Problem      : 사용자 조회 이전에 가입 진행 상태를 현재 로그인에 연결해야 한다.
+ * - Why          : 토큰 대신 임의 세션 ID를 사용하고 refresh 회전 동안 유지한다.
+ * - Alternatives : 토큰 복사 저장 → 인증 정보의 저장 범위를 불필요하게 넓힌다.
+ * - Trade-offs   : ID는 현재 탭에만 존재하며 인증이나 권한 판단에 사용하지 않는다.
+ * - Edge Case    : 다른 계정 로그인은 새 ID, 토큰 갱신은 동일 ID, 로그아웃은 제거.
+ */
+export function getAuthSessionId(): string | null {
+  try { return sessionStorage.getItem(AUTH_SESSION_KEY); } catch { return null; }
+}
+
+export function startAuthSession() {
+  sessionStorage.setItem(AUTH_SESSION_KEY, crypto.randomUUID());
+}
+
+export function clearAuthSession() {
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
+}
 
 export function readRefreshToken(local: TokenStorage, session: TokenStorage) {
   return session.getItem(REFRESH_TOKEN_KEY) ?? local.getItem(REFRESH_TOKEN_KEY);

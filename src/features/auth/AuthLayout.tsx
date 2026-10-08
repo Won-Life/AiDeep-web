@@ -27,19 +27,25 @@ export default function AuthLayout({
   reset = false,
   error = false,
   signup = false,
+  cardClassName,
+  background,
+  logoSrc = '/onnode/auth/imgGroup268.svg',
 }: {
   children: ReactNode;
   recovery?: boolean;
   reset?: boolean;
   error?: boolean;
   signup?: boolean;
+  cardClassName?: string;
+  background?: ReactNode;
+  logoSrc?: string;
 }) {
   const scrollContainer = useRef<HTMLDivElement>(null);
   const scrollContent = useRef<HTMLDivElement>(null);
   const content = (
     <>
       <Image
-        src="/onnode/auth/imgGroup268.svg"
+        src={logoSrc}
         width={116.811}
         height={22.2767}
         alt="On:Node"
@@ -55,14 +61,14 @@ export default function AuthLayout({
       lang="ko"
       className={`onnode-auth ${pretendard.variable} ${signup ? 'fixed inset-0 h-dvh py-[50px]' : 'relative min-h-dvh py-12'} flex flex-col items-center justify-center overflow-hidden bg-[image:var(--onnode-auth-gradient)] px-6`}
     >
-      {signup ? (
+      {background ?? (signup ? (
         <SignupBackground container={scrollContainer} content={scrollContent} />
       ) : (
         <AuthBackground recovery={recovery} error={error} />
-      )}
+      ))}
       <section
         aria-label="계정"
-        className={`relative z-10 w-full max-w-[490px] bg-[var(--onnode-surface)] shadow-[var(--onnode-card-shadow)] ${signup ? 'min-h-0 overflow-hidden' : `px-[min(5vw,64px)] ${recovery ? (reset ? 'pt-[51px] pb-[46px] min-[900px]:translate-y-[19px]' : 'pt-[51px] pb-[55px] min-[900px]:-translate-y-[7px]') : 'pt-[55px] pb-[39px] min-[1280px]:pr-[63px]'}`} ${error ? 'rounded-[10px]' : 'rounded-[20px]'}`}
+        className={`relative z-10 w-full max-w-[490px] bg-[var(--onnode-surface)] shadow-[var(--onnode-card-shadow)] ${cardClassName ?? (signup ? 'min-h-0 overflow-hidden' : `px-[min(5vw,64px)] ${recovery ? (reset ? 'pt-[51px] pb-[46px] min-[900px]:translate-y-[19px]' : 'pt-[51px] pb-[55px] min-[900px]:-translate-y-[7px]') : 'pt-[55px] pb-[39px] min-[1280px]:pr-[63px]'}`)} ${error ? 'rounded-[10px]' : 'rounded-[20px]'}`}
       >
         {signup ? (
           <div

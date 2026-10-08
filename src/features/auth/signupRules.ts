@@ -5,8 +5,8 @@ export const VERIFIED_EMAIL_TTL_SECONDS = 600;
  * CONTEXT
  * - Problem      : 화면 검증과 서버 인증 시간을 명시적으로 분리한다.
  * - Why          : 비밀번호는 디자인 조건, 인증 시간은 원격 서버 계약을 따른다.
- * - Alternatives : 서버 가입 DTO 완화 → 이름·전화번호 계약을 숨기게 된다.
- * - Trade-offs   : 최종 가입 요청은 서버 계약 정리 후 연결한다.
+ * - Alternatives : 서버 검증만 사용 → 입력 단계의 즉각적인 안내가 없다.
+ * - Trade-offs   : 프론트 검증과 최종 서버 검증을 함께 유지한다.
  * - Edge Case    : 공백, 6자리 코드, 선택 동의, 비밀번호 조합.
  */
 export function isSignupPasswordValid(value: string): boolean {
@@ -36,4 +36,5 @@ export interface SignupFormValues {
   password: string;
   agreedToTerms: boolean;
   agreedToPrivacy: boolean;
+  marketing: boolean;
 }
