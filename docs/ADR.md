@@ -73,8 +73,8 @@
 **트레이드오프**: Lexical 내부 API 변동이 잦다. 마크다운 붙여넣기 등은 플러그인 생태계가 Tiptap보다 작아 `MarkdownPastePlugin`을 직접 구현했다.
 
 **에러 케이스**:
-- `yjs:join` ack `ok=false`: `status:disconnected` 이벤트. 에디터 재마운트로만 복구. 원인: 권한 없음 또는 소켓 미인증.
-- SyncStep1 핸드셰이크 실패: `isSynced=false` 유지 → 에디터 빈 상태. 재마운트로 재시도.
+- `yjs:join` ack `ok=false`: `status:disconnected` 및 `sync-error` 이벤트. 다시 시도 버튼으로 복구. 원인: 권한 없음 또는 소켓 미인증.
+- SyncStep1 핸드셰이크 실패: join 성공 시 클라이언트도 SyncStep1 요청. 10초 초과 시 실패 안내와 재시도 버튼, 소켓 재연결 시 자동 재참여.
 - 에디터 언마운트 타이밍과 Yjs update 도착 타이밍 충돌: `origin === this` 가드 + cleanup 순서(`_unregisterSocketListeners` 먼저)로 처리.
 - `CollaborationPlugin`의 `connect()` 중복 호출: `_connected` 플래그로 차단.
 - doc.on('update')에서 Y.XmlText delta 파싱으로 타이틀 추출: Lexical은 블록을 `Y.XmlElement`로 저장해 최상위 delta에 string insert 없음 → 항상 빈 문자열 반환. `TitleTrackerPlugin`(`editor.registerUpdateListener`)으로 대체.

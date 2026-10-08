@@ -294,10 +294,11 @@ node_position_live 수신 (별도, 50ms throttle)
   │     └─ 미연결 → 200ms 간격 재시도 (cancelled 플래그로 cleanup)
   └── SocketIoYjsProvider 생성 (기존 소켓 주입)
         ├── connect() → yjs:join emit (ack 대기)
-        │     ├─ ack.ok=true → status:connected, awareness user 설정
-        │     └─ ack.ok=false → status:disconnected (에디터 로딩 상태 유지)
+        │     ├─ ack.ok=true → status:connected, awareness user 설정 + 클라이언트 SyncStep1 전송
+        │     └─ ack.ok=false → status:disconnected + sync-error (다시 시도 안내)
         ├── 서버 SyncStep1 수신 → SyncStep2 응답 + 클라이언트 SyncStep1 전송
         │     └─ 서버 SyncStep2 수신 → isSynced=true
+        ├── 동기화 10초 초과·소켓 단절 → sync-error; 재연결 시 재참여·동기화
         ├── 로컬 편집 → doc:update (origin !== this) → yjs:sync emit
         ├── 서버 yjs:sync 수신 → readSyncMessage → 응답 있으면 emit
         └── 언마운트 → yjs:leave → _unregisterSocketListeners → awareness.destroy → doc.destroy
@@ -397,11 +398,11 @@ node_position_live 수신 (별도, 50ms throttle)
 | 상황 | 처리 |
 |------|------|
 | 소켓 미연결 시 에디터 클릭 | 200ms 재시도 루프 → 연결되면 즉시 생성 |
-| `yjs:join` ack 실패 | `status:disconnected`. 에디터에 로딩 텍스트 유지. 재마운트로 복구 |
+| `yjs:join` ack 실패 | `status:disconnected` + `sync-error`. 실패 안내와 다시 시도 버튼 |
 | 빠른 unmount (패널 전환) | `cancelled` 플래그 + cleanup 순서 보장 (zombie provider 방지) |
 | `doc:update` origin === this | 서버발 업데이트 재전송 방지 (무한 루프 차단) |
-| SyncStep1 핸드셰이크 실패 | `isSynced=false` 유지 → 에디터 빈 상태. 재마운트로 재시도 |
-| 소켓 재연결 후 Yjs | Provider 리스너 재등록 미구현. 에디터 재마운트로만 복구 |
+| SyncStep1 핸드셰이크 실패 | 10초 후 동기화 실패 안내. 버튼 또는 소켓 재연결로 재시도 |
+| 소켓 재연결 후 Yjs | `connect` 이벤트에서 yjs:join 및 SyncStep1 재요청. 기존 Doc 유지 |
 
 ### UX 관련 에러
 | 상황 | 처리 |

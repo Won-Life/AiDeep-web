@@ -1196,12 +1196,26 @@ export function NotionEditor({
   // provider의 'sync' 이벤트에서 동기화 여부를 직접 구독 — on()이 등록 즉시
   // 현재 상태를 replay하므로 늦게 마운트돼도 값이 맞는다 (prop 중계 불필요)
   // provider null이면 렌더 시 파생값으로 false 처리 — effect 본문 동기 setState 금지(lint error)
+  /*
+   * CONTEXT
+   * - Problem      : 동기화 실패가 빈 문서의 로딩 placeholder로 무기한 표시됐다.
+   * - Why          : provider의 실패 상태를 구독해 내용 유무와 독립적인 재시도 UI를 제공한다.
+   * - Alternatives : 시간 경과만으로 완료 처리하면 실제 원격 데이터 수신 여부를 알 수 없다.
+   * - Trade-offs   : 실패 시 안내 영역이 추가되지만 기존 에디터와 미전송 내용은 유지한다.
+   * - Edge Case    : 늦게 도착한 동기화 성공은 오류를 해제하며 구독 해제도 함께 수행한다.
+   */
   const [providerSynced, setProviderSynced] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   useEffect(() => {
     if (!collabProvider) return;
     const onSync = (synced: unknown) => setProviderSynced(synced as boolean);
+    const onSyncError = (failed: unknown) => setSyncError(failed as boolean);
     collabProvider.on('sync', onSync);
-    return () => collabProvider.off('sync', onSync);
+    collabProvider.on('sync-error', onSyncError);
+    return () => {
+      collabProvider.off('sync', onSync);
+      collabProvider.off('sync-error', onSyncError);
+    };
   }, [collabProvider]);
   const isSynced = collabProvider ? providerSynced : false;
 
@@ -1228,6 +1242,18 @@ export function NotionEditor({
       <LexicalCollaboration>
         <LexicalComposer initialConfig={initialConfig}>
           {toolbarSlot}
+          {collabProvider && syncError && (
+            <div role="alert" className="flex items-center justify-between gap-2 px-4 py-2 text-sm text-muted">
+              <span>노트를 동기화하지 못했습니다.</span>
+              <button
+                type="button"
+                className="nodrag shrink-0 rounded border border-border px-2 py-1 text-foreground"
+                onClick={() => collabProvider.retry()}
+              >
+                다시 시도
+              </button>
+            </div>
+          )}
 
           <div
             className={autoGrow ? 'relative' : 'relative flex-1 min-h-0 overflow-y-auto scrollbar-hide'}
@@ -1240,7 +1266,7 @@ export function NotionEditor({
                   spellCheck
                 />
               }
-              placeholder={
+              placeholder={collabProvider && syncError ? null : (
                 <div
                   className={`absolute ${compactTop ? 'top-1' : 'top-3'} left-4 pointer-events-none select-none`}
                   style={{ color: 'rgb(var(--muted))', fontSize: 14 }}
@@ -1251,7 +1277,7 @@ export function NotionEditor({
                     (마크다운 단축키 지원, &apos;/&apos;로 메뉴 열기)
                   </span>
                 </div>
-              }
+              )}
               ErrorBoundary={LexicalErrorBoundary}
             />
           </div>

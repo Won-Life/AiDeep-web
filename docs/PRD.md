@@ -272,7 +272,7 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 - 노드별 독립적인 Yjs Doc + `SocketIoYjsProvider`
 - 소켓 미연결 시 200ms 재시도. 연결되면 즉시 provider 생성
 - 초기 동기화: SyncStep1 → SyncStep2 핸드셰이크. `isSynced=true` 전까지 에디터 로딩 상태
-- **에러 케이스**: `yjs:join` ack `ok=false` → "워크스페이스를 불러오는 중..." 표시 유지. 재마운트로 복구
+- **에러 케이스**: `yjs:join` 거절·동기화 10초 초과·소켓 단절 → 동기화 실패 안내와 다시 시도 버튼. 소켓 재연결 시 자동으로 다시 참여하고 동기화한다. 빈 문서도 SyncStep2 수신 후 작성 안내를 표시한다.
 
 #### 전체화면 에디터 (`/workspace/node/{nodeId}`)
 - 전체화면에서 에디터: `width: 62.5%`, `minWidth: 300px`, 가운데 정렬, 상단 툴바(`ToolbarPlugin`)
