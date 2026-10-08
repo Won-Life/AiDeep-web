@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../styles/onnode.css";
 
 /* 커서 공유 활성화 시 기본 커서 숨김 */
 .cursor-none,
@@ -32,6 +33,7 @@
     --ds-main: 127 213 26;       /* #7FD51A */
     --ds-main-10: 245 253 236;   /* #F5FDEC */
     --ds-main-5: 249 253 243;    /* #F9FDF3 */
+    --ds-main-blue: 116 141 253; /* #748DFD — Figma 08 Main Blue (주요 CTA 버튼) */
 
     /* ---------- Sub (Pastel) ---------- */
     --ds-sub-gray: 239 239 239;   /* #EFEFEF */
@@ -169,6 +171,7 @@
   --color-main: rgb(var(--ds-main));
   --color-main-10: rgb(var(--ds-main-10));
   --color-main-5: rgb(var(--ds-main-5));
+  --color-main-blue: rgb(var(--ds-main-blue));
 
   /* =========================
      Sub (Pastel)

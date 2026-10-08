@@ -11,6 +11,7 @@ import {
 } from 'react';
 import {
   ReactFlow,
+  MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
   type NodeChange,
@@ -29,10 +30,11 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import ZoomControl from '@/components/ui/ZoomControl';
-import GraphUsageGuide, {
-  type GraphUsageGuideHandle,
-} from '@/components/ui/GraphUsageGuide';
-import MouseIcon, { ConnectDragIcon } from '@/components/ui/MouseIcon';
+import HelpMenu from '@/components/ui/HelpMenu';
+import GraphOnboardingModal, {
+  useGraphOnboardingSeen,
+} from '@/components/ui/GraphOnboardingModal';
+import { useOnboardingSeen } from '@/components/layout/OnboardingPopup';
 import * as d3 from 'd3';
 import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
@@ -46,12 +48,12 @@ import {
 } from '../api/nodes';
 import { emitLivePosition, emitCursorMove } from '@/api/ws';
 import { createEdge, deleteEdge, updateEdge } from '../api/edges';
-import type { EdgeDto, NodeDto } from '../types';
 import { rectCollide } from '../layout/rectCollide';
 import { getRandomColorPair, DEFAULT_NODE_COLOR } from '../constants/colors';
 import {
   getDescendantIds,
-  getSameColorDescendantIds,
+  getParentId,
+  getRootNodeForSubtree,
   applyDepthOnEdgeCreate,
   applyDepthOnEdgeDelete,
   isRootNode,
@@ -60,526 +62,41 @@ import {
   buildCollapseButtons,
   type CollapseSide,
   type CollapsedSides,
-} from '../utils/graphUtils';
+} from '../logic/traversal';
+import {
+  getGraphColor,
+  getUncoloredGraphAnchorIds,
+  colorOfNodeIn,
+  getSameGraphDescendantIds,
+  getRecolorTargetIds,
+  findCrossColorChildEdges,
+  updateSubtreeColors,
+} from '../logic/colors';
+import {
+  isInvalidConnection,
+  resolveConnectionDirection,
+} from '../logic/connection';
+import {
+  NODE_WIDTH,
+  EMPTY_SUB_NODE_WIDTH,
+  NODE_HEIGHT,
+  NODE_PADDING,
+  HUB_OFFSET,
+  isOverlapping,
+  findClosestNodeInRange,
+  findNonOverlappingPosition,
+  getForcedOutboundSideForSubNode,
+  getTargetSideRelativeToParent,
+  adjustPositionRelativeToSource,
+  resolveHandleId,
+  buildEdgePresentation,
+  mirrorSubtree,
+} from '../logic/placement';
 import { useCursors } from '@/hooks/useCursors';
 import { useWorkspaceAwareness } from '@/hooks/useWorkspaceAwareness';
 import { getCursorColor } from '@/utils/cursorColor';
 import CursorOverlay from './CursorOverlay';
 import { MdBody, type WorkspaceRole } from '@/api/types';
-
-// TODO: 실제 노드 너비로 변경
-const NODE_WIDTH = 200;
-// 제목 없는 신규 서브 노드의 실측 폭 근사치 — "서브 노드" 플레이스홀더 + 패딩 기준.
-// 엣지 드래그 생성(좌측 방향)에서 NODE_WIDTH(200) 폴백이 거리를 과도하게 벌리는 것 방지 (#215)
-const EMPTY_SUB_NODE_WIDTH = 90;
-const NODE_HEIGHT = 48;
-const NODE_PADDING = 0; // 완전히 부딪힐 때만 충돌
-const HUB_OFFSET = 25; // Figma 메인 화면 디자인 실측: 엣지 elbow 수평 거리 25px
-const DEFAULT_NODE_DISTANCE = 64; // Figma 메인 화면 디자인 실측: 부모-자식 수평 빈 간격 64px
-
-function getParentId(nodeId: string, edges: Edge[]): string | null {
-  const incoming = edges.find((edge) => edge.target === nodeId);
-  return incoming?.source ?? null;
-}
-
-function getAncestorIds(nodeId: string, edges: Edge[]): Set<string> {
-  const ancestors = new Set<string>();
-  let current = getParentId(nodeId, edges);
-  // 방문 체크로 순환에서 무한 루프 방지 (§10-4/10-5). 정상 트리에선 부모가 null이
-  // 되며 끝나지만, 레거시·경합으로 순환 엣지가 남으면 !has 조건이 루프를 끊는다.
-  while (current && !ancestors.has(current)) {
-    ancestors.add(current);
-    current = getParentId(current, edges);
-  }
-  return ancestors;
-}
-
-/*
- * CONTEXT
- * - Problem      : 그래프 기준 노드(대칭 축·같은 그래프 판정·방향 기준점)를 isMain 조상
- *                  탐색으로 찾아서, 메인 노드 없는 그래프(일반 노드 루트)에서는 undefined가
- *                  되어 해당 로직이 전부 무력화됐다 (#146).
- * - Why          : root 판별 단일 기준인 depth === 0(isRootNode, #99)으로 조상 체인을
- *                  탐색한다. 메인 노드는 항상 depth 0이므로 기존 메인 그래프 동작은 불변.
- * - Alternatives : 엣지 스캔으로 "부모 없는 조상" 탐색 — #99에서 root 판별을 depth 단일
- *                  기준으로 통일했으므로 기각 (두 기준 공존 시 WS 수신 타이밍에 분기).
- * - Trade-offs   : depth가 서버와 어긋난 노드는 오판 가능 — 아래 Edge Case fallback으로 방어.
- * - Edge Case    : 서버 deleteNode가 depth를 전파하지 않아(Aideep_backend#64) depth≠0인
- *                  채 루트가 된 노드가 존재할 수 있다 → 조상 체인에 depth 0이 없으면
- *                  체인 끝(부모 없는 노드)을 루트로 간주한다.
- */
-function getRootNodeForSubtree(
-  nodeId: string,
-  nodes: Node[],
-  edges: Edge[],
-): Node | undefined {
-  const currentNode = nodes.find((n) => n.id === nodeId);
-  if (!currentNode) return undefined;
-  if (isRootNode(currentNode)) return currentNode;
-
-  // getAncestorIds는 가까운 부모 → 최상위 순으로 삽입된 Set — 순회 후 last = 체인 끝
-  let last: Node = currentNode;
-  for (const ancestorId of getAncestorIds(nodeId, edges)) {
-    const ancestor = nodes.find((n) => n.id === ancestorId);
-    if (!ancestor) continue;
-    if (isRootNode(ancestor)) return ancestor;
-    last = ancestor;
-  }
-  return last;
-}
-
-// main(PROJECT) 노드는 생성 시점(onPaneContextMenu)에 이미 실제 그래프 색을 data.color에
-// 저장하므로(화면은 isMain이라 항상 흰색으로 그려짐), 별도 분기 없이 본인 색을 그대로 쓴다.
-function getGraphColor(
-  parentNodeId: string,
-  nodes: Node[],
-): { bg: string; text: string } {
-  const parentNode = nodes.find((n) => n.id === parentNodeId);
-
-  if (parentNode?.data?.color) {
-    return {
-      bg: parentNode.data.color as string,
-      text: (parentNode.data.textColor as string) || DEFAULT_NODE_COLOR.text,
-    };
-  }
-
-  return getRandomColorPair();
-}
-
-function colorOfNodeIn(nodes: Node[]) {
-  return (id: string) =>
-    nodes.find((n) => n.id === id)?.data?.color as string | undefined;
-}
-
-/*
- * CONTEXT
- * - Problem      : 크로스 그래프 엣지(색이 다른 노드 간 연결)가 있으면 서브트리 이동·색 전파·
- *                  삭제 캐스케이드가 경계를 넘어 다른 그래프의 노드까지 끌고 간다.
- * - Why          : 이동/전파/삭제 대상을 루트의 그래프 색과 같은 색의 자손으로 제한한다.
- *                  main 노드도 생성 시점에 그래프 색을 data.color에 저장하므로(표시만 흰색)
- *                  본인 색을 기준색으로 그대로 쓴다.
- * - Alternatives : 서버 그래프 ID·크로스 엣지 플래그 — getSameColorDescendantIds CONTEXT 참고.
- * - Edge Case    : 그래프 색을 알 수 없으면 전체 자손 순회로 폴백.
- */
-function getSameGraphDescendantIds(
-  rootNode: Node,
-  nodes: Node[],
-  edges: Edge[],
-): Set<string> {
-  const colorOf = colorOfNodeIn(nodes);
-  const rootColor = colorOf(rootNode.id);
-
-  if (!rootColor) return getDescendantIds(rootNode.id, edges);
-  return getSameColorDescendantIds(rootNode.id, edges, rootColor, colorOf);
-}
-
-// 색을 칠할 노드 집합: 루트 + 같은 그래프(같은 색) 자손, main 노드 제외.
-// 로컬 페인트(updateSubtreeColors)와 서버 저장 PATCH가 반드시 같은 집합을 쓰도록 공용.
-// 서버의 propagateToChildren 전파는 그래프 색 경계를 모르고 크로스 그래프 엣지 너머까지
-// 덮어쓰므로(Aideep_backend#51) 사용하지 않고, 이 집합에 노드별 PATCH로 저장한다.
-function getRecolorTargetIds(
-  rootId: string,
-  nodes: Node[],
-  edges: Edge[],
-): string[] {
-  const rootColor = colorOfNodeIn(nodes)(rootId);
-  // 색상 경계(다른 그래프)를 넘어 전파하지 않는다
-  const descendantIds = rootColor
-    ? getSameColorDescendantIds(rootId, edges, rootColor, colorOfNodeIn(nodes))
-    : getDescendantIds(rootId, edges);
-  return [rootId, ...descendantIds].filter(
-    (id) => !nodes.find((n) => n.id === id)?.data?.isMain,
-  );
-}
-
-// 대칭이동(미러)은 서브트리를 축 반대편으로 보내는데, 색이 다른(다른 그래프) 직계
-// 자식은 함께 이동하지 않으므로 연결 방향 규칙이 꼬인다 → 대칭이동 시점에 그 크로스
-// 그래프 엣지를 끊는다. 불변식: 같은 그래프의 자식은 항상 부모와 같은 색
-// (legacy 무색 노드는 2026-07-05 데이터 정리로 소거 — 색 다름 = 크로스 그래프 확정)
-function findCrossColorChildEdges(
-  mirroredIds: Iterable<string>,
-  nodes: Node[],
-  edges: Edge[],
-): Edge[] {
-  const colorOf = colorOfNodeIn(nodes);
-  const ids = new Set(mirroredIds);
-  // source/target 정규화(isMain·엣지 수 우선) 때문에 크로스 그래프 엣지는 다른 그래프
-  // 쪽이 source일 수도 있다 → 방향 무관하게 한쪽 끝이 미러 집합에 속하면 검사한다.
-  // 양쪽 다 집합 안이면 같은 서브트리(같은 색)라 색 비교에서 걸러진다.
-  return edges.filter((edge) => {
-    if (!ids.has(edge.source) && !ids.has(edge.target)) return false;
-    const srcColor = colorOf(edge.source);
-    const tgtColor = colorOf(edge.target);
-    // 한쪽 색이 미확정(색 없는 legacy main 등)이면 크로스 그래프로 단정하지 않는다
-    // — 오판 시 자기 그래프의 엣지를 끊어 서브트리가 고아가 된다 (Aideep_backend#52 전까지 방어)
-    if (srcColor === undefined || tgtColor === undefined) return false;
-    return srcColor !== tgtColor;
-  });
-}
-
-function updateSubtreeColors(
-  rootId: string,
-  nodes: Node[],
-  edges: Edge[],
-  colorPair: { bg: string; text: string },
-): Node[] {
-  const idsToUpdate = new Set(getRecolorTargetIds(rootId, nodes, edges));
-
-  return nodes.map((node) =>
-    idsToUpdate.has(node.id)
-      ? {
-          ...node,
-          data: {
-            ...node.data,
-            color: colorPair.bg,
-            textColor: colorPair.text,
-          },
-        }
-      : node,
-  );
-}
-
-function isInvalidConnection(
-  sourceId: string,
-  targetId: string,
-  nodes: Node[],
-  edges: Edge[],
-): boolean {
-  if (sourceId === targetId) return true;
-
-  // 프로젝트(main) 노드끼리는 직접 연결 불가 — 모든 연결 경로(핸들 드래그·노드 드래그·드롭)가 이 함수를 거친다
-  const sourceIsMain = nodes.find((n) => n.id === sourceId)?.data?.isMain;
-  const targetIsMain = nodes.find((n) => n.id === targetId)?.data?.isMain;
-  if (sourceIsMain && targetIsMain) return true;
-
-  // 둘이 서로 연결되어 있는지 확인
-  const targetParent = getParentId(targetId, edges);
-  const sourceParent = getParentId(sourceId, edges);
-  if (targetParent === sourceId || sourceParent === targetId) return true;
-
-  // 순환 방지 (§10-4/10-5): source→target 엣지는 source를 부모로 만든다. source가
-  // 이미 target의 자손이면 target→…→source→target 순환이 생겨 getAncestorIds가
-  // 폭주하므로(과거 탭 정지 원인) 연결 자체를 막는다. 모든 경로가 이 함수를 거치므로
-  // 핸들 드래그(isValidConnection)·편입(onNodeDragStop)·hover 감지가 한 번에 차단된다.
-  if (getDescendantIds(targetId, edges).has(sourceId)) return true;
-
-  return false;
-}
-
-/**
- * 핸들 드래그 연결의 실제 부모/자식 방향을 결정한다.
- * onConnect와 isValidConnection이 같은 규칙을 공유해야 단일 부모 검사가
- * swap 케이스(단독 노드 편입, main 노드가 target)에서 어긋나지 않는다.
- */
-function resolveConnectionDirection(
-  source: string,
-  target: string,
-  nodes: Node[],
-  edges: Edge[],
-): {
-  sourceId: string;
-  targetId: string;
-  shouldSwap: boolean;
-  bothInGraphs: boolean;
-} {
-  const sourceIsMain = nodes.find((n) => n.id === source)?.data?.isMain === true;
-  const targetIsMain = nodes.find((n) => n.id === target)?.data?.isMain === true;
-
-  const sourceEdgeCount = edges.filter(
-    (e) => e.source === source || e.target === source,
-  ).length;
-  const targetEdgeCount = edges.filter(
-    (e) => e.source === target || e.target === target,
-  ).length;
-
-  const shouldSwap =
-    // 케이스 1: main(프로젝트) 노드는 항상 부모
-    ((sourceIsMain || targetIsMain) && !sourceIsMain) ||
-    // 케이스 2: 단독 노드가 그래프에 연결되면 그래프 쪽이 부모
-    (sourceEdgeCount === 0 && targetEdgeCount > 0);
-
-  return {
-    sourceId: shouldSwap ? target : source,
-    targetId: shouldSwap ? source : target,
-    shouldSwap,
-    // 두 노드 모두 기존 그래프(1개 이상의 연결)에 속함 → 색상·위치 유지, 연결만 생성
-    bothInGraphs: sourceEdgeCount > 0 && targetEdgeCount > 0,
-  };
-}
-
-function rectForNode(node: Node) {
-  return {
-    left: node.position.x,
-    right: node.position.x + NODE_WIDTH,
-    top: node.position.y,
-    bottom: node.position.y + NODE_HEIGHT,
-  };
-}
-
-function isOverlapping(a: Node, b: Node): boolean {
-  const rectA = rectForNode(a);
-  const rectB = rectForNode(b);
-
-  return !(
-    rectA.right + NODE_PADDING < rectB.left ||
-    rectA.left > rectB.right + NODE_PADDING ||
-    rectA.bottom + NODE_PADDING < rectB.top ||
-    rectA.top > rectB.bottom + NODE_PADDING
-  );
-}
-
-function canApplyMove(
-  nodes: Node[],
-  movingIds: Set<string>,
-  delta: { x: number; y: number },
-): boolean {
-  const movingNodes = nodes.filter((node) => movingIds.has(node.id));
-  const staticNodes = nodes.filter((node) => !movingIds.has(node.id));
-
-  return movingNodes.every((node) => {
-    const movedNode = {
-      ...node,
-      position: {
-        x: node.position.x + delta.x,
-        y: node.position.y + delta.y,
-      },
-    };
-
-    return staticNodes.every((other) => !isOverlapping(movedNode, other));
-  });
-}
-
-function findOverlapTarget(dragged: Node, nodes: Node[]): Node | null {
-  for (const node of nodes) {
-    if (node.id === dragged.id) continue;
-    if (isOverlapping(dragged, node)) return node;
-  }
-  return null;
-}
-
-// AABB 테두리 간 최단 거리 기반으로 가장 가까운 유효한 노드 찾기
-function findClosestNodeInRange(
-  draggedNode: Node,
-  nodes: Node[],
-  edges: Edge[],
-  hiddenIds: Set<string>, // 접힘으로 숨겨진 노드 — 시각 피드백 없는 hover/드롭 대상 방지 위해 후보에서 제외
-  threshold: number = 50, // 픽셀 단위 임계값
-): Node | null {
-  let closestNode: Node | null = null;
-  let minDistance = threshold;
-
-  // 드래그 중인 노드의 실제 크기
-  const draggedWidth = draggedNode.width ?? NODE_WIDTH;
-  const draggedHeight = draggedNode.height ?? NODE_HEIGHT;
-
-  // 드래그 중인 노드의 AABB 경계 계산 (중심점 기준)
-  const draggedCenterX = draggedNode.position.x + draggedWidth / 2;
-  const draggedCenterY = draggedNode.position.y + draggedHeight / 2;
-  const ax1 = draggedCenterX - draggedWidth / 2;
-  const ay1 = draggedCenterY - draggedHeight / 2;
-  const ax2 = draggedCenterX + draggedWidth / 2;
-  const ay2 = draggedCenterY + draggedHeight / 2;
-
-  for (const node of nodes) {
-    if (node.id === draggedNode.id) continue;
-    if (hiddenIds.has(node.id)) continue; // 접힌 서브트리의 숨겨진 노드는 hover/드롭 후보 제외
-
-    // 연결 유효성 체크
-    if (isInvalidConnection(node.id, draggedNode.id, nodes, edges)) continue;
-
-    // 대상 노드의 실제 크기
-    const nodeWidth = node.width ?? NODE_WIDTH;
-    const nodeHeight = node.height ?? NODE_HEIGHT;
-
-    // 대상 노드의 AABB 경계 계산 (중심점 기준)
-    const nodeCenterX = node.position.x + nodeWidth / 2;
-    const nodeCenterY = node.position.y + nodeHeight / 2;
-    const bx1 = nodeCenterX - nodeWidth / 2;
-    const by1 = nodeCenterY - nodeHeight / 2;
-    const bx2 = nodeCenterX + nodeWidth / 2;
-    const by2 = nodeCenterY + nodeHeight / 2;
-
-    // y축 범위가 겹치지 않으면 제외 (위아래로는 감지 안 함)
-    if (ay2 < by1 || ay1 > by2) continue;
-
-    // x축 방향 거리만 계산 (좌우 방향으로만 감지)
-    const dx = Math.max(0, Math.max(ax1, bx1) - Math.min(ax2, bx2));
-    const distance = dx;
-
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestNode = node;
-    }
-  }
-
-  return closestNode;
-}
-
-function findNonOverlappingPosition(
-  base: { x: number; y: number },
-  nodes: Node[],
-): { x: number; y: number } {
-  const candidate = (x: number, y: number) =>
-    ({
-      id: '__drag_candidate__',
-      position: { x, y },
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT,
-      data: {},
-    }) as Node;
-
-  if (!nodes.some((node) => isOverlapping(candidate(base.x, base.y), node))) {
-    return base;
-  }
-
-  const step = 16;
-  const maxRadius = 12;
-  for (let r = 1; r <= maxRadius; r += 1) {
-    const radius = r * step;
-    for (let i = 0; i < 8; i += 1) {
-      const angle = (Math.PI / 4) * i;
-      const x = base.x + Math.round(Math.cos(angle) * radius);
-      const y = base.y + Math.round(Math.sin(angle) * radius);
-      if (!nodes.some((node) => isOverlapping(candidate(x, y), node))) {
-        return { x, y };
-      }
-    }
-  }
-
-  return base;
-}
-
-function getForcedOutboundSideForSubNode(
-  node: Node,
-  nodes: Node[],
-  edges: Edge[],
-): 'left' | 'right' | null {
-  if (isRootNode(node)) return null;
-
-  const rootNode = getRootNodeForSubtree(node.id, nodes, edges);
-  if (!rootNode) return null;
-
-  const parentId = getParentId(node.id, edges);
-  const parentNode = parentId
-    ? nodes.find((n) => n.id === parentId)
-    : undefined;
-  const referenceX = parentNode?.position.x ?? rootNode.position.x;
-
-  // root 노드의 반대 방향(바깥쪽)으로만 새 연결을 허용
-  return getTargetSideRelativeToParent(node.position.x, referenceX);
-}
-
-function resolveSideFromEdgeHandle(
-  edge: Edge,
-  sourceNode: Node,
-  targetNode: Node,
-): 'left' | 'right' {
-  if (edge.sourceHandle?.includes('left')) return 'left';
-  if (edge.sourceHandle?.includes('right')) return 'right';
-
-  return getTargetSideRelativeToParent(
-    targetNode.position.x,
-    sourceNode.position.x,
-  );
-}
-
-function getTargetSideRelativeToParent(
-  targetX: number,
-  parentX: number,
-): 'left' | 'right' {
-  return targetX < parentX ? 'left' : 'right';
-}
-
-/**
- * Source 노드 기준으로 target 노드의 X/Y 좌표를 적절히 조정
- * X는 연결 방향 기준 고정 거리, Y는 같은 방향 형제 노드와 간격을 유지하도록 보정
- * @param sourceNode - 부모(source) 노드
- * @param originalY - 생성/드롭된 Y 좌표
- * @param side - 연결 방향 ("left" 또는 "right")
- * @param nodes - 현재 노드 목록
- * @param edges - 현재 엣지 목록
- * @param excludeNodeId - Y 충돌 검사에서 제외할 노드 ID (재연결 시 자기 자신 제외)
- */
-function adjustPositionRelativeToSource(
-  sourceNode: Node,
-  originalY: number,
-  side: 'left' | 'right',
-  nodes: Node[],
-  edges: Edge[],
-  excludeNodeId?: string,
-  targetNode?: Node | null,
-): { x: number; y: number } {
-  // React Flow v12는 실측 크기를 node.measured에 담는다 — node.width(명시값)는 대부분
-  // undefined라 NODE_WIDTH(200) 폴백이 서브 노드 실폭(~100px)을 크게 웃돌아
-  // 엣지 드래그 생성 시 노드 간 거리가 과도해진다 (#215)
-  const sourceWidth =
-    sourceNode?.measured?.width ?? sourceNode?.width ?? NODE_WIDTH;
-  const targetWidth =
-    targetNode?.measured?.width ?? targetNode?.width ?? NODE_WIDTH;
-
-  // 연결 방향에 따라 X 좌표 계산
-  const targetX =
-    side === 'right'
-      ? sourceNode.position.x + sourceWidth + DEFAULT_NODE_DISTANCE
-      : sourceNode.position.x - targetWidth - DEFAULT_NODE_DISTANCE;
-
-  const siblingYs = edges
-    .filter(
-      (edge) => edge.source === sourceNode.id && edge.target !== excludeNodeId,
-    )
-    .map((edge) => {
-      const targetNode = nodes.find((node) => node.id === edge.target);
-      if (!targetNode) return null;
-      return {
-        node: targetNode,
-        edgeSide: resolveSideFromEdgeHandle(edge, sourceNode, targetNode),
-      };
-    })
-    .filter(
-      (item): item is { node: Node; edgeSide: 'left' | 'right' } =>
-        item !== null,
-    )
-    .filter((item) => item.edgeSide === side)
-    .map((item) => item.node.position.y);
-
-  const verticalGap = NODE_HEIGHT + 24;
-  const isYAvailable = (y: number) =>
-    siblingYs.every((siblingY) => Math.abs(siblingY - y) >= verticalGap);
-
-  let targetY = originalY;
-  if (!isYAvailable(targetY)) {
-    for (let i = 1; i <= 20; i++) {
-      const upperY = originalY - i * verticalGap;
-      if (isYAvailable(upperY)) {
-        targetY = upperY;
-        break;
-      }
-
-      const lowerY = originalY + i * verticalGap;
-      if (isYAvailable(lowerY)) {
-        targetY = lowerY;
-        break;
-      }
-    }
-  }
-
-  return {
-    x: targetX,
-    y: targetY,
-  };
-}
-
-function resolveHandleId(
-  role: 'source' | 'target',
-  side: 'left' | 'right',
-): string {
-  // source 핸들: side 방향과 같은 방향에 위치 (예: side="right" → source-right)
-  // target 핸들: source의 반대 방향에 위치 (예: side="right"이면 target이 source 오른쪽에 있으므로 → target-left)
-  if (role === 'target') {
-    return `target-${side === 'left' ? 'right' : 'left'}`;
-  }
-  return `source-${side}`;
-}
 
 /*
  * CONTEXT
@@ -719,91 +236,6 @@ async function saveDragPositions(
   }
 }
 
-function buildEdgePresentation(edge: Edge, nodes: Node[], edges: Edge[]): Edge {
-  const source = nodes.find((node) => node.id === edge.source);
-  const target = nodes.find((node) => node.id === edge.target);
-  if (!source || !target) return edge;
-
-  const forcedSourceSide = getForcedOutboundSideForSubNode(
-    source,
-    nodes,
-    edges,
-  );
-  // target.data.handleSide는 topology 변경 시점(connect/drag-stop)에만 갱신되므로
-  // 드래그 중 position이 바뀌어도 sourceHandle/targetHandle이 유지되도록 한다.
-  const storedSide = target.data?.handleSide as 'left' | 'right' | undefined;
-  const side =
-    storedSide ??
-    forcedSourceSide ??
-    getTargetSideRelativeToParent(target.position.x, source.position.x);
-  const sourceHandle = resolveHandleId('source', side);
-  const targetHandle = resolveHandleId('target', side);
-  const sourceHandleX =
-    source.position.x +
-    (side === 'right'
-      ? (source.measured?.width ?? source.width ?? NODE_WIDTH)
-      : 0);
-
-  return {
-    ...edge,
-    type: 'branch',
-    sourceHandle,
-    targetHandle,
-    data: {
-      ...edge.data,
-      hubX: sourceHandleX + (side === 'right' ? HUB_OFFSET : -HUB_OFFSET),
-      hubY: source.position.y + NODE_HEIGHT / 2,
-    },
-  };
-}
-
-function mirrorSubtree(
-  nodes: Node[],
-  subtreeIds: Set<string>, // root 제외, 함께 이동하는(같은 그래프) 자식들만
-  parentAxisX: number,
-): Node[] {
-  const next = nodes.map((node) =>
-    subtreeIds.has(node.id)
-      ? {
-          ...node,
-          position: {
-            x: parentAxisX * 2 - node.position.x - (node.width ?? NODE_WIDTH),
-            y: node.position.y,
-          },
-        }
-      : node,
-  );
-
-  return next;
-}
-
-function initializeHandleSides(nodes: Node[], edges: Edge[]): Node[] {
-  return nodes.map((node) => {
-    if (node.data?.isMain) return node;
-
-    // root 판별은 depth === 0 (issue #99) — 핸들 방향만 incoming edge에서 유도
-    const hasParent = !isRootNode(node);
-
-    // Case 1: target 노드 (부모가 있음) → incoming edge의 sourceHandle로 방향 결정
-    const incomingEdge = edges.find((e) => e.target === node.id);
-    if (incomingEdge) {
-      const side: 'left' | 'right' | undefined =
-        incomingEdge.sourceHandle?.includes('right')
-          ? 'right'
-          : incomingEdge.sourceHandle?.includes('left')
-            ? 'left'
-            : undefined;
-      return {
-        ...node,
-        data: { ...node.data, handleSide: side, hasParent },
-      };
-    }
-
-    // Case 2: 부모 없는 non-main 노드
-    return { ...node, data: { ...node.data, hasParent } };
-  });
-}
-
 // D3 force simulation용 노드 타입
 interface D3Node extends d3.SimulationNodeDatum {
   id: string;
@@ -894,43 +326,6 @@ function InitialViewport({ mainNodeId }: { mainNodeId: string | null }) {
   return null;
 }
 
-export function convertToReactFlow(
-  graphNodes: NodeDto[],
-  graphEdges: EdgeDto[],
-): { nodes: Node[]; edges: Edge[] } {
-  const nodes: Node[] = graphNodes.map((n) => ({
-    id: n.node_id,
-    type: 'textUpdater',
-    position: { x: n.position_x, y: n.position_y },
-    data: {
-      title: n.title,
-      color: n.content?.color ?? DEFAULT_NODE_COLOR.bg,
-      textColor: n.content?.textColor ?? DEFAULT_NODE_COLOR.text,
-      isMain: n.node_type === 'PROJECT',
-      nodeType: n.node_type,
-      depth: n.depth ?? 0,
-    },
-  }));
-
-  const rawEdges: Edge[] = graphEdges.map((e) => ({
-    id: e.edge_id,
-    source: e.source_id,
-    target: e.target_id,
-    type: 'branch',
-    sourceHandle: e.source_handle,
-    targetHandle: e.target_handle,
-    data: {},
-  }));
-
-  const nodesWithHandleSide = initializeHandleSides(nodes, rawEdges);
-
-  const edges: Edge[] = rawEdges.map((edge) =>
-    buildEdgePresentation(edge, nodesWithHandleSide, rawEdges),
-  );
-
-  return { nodes: nodesWithHandleSide, edges };
-}
-
 function GraphCanvasInner({
   workspaceId,
   currentUserId,
@@ -957,6 +352,8 @@ function GraphCanvasInner({
   const [contextMenuNodeId, setContextMenuNodeId] = useState<string | null>(
     null,
   );
+  // 인라인 이름 편집(G5·G7 "이름 바꾸기") 중인 노드 — 해당 노드 제목이 input으로 전환
+  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isArchiveDeleting, setIsArchiveDeleting] = useState(false);
   const [pendingArchiveNodeIds, setPendingArchiveNodeIds] = useState<string[]>(
@@ -1071,8 +468,19 @@ function GraphCanvasInner({
   const isMultiDragRef = useRef(false);
   // 뷰포트 중앙 좌표 계산용 캔버스 래퍼 (#204 보이는 생성 버튼)
   const wrapperRef = useRef<HTMLDivElement>(null);
-  // 빈 캔버스 안내의 인라인 "사용법" 버튼으로 사용법 창을 여는 핸들
-  const usageGuideRef = useRef<GraphUsageGuideHandle>(null);
+  // 그래프 구조 온보딩(G3) — Meet 온보딩 팝업(layout, z-50)과 겹치지 않게
+  // Meet 온보딩 확인 이후 첫 렌더에서 1회만 자동 오픈한다
+  const meetOnboardingSeen = useOnboardingSeen();
+  const graphOnboardingSeen = useGraphOnboardingSeen();
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const onboardingAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (onboardingAutoOpenedRef.current) return;
+    if (meetOnboardingSeen && !graphOnboardingSeen) {
+      onboardingAutoOpenedRef.current = true;
+      setOnboardingOpen(true);
+    }
+  }, [meetOnboardingSeen, graphOnboardingSeen]);
   const lastLiveEmitRef = useRef(0);
   const LIVE_EMIT_INTERVAL = 50; // ms
 
@@ -1258,6 +666,139 @@ function GraphCanvasInner({
     },
     [workspaceId, handleNodeViewChange],
   );
+
+  // 인라인 이름 편집 시작(컨텍스트 메뉴 "이름 바꾸기") — 메뉴는 닫고 해당 노드를 편집 모드로.
+  const handleStartRename = useCallback((nodeId: string) => {
+    setRenamingNodeId(nodeId);
+    setContextMenuNodeId(null);
+  }, []);
+  const handleFinishRename = useCallback(() => setRenamingNodeId(null), []);
+
+  // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 빈 자식 노드 생성 + 엣지 + 색 상속 후
+  // 바로 인라인 이름 편집(G5). onConnectEnd(핸들 드래그 생성)과 동일한 생성 규칙을 노드 기준으로
+  // 재사용한다. 겹침 bail 없이 source 높이에 놓고 D3 rectCollide가 분리하도록 맡긴다.
+  const handleAddChild = useCallback(
+    async (parentId: string) => {
+      const sourceNode = nodes.find((n) => n.id === parentId);
+      if (!sourceNode) return;
+
+      const forced = getForcedOutboundSideForSubNode(sourceNode, nodes, edges);
+      let side: 'left' | 'right';
+      if (forced) {
+        side = forced;
+      } else {
+        const parentOfSource = getParentId(sourceNode.id, edges);
+        const parentNode = parentOfSource
+          ? nodes.find((n) => n.id === parentOfSource)
+          : undefined;
+        side = parentNode
+          ? getTargetSideRelativeToParent(
+              sourceNode.position.x,
+              parentNode.position.x,
+            )
+          : 'right'; // 루트/프로젝트는 기본 오른쪽으로 성장
+      }
+
+      const adjustedPosition = adjustPositionRelativeToSource(
+        sourceNode,
+        sourceNode.position.y,
+        side,
+        nodes,
+        edges,
+        undefined,
+        { width: EMPTY_SUB_NODE_WIDTH } as Node,
+      );
+
+      const colorPair = getGraphColor(sourceNode.id, nodes, edges);
+      const colorAnchorIds = getUncoloredGraphAnchorIds(
+        sourceNode.id,
+        nodes,
+        edges,
+      );
+      colorAnchorIds.forEach((id) =>
+        updateNodeContent(workspaceId, id, {
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        }).catch((err) => console.error('[addChild color anchor] failed', err)),
+      );
+
+      try {
+        const { nodeId } = await createMdNode(workspaceId, '', adjustedPosition, {
+          markdownBody: '',
+          jsonBody: EMPTY_LEXICAL_JSON,
+          color: colorPair.bg,
+          textColor: colorPair.text,
+        });
+        setNodes((prev) => [
+          ...prev.map((node) =>
+            colorAnchorIds.includes(node.id)
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    color: colorPair.bg,
+                    textColor: colorPair.text,
+                  },
+                }
+              : node,
+          ),
+          {
+            id: nodeId,
+            type: 'textUpdater',
+            position: adjustedPosition,
+            data: {
+              title: '',
+              isMain: false,
+              depth: 0,
+              color: colorPair.bg,
+              textColor: colorPair.text,
+              handleSide: side,
+            },
+          } as Node,
+        ]);
+
+        const fromHandleId = `source-${side}`;
+        const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
+        // 엣지를 낙관적으로 먼저(임시 id) 추가해 부모 관계를 즉시 성립시킨다. 콘텐츠/타이틀
+        // 판정은 "부모가 프로젝트인가"로 하는데, 엣지가 없는 첫 프레임엔 부모 미상이라 새 노드가
+        // 타이틀로 잠깐 보였다가 콘텐츠로 바뀌는 깜빡임이 생겼다. createEdge 응답 시 실제 id로 교체.
+        const tempEdgeId = `temp-edge-${nodeId}`;
+        setEdges((prev) => [
+          ...prev,
+          {
+            id: tempEdgeId,
+            source: sourceNode.id,
+            target: nodeId,
+            type: 'branch',
+            sourceHandle: fromHandleId,
+            targetHandle: targetHandleId,
+          },
+        ]);
+        createEdge(workspaceId, sourceNode.id, nodeId, fromHandleId, targetHandleId)
+          .then(({ edgeId }) => {
+            setEdges((prev) =>
+              prev.map((e) => (e.id === tempEdgeId ? { ...e, id: edgeId } : e)),
+            );
+            setNodes((prev) =>
+              applyDepthOnEdgeCreate(prev, [], sourceNode.id, nodeId),
+            );
+          })
+          .catch((err) => {
+            // 실패 시 낙관적 임시 엣지 롤백
+            setEdges((prev) => prev.filter((e) => e.id !== tempEdgeId));
+            console.error('[addChild] createEdge failed', err);
+          });
+
+        // G5: 생성 직후 바로 인라인 이름 편집
+        setRenamingNodeId(nodeId);
+        setContextMenuNodeId(null);
+      } catch (err) {
+        console.error('[addChild] node creation failed', err);
+      }
+    },
+    [nodes, edges, workspaceId],
+  );
+
   const handleToggleNodeType = (nodeId: string) => {
     const target = nodes.find((n) => n.id === nodeId);
     if (!target) return;
@@ -1340,9 +881,21 @@ function GraphCanvasInner({
   const collapseChildrenMap = buildChildrenMap(edges);
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
+  // 타이틀/콘텐츠 판정은 depth가 아니라 '부모가 프로젝트(main)인가'로 한다. depth는 서버가
+  // WS·REST 응답에 안 실어 stale할 수 있어(graph/CLAUDE.md) 깊은 콘텐츠가 타이틀로 오분류됨.
+  // 단일 부모 불변식이라 incoming 엣지(target=자식)의 source가 곧 부모다.
+  const isMainById = new Map(
+    nodes.map((n) => [n.id, !!(n.data as { isMain?: boolean })?.isMain]),
+  );
+  const parentIdByChildId = new Map<string, string>();
+  edges.forEach((e) => parentIdByChildId.set(e.target, e.source));
+
   const nodesWithCallbacks = nodes.map((node) => {
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
     const hasParent = !isRootNode(node);
+    // 콘텐츠 노드 = 부모가 있고 그 부모가 프로젝트가 아님 (프로젝트 직계 = 타이틀)
+    const parentId = parentIdByChildId.get(node.id);
+    const isContentNode = parentId != null && !isMainById.get(parentId);
 
     const isContextMenuOpen = contextMenuNodeId === node.id;
     const isEditorOpen = myOpenEditorNodeIds.includes(node.id);
@@ -1355,8 +908,13 @@ function GraphCanvasInner({
         ...node.data,
         handleSide: node.data?.isMain ? undefined : node.data?.handleSide,
         hasParent, // 부모 노드 존재 여부 전달
+        isContentNode, // 타이틀(프로젝트 직계) vs 콘텐츠(그 이하) 구분 — Figma 08 G1 노드 스타일
         showInputBox: myOpenEditorNodeIds.includes(node.id), // 열린 노드에 입력박스 표시 (내 탭 기준)
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
+        isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
+        onStartRename: handleStartRename,
+        onFinishRename: handleFinishRename,
+        onAddChild: handleAddChild, // G4·C1 hover "+" 자식 노드 추가
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
@@ -1618,7 +1176,7 @@ function GraphCanvasInner({
                       ? updatedNodes.find((n) => n.id === remainingParentId)
                       : null;
                     const color = remainingParent
-                      ? getGraphColor(remainingParentId!, updatedNodes)
+                      ? getGraphColor(remainingParentId!, updatedNodes, updatedEdges)
                       : DEFAULT_NODE_COLOR;
                     // 페인트가 색을 바꾸기 전에 저장 대상 집합을 확정해 둔다
                     const recolorIds = getRecolorTargetIds(
@@ -1722,16 +1280,9 @@ function GraphCanvasInner({
         }
       }
 
-      // 단일 부모 불변식 (#92): swap 이후의 실제 자식이 이미 부모를 가지면 차단
-      const { targetId } = resolveConnectionDirection(
-        connection.source,
-        connection.target,
-        nodes,
-        edges,
-      );
-      if (getParentId(targetId, edges) !== null) {
-        return false;
-      }
+      // 단일 부모 불변식 (#92)은 차단이 아니라 재부모화로 보장한다 —
+      // 실제 자식(swap 이후 targetId)이 이미 부모를 가져도 연결을 허용하고,
+      // onConnect가 기존 부모 엣지를 전부 끊은 뒤 새 연결을 만든다.
 
       // 부모가 있는 노드의 부모 방향(target-*) 핸들로는 연결 불가 —
       // 연결은 부모 반대 방향으로만 가능 (docs/GRAPH_RULES.md §3-2).
@@ -1771,16 +1322,29 @@ function GraphCanvasInner({
       const { sourceId, targetId, shouldSwap, bothInGraphs } =
         resolveConnectionDirection(params.source, params.target, nodes, edges);
 
-      // 단일 부모 불변식 (#92): 실제 자식이 이미 부모를 가지면 연결하지 않는다.
-      // isValidConnection이 드래그 중에 걸러주지만, 프로그래매틱 연결 대비 이중 방어.
-      if (getParentId(targetId, edges) !== null) return;
-
       // 부모 있는 노드의 부모 방향(target-*) 핸들 연결 차단 — isValidConnection과 동일 규칙
       if (
         params.targetHandle?.startsWith('target-') &&
         getParentId(params.target, edges) !== null
       )
         return;
+
+      // 단일 부모 불변식 (#92): 실제 자식이 이미 부모를 가지면 기존 부모 엣지를
+      // 전부 끊고 새 연결로 재부모화한다 (차단 → 재부모화로 변경).
+      // filter(전부)인 이유: legacy 데이터에 부모가 2개인 노드가 존재하므로
+      // (과거 incoming 2개 허용 시절 산물), 재연결이 그 데이터의 복구 경로가 된다.
+      const oldParentEdges = edges.filter((e) => e.target === targetId);
+      if (oldParentEdges.length > 0) {
+        const oldIds = new Set(oldParentEdges.map((e) => e.id));
+        setEdges((prev) => prev.filter((e) => !oldIds.has(e.id)));
+        // 서버가 엣지 삭제 시 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
+        setNodes((prev) => applyDepthOnEdgeDelete(prev, edges, targetId));
+        oldParentEdges.forEach((e) =>
+          deleteEdge(workspaceId, e.id).catch((err) =>
+            console.error(`[deleteEdge reparent-connect ${e.id}] failed`, err),
+          ),
+        );
+      }
 
       const srcNode = nodes.find((n) => n.id === sourceId);
       const tgtNode = nodes.find((n) => n.id === targetId);
@@ -1809,7 +1373,14 @@ function GraphCanvasInner({
       const resolvedSourceHandle = `source-${computedSide}`;
       const resolvedTargetHandle = resolveHandleId('target', computedSide);
 
-      const colorToPropagate = getGraphColor(sourceId, nodes);
+      const colorToPropagate = getGraphColor(sourceId, nodes, edges);
+      // 무색 그래프(legacy)에 랜덤 색이 확정된 경우, 소스 노드·루트에도 저장해
+      // 다음 연결부터 같은 색을 읽게 한다 (연결마다 색이 달라지는 혼색 버그 방지)
+      const sourceColorAnchorIds = getUncoloredGraphAnchorIds(
+        sourceId,
+        nodes,
+        edges,
+      );
 
       // target이 트리째 병합될 때 서브트리 방향 정규화 대상 (subtreeInternalEdgeFilter CONTEXT 참고)
       const mergedSubtreeIds = tgtNode
@@ -1897,12 +1468,27 @@ function GraphCanvasInner({
           }
         }
 
-        return updateSubtreeColors(
+        const painted = updateSubtreeColors(
           targetId,
           positionedNodes,
           edges,
           colorToPropagate,
         );
+        // 무색 앵커(소스·루트)도 같은 색으로 로컬 페인트 — main은 표시만 흰색 유지
+        return sourceColorAnchorIds.length === 0
+          ? painted
+          : painted.map((node) =>
+              sourceColorAnchorIds.includes(node.id)
+                ? {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      color: colorToPropagate.bg,
+                      textColor: colorToPropagate.text,
+                    },
+                  }
+                : node,
+            );
       });
 
       // 서브트리 내부 엣지 핸들도 새 방향으로 — 로컬 상태와 서버 저장분 동시 갱신
@@ -1953,7 +1539,10 @@ function GraphCanvasInner({
           ]);
           // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
           setNodes((prev) => applyDepthOnEdgeCreate(prev, edges, sourceId, targetId));
-          getRecolorTargetIds(targetId, nodes, edges).forEach((id) =>
+          new Set([
+            ...getRecolorTargetIds(targetId, nodes, edges),
+            ...sourceColorAnchorIds,
+          ]).forEach((id) =>
             updateNodeContent(workspaceId, id, {
               color: colorToPropagate.bg,
               textColor: colorToPropagate.text,
@@ -2064,8 +1653,21 @@ function GraphCanvasInner({
           return;
         }
 
-        // source 노드의 색상 가져오기
-        const colorPair = getGraphColor(fromNode.id, nodes);
+        // source 노드의 색상 가져오기 — 무색 그래프면 랜덤 확정 후 앵커에도 저장
+        const colorPair = getGraphColor(fromNode.id, nodes, edges);
+        const colorAnchorIds = getUncoloredGraphAnchorIds(
+          fromNode.id,
+          nodes,
+          edges,
+        );
+        colorAnchorIds.forEach((id) =>
+          updateNodeContent(workspaceId, id, {
+            color: colorPair.bg,
+            textColor: colorPair.text,
+          }).catch((err) =>
+            console.error('[updateNodeColor anchor] failed', err),
+          ),
+        );
 
         try {
           const { nodeId } = await createMdNode(
@@ -2083,7 +1685,18 @@ function GraphCanvasInner({
           // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
           // 본인 생성 노드의 WS 이벤트는 무시되므로 REST 응답이 항상 최초 삽입.
           setNodes((prev) => [
-            ...prev,
+            ...prev.map((node) =>
+              colorAnchorIds.includes(node.id)
+                ? {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      color: colorPair.bg,
+                      textColor: colorPair.text,
+                    },
+                  }
+                : node,
+            ),
             {
               id: nodeId,
               type: 'textUpdater',
@@ -2388,7 +2001,7 @@ function GraphCanvasInner({
           : findNonOverlappingPosition(basePosition, nodes);
 
       const colorPair = shouldConnect
-        ? getGraphColor(targetParent.id, nodes)
+        ? getGraphColor(targetParent.id, nodes, edges)
         : DEFAULT_NODE_COLOR;
 
       try {
@@ -2870,8 +2483,10 @@ function GraphCanvasInner({
           const parentNode = draggedIsMain ? draggedNode : newParent;
           const childNode = draggedIsMain ? newParent : draggedNode;
 
-          // 1. 기존 부모와의 연결 끊기 (childNode 기준)
-          const existingParentEdge = edges.find(
+          // 1. 기존 부모와의 연결 끊기 (childNode 기준) — filter(전부)인 이유:
+          // legacy 데이터에 부모 2개인 노드가 존재해, find(첫 번째)만 끊으면
+          // 재부모화 후에도 두 번째 부모가 남는다
+          const existingParentEdges = edges.filter(
             (edge) => edge.target === childNode.id,
           );
 
@@ -3083,25 +2698,30 @@ function GraphCanvasInner({
 
           // 6. 엣지 업데이트 (기존 부모 연결 끊고, 새 부모 연결)
           // 기존 부모 연결 먼저 제거 — 로컬 state와 서버 모두 삭제해야 재접속 시 복원되지 않음
-          setEdges((prev) =>
-            existingParentEdge
-              ? prev.filter((edge) => edge.id !== existingParentEdge.id)
-              : prev,
-          );
-          if (existingParentEdge) {
+          if (existingParentEdges.length > 0) {
+            const oldIds = new Set(existingParentEdges.map((e) => e.id));
+            setEdges((prev) => prev.filter((edge) => !oldIds.has(edge.id)));
             // 서버가 이 시점에 target 서브트리 depth를 갱신하므로 로컬도 동일 규칙 적용
             setNodes((prev) =>
-              applyDepthOnEdgeDelete(prev, edges, existingParentEdge.target),
+              applyDepthOnEdgeDelete(prev, edges, childNode.id),
             );
-            deleteEdge(workspaceId, existingParentEdge.id).catch((err) =>
-              console.error('[deleteEdge re-parent] failed', err),
+            existingParentEdges.forEach((e) =>
+              deleteEdge(workspaceId, e.id).catch((err) =>
+                console.error(`[deleteEdge re-parent ${e.id}] failed`, err),
+              ),
             );
           }
 
           // API: 새 부모 연결 — REST 응답으로 edgeId 취득 후 state 추가
           const dragStopSourceHandle = `source-${sideRelativeToParent}`;
           const dragStopTargetHandle = `target-${sideRelativeToParent === 'left' ? 'right' : 'left'}`;
-          const dragStopColor = getGraphColor(parentNode.id, nodes);
+          const dragStopColor = getGraphColor(parentNode.id, nodes, edges);
+          // 무색 그래프면 확정 색을 앵커(부모·루트)에도 저장 (onConnect와 동일 규칙)
+          const dragStopAnchorIds = getUncoloredGraphAnchorIds(
+            parentNode.id,
+            nodes,
+            edges,
+          );
           createEdge(
             workspaceId,
             parentNode.id,
@@ -3125,7 +2745,10 @@ function GraphCanvasInner({
               setNodes((prev) =>
                 applyDepthOnEdgeCreate(prev, edges, parentNode.id, childNode.id),
               );
-              getRecolorTargetIds(childNode.id, nodes, edges).forEach((id) =>
+              new Set([
+                ...getRecolorTargetIds(childNode.id, nodes, edges),
+                ...dragStopAnchorIds,
+              ]).forEach((id) =>
                 updateNodeContent(workspaceId, id, {
                   color: dragStopColor.bg,
                   textColor: dragStopColor.text,
@@ -3140,14 +2763,28 @@ function GraphCanvasInner({
 
           // 7. childNode 서브트리 색상을 parentNode 색상으로 업데이트
           // dragStopColor 재사용 — 색 없는 main의 랜덤 색이 두 번 뽑히는 것 방지
-          setNodes((currentNodes) =>
-            updateSubtreeColors(
+          setNodes((currentNodes) => {
+            const painted = updateSubtreeColors(
               childNode.id,
               currentNodes,
               edges,
               dragStopColor,
-            ),
-          );
+            );
+            return dragStopAnchorIds.length === 0
+              ? painted
+              : painted.map((node) =>
+                  dragStopAnchorIds.includes(node.id)
+                    ? {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          color: dragStopColor.bg,
+                          textColor: dragStopColor.text,
+                        },
+                      }
+                    : node,
+                );
+          });
         }
       }
 
@@ -3280,6 +2917,12 @@ function GraphCanvasInner({
     <div
       ref={wrapperRef}
       className="relative w-full h-full bg-background"
+      // Figma 08 '그래프뷰 배경' 스타일 실측값: 각지형(conic) 그라데이션, 아주 옅은 라벤더/핑크 5색.
+      // 앱 토큰에 대응 값이 없어 Figma 디자인 hex를 그대로 사용.
+      style={{
+        background:
+          'conic-gradient(from 90deg at 50% 50%, #E5EBFF, #FFF7FB, #F1F4FE, #EDF2FF, #FAF4F8, #E5EBFF)',
+      }}
       onDoubleClick={onPaneDoubleClick}
     >
       <ReactFlow
@@ -3310,114 +2953,97 @@ function GraphCanvasInner({
         zoomOnDoubleClick={false}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
-      />
+        proOptions={{ hideAttribution: true }}
+      >
+        {/* Figma 08(G1) 우하단 미니맵 — 라운드 카드. 줌 컨트롤 위에 오도록 bottom 오프셋.
+            노드 색은 프로젝트=흰색, 그 외=그래프 색으로 실제 그래프와 동일하게 표시 */}
+        <MiniMap
+          position="bottom-right"
+          pannable
+          zoomable
+          nodeColor={(n) =>
+            (n.data as { isMain?: boolean; color?: string })?.isMain
+              ? '#ffffff'
+              : ((n.data as { color?: string })?.color ?? '#E5E5E5')
+          }
+          nodeStrokeColor="#D9D9D9"
+          nodeBorderRadius={6}
+          maskColor="rgba(240, 242, 248, 0.6)"
+          bgColor="#ffffff"
+          style={{
+            width: 220,
+            height: 148,
+            bottom: 52,
+            right: 12,
+            margin: 0,
+            borderRadius: 12,
+            border: '1px solid rgb(var(--ds-gray-800))',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
+            overflow: 'hidden',
+          }}
+        />
+      </ReactFlow>
       {!savedViewport && <InitialViewport mainNodeId={mainNodeId} />}
       {onFirstPaint && (
         <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
       )}
       <CursorOverlay cursors={cursors} />
       <ZoomControl />
-      {/* 빈 캔버스 empty state (#204) — 첫 행동을 안내하고 숨겨진 조작법을 조작 위치에서 노출.
-          실제 노드 모양 안에 용어를 그대로 써서(중심 주제/하위 주제/연결점) 사용법 창과 같은
-          어휘를 미리 학습시킨다. 노드 표면색은 UI 가이드의 고정 팔레트라 하드코딩 허용 */}
+      {/* 빈 캔버스 empty state (G2) — 프로젝트 노드부터 만들도록 첫 행동을 안내하고,
+          프로젝트 → 타이틀 → 회의 녹음으로 이어지는 핵심 흐름을 단계로 보여준다 */}
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
-          {/* 미니 그래프: 중심 주제 노드 → 연결점 → 같은 색(같은 그래프) 하위 주제 노드 2개 */}
-          <div className="flex items-center" aria-hidden="true">
-            <div
-              className="relative rounded-lg border px-5 py-3 text-sm font-medium"
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderColor: '#D9D9D9',
-                color: '#2C2C2C',
-              }}
-            >
-              중심 주제
-              {/* 연결점 — 노드 가장자리의 작은 점 */}
-              <span
-                className="absolute top-1/2 -right-[5px] h-2.5 w-2.5 -translate-y-1/2 rounded-full"
-                style={{ backgroundColor: '#2C2C2C' }}
-              />
-              {/* 연결점 라벨 — 점 바로 위, 연결선과 겹치지 않는 노드 우상단 바깥.
-                  연결점(검정)과 같은 색으로 맞춤 */}
-              <span className="absolute -top-5 right-0 translate-x-1/2 whitespace-nowrap text-[11px] text-foreground">
-                연결점
-              </span>
-            </div>
-            <svg width="48" height="104" viewBox="0 0 48 104" fill="none">
-              <path
-                d="M0 52 H20 V26 H48"
-                stroke="#D9D9D9"
-                strokeWidth="1.5"
-                fill="none"
-              />
-              <path
-                d="M0 52 H20 V78 H48"
-                stroke="#D9D9D9"
-                strokeWidth="1.5"
-                fill="none"
-              />
-            </svg>
-            {/* 같은 그래프의 서브 노드는 같은 색 (색상 = 그래프 구분) */}
-            <div className="flex flex-col gap-5">
-              <span
-                className="rounded-full px-4 py-1.5 text-[13px]"
-                style={{ backgroundColor: '#D0EEFB', color: '#254756' }}
-              >
-                하위 주제
-              </span>
-              <span
-                className="rounded-full px-4 py-1.5 text-[13px]"
-                style={{ backgroundColor: '#D0EEFB', color: '#254756' }}
-              >
-                하위 주제
-              </span>
-            </div>
-          </div>
-          <p className="mt-6 text-xl font-bold text-foreground">
-            머릿속 생각을 하나 꺼내볼까요?
+          {/* 점선 프로젝트 노드 모형 */}
+          <span
+            className="rounded-full border-[1.5px] border-dashed border-gray-700 px-7 py-2.5 text-[13px] text-gray-500"
+            aria-hidden="true"
+          >
+            프로젝트
+          </span>
+          <p className="mt-5 text-xl font-bold text-foreground">
+            첫 프로젝트 노드를 만들어보세요
+          </p>
+          <p className="mt-2 text-[13.5px] text-muted">
+            과목이나 팀 프로젝트 이름으로 시작하면 좋아요. 예: 운영체제, 캡스톤
           </p>
           <button
             type="button"
             onClick={createProjectAtViewportCenter}
             disabled={isCreatingProject}
-            className="pointer-events-auto mt-5 rounded-lg bg-main px-6 py-2.5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
+            className="pointer-events-auto mt-6 rounded-[20px] px-6 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            첫 주제 만들기
+            + 프로젝트 노드 만들기
           </button>
-          <div className="mt-7 flex flex-col gap-2.5">
+          {/* 핵심 흐름 3단계 */}
+          <div className="mt-8 flex items-center gap-2 text-[12.5px] text-muted">
             {(
               [
-                ['우클릭', '중심 주제 만들기', <MouseIcon key="r" button="right" />],
-                [
-                  '더블 클릭',
-                  '하위 주제 만들기',
-                  <MouseIcon key="d" button="double" />,
-                ],
-                ['연결점 끌기', '이어진 주제 만들기', <ConnectDragIcon key="c" />],
+                ['1', '프로젝트 만들기'],
+                ['2', '타이틀 추가'],
               ] as const
-            ).map(([action, desc, icon]) => (
-              <div key={action} className="flex items-center gap-2.5 text-sm">
-                <span className="flex w-[108px] shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-foreground">
-                  {icon}
-                  {action}
+            ).map(([step, label]) => (
+              <span key={step} className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-700 text-[11px]">
+                    {step}
+                  </span>
+                  {label}
                 </span>
-                <span className="text-muted">{desc}</span>
-              </div>
+                <span aria-hidden="true">→</span>
+              </span>
             ))}
+            <span className="flex items-center gap-1.5">
+              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-700 text-[11px]">
+                3
+              </span>
+              타이틀 위{' '}
+              <span className="font-semibold text-foreground whitespace-nowrap">
+                <span className="text-red-500">●</span> 회의 녹음
+              </span>{' '}
+              으로 회의 시작
+            </span>
           </div>
-          <p className="mt-6 flex items-center gap-1.5 text-[13px] text-muted">
-            자세한 방법은 우측 상단{' '}
-            {/* 실제 사용법 버튼과 동일한 디자인·동작 — 클릭 시 사용법 창 열림 */}
-            <button
-              type="button"
-              onClick={() => usageGuideRef.current?.open()}
-              className="pointer-events-auto rounded-[5px] border border-gray-700 bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-surface"
-            >
-              사용법
-            </button>{' '}
-            버튼에 있어요.
-          </p>
         </div>
       )}
       {/* 노드 생성 진입점을 항상 보이는 버튼으로 제공 (#204) — 뷰포트 중앙에 중심 노드 생성 */}
@@ -3447,7 +3073,7 @@ function GraphCanvasInner({
       {/* top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
           top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치. */}
       <div className="absolute top-20 right-4 z-40 flex items-start gap-2">
-        <GraphUsageGuide ref={usageGuideRef} highlight={nodes.length === 0} />
+        <HelpMenu onOpenGuide={() => setOnboardingOpen(true)} />
         {myOpenEditorNodeIds.length > 0 && (
           <button
             type="button"
@@ -3458,37 +3084,88 @@ function GraphCanvasInner({
           </button>
         )}
       </div>
-      {isArchiveModalOpen && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[360px] rounded-xl border border-border bg-background p-5 shadow-xl">
-            {/* 보관함 UI가 활성화되기 전까지는 사용자 입장에서 복구 수단이 없으므로
-                "삭제"로 안내한다 (보관함 활성화 시 카피를 보관 문구로 되돌릴 것) */}
-            <p className="text-base font-semibold">노드를 삭제할까요?</p>
-            <p className="mt-2 text-sm text-muted">
-              선택한 노드와 아래에 연결된 노드까지 총{' '}
-              {pendingArchiveNodeIds.length}개가 삭제돼요.
-            </p>
-            <p className="mt-1 text-sm text-muted">삭제한 노드는 되돌릴 수 없어요.</p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={handleCancelArchive}
-                className="rounded-md border border-border px-3 py-1.5 text-sm"
+      <GraphOnboardingModal
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+      />
+      {/* D2 하위 삭제 확인 — 대상 노드 이름·타입·하위 개수를 카피에 반영(Figma 08 D2).
+          보관함 UI 활성화 전까지 복구 수단이 없어 "삭제"로 안내(활성화 시 보관 문구로). */}
+      {isArchiveModalOpen &&
+        (() => {
+          const target = nodes.find(
+            (n) => n.id === pendingArchiveNodeIds[0],
+          );
+          const delTitle =
+            ((target?.data as { title?: string } | undefined)?.title ?? '') ||
+            '제목 없음';
+          const descendants = Math.max(0, pendingArchiveNodeIds.length - 1);
+          const parentId = edges.find(
+            (e) => e.target === pendingArchiveNodeIds[0],
+          )?.source;
+          const parentIsMain = parentId
+            ? !!(
+                nodes.find((n) => n.id === parentId)?.data as
+                  | { isMain?: boolean }
+                  | undefined
+              )?.isMain
+            : false;
+          // 콘텐츠 = 부모가 있고 그 부모가 프로젝트가 아님(노드 렌더의 isContentNode와 동일).
+          // 루트(부모 없음)·프로젝트 직계는 타이틀로 본다.
+          const isContentType = !!parentId && !parentIsMain;
+          const typeLabel = (target?.data as { isMain?: boolean } | undefined)
+            ?.isMain
+            ? '프로젝트'
+            : isContentType
+              ? '콘텐츠'
+              : '타이틀';
+          return (
+            <div
+              className="absolute inset-0 z-50 flex items-center justify-center bg-black/40"
+              onClick={handleCancelArchive}
+            >
+              <div
+                className="w-[360px] max-w-[90vw] rounded-[16px] bg-background p-5 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
               >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmArchive}
-                disabled={isArchiveDeleting}
-                className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50"
-              >
-                삭제하기
-              </button>
+                <div className="flex items-start justify-between">
+                  <p className="text-[16px] font-bold text-foreground">
+                    ‘{delTitle}’를 삭제할까요?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCancelArchive}
+                    aria-label="닫기"
+                    className="shrink-0 text-muted hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="mt-2 text-[13px] text-muted">
+                  {descendants > 0
+                    ? `이 ${typeLabel} 아래의 노드 ${descendants}개도 함께 삭제되고, 되돌릴 수 없어요`
+                    : '삭제하면 되돌릴 수 없어요'}
+                </p>
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelArchive}
+                    className="h-[40px] flex-1 rounded-full border border-border text-[13px] font-semibold text-foreground transition-colors hover:bg-surface"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmArchive}
+                    disabled={isArchiveDeleting}
+                    className="h-[40px] flex-1 rounded-full bg-red-500 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    삭제하기
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
     </div>
   );
 }

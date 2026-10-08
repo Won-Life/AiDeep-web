@@ -337,7 +337,7 @@ export default function UserMenu({
           {/* 버튼 영역 */}
           <div className="flex flex-col gap-2" style={{ padding: "0 8px 8px" }}>
             {/* 설정 */}
-            {SHOW_TEMP_HIDDEN_UI && (
+            {onSettings && (
             <button
               onClick={() => {
                 setIsOpen(false);

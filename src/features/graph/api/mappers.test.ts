@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toFlowNode, toFlowEdge } from './mappers'
+import { toFlowNode, toFlowEdge, convertToReactFlow } from './mappers'
 import type { NodeDto, EdgeDto } from '../types'
 import { DEFAULT_NODE_COLOR } from '../constants/colors'
 
@@ -96,5 +96,48 @@ describe('toFlowEdge', () => {
     const edge = toFlowEdge(baseEdge)
     expect(edge.sourceHandle).toBe('right')
     expect(edge.targetHandle).toBe('left')
+  })
+})
+
+describe('toFlowNode — nodeType 보존', () => {
+  it('node_type을 data.nodeType으로 보존한다', () => {
+    expect(toFlowNode({ ...baseNode, node_type: 'RESOURCE' }).data.nodeType).toBe('RESOURCE')
+  })
+})
+
+describe('toFlowEdge — data 초기화', () => {
+  it('data는 빈 객체로 초기화된다', () => {
+    expect(toFlowEdge(baseEdge).data).toEqual({})
+  })
+})
+
+describe('convertToReactFlow', () => {
+  const parentDto: NodeDto = { ...baseNode, node_id: 'node-a', position_x: 0, position_y: 0 }
+  const childDto: NodeDto = { ...baseNode, node_id: 'node-b', position_x: 264, position_y: 0, depth: 1 }
+
+  it('노드·엣지 개수를 보존한다', () => {
+    const { nodes, edges } = convertToReactFlow([parentDto, childDto], [baseEdge])
+    expect(nodes).toHaveLength(2)
+    expect(edges).toHaveLength(1)
+  })
+
+  it('incoming 엣지의 source_handle로 자식의 handleSide를 초기화한다', () => {
+    const { nodes } = convertToReactFlow([parentDto, childDto], [baseEdge])
+    const child = nodes.find((n) => n.id === 'node-b')
+    expect(child?.data.handleSide).toBe('right')
+    expect(child?.data.hasParent).toBe(true)
+  })
+
+  it('부모 없는 노드는 hasParent가 false다', () => {
+    const { nodes } = convertToReactFlow([parentDto, childDto], [baseEdge])
+    expect(nodes.find((n) => n.id === 'node-a')?.data.hasParent).toBe(false)
+  })
+
+  it('엣지 핸들을 source-*/target-* 형태로 정규화하고 hub 좌표를 계산한다', () => {
+    const { edges } = convertToReactFlow([parentDto, childDto], [baseEdge])
+    expect(edges[0].sourceHandle).toBe('source-right')
+    expect(edges[0].targetHandle).toBe('target-left')
+    expect(edges[0].data?.hubX).toBeTypeOf('number')
+    expect(edges[0].data?.hubY).toBeTypeOf('number')
   })
 })

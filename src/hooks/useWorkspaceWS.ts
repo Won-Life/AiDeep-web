@@ -19,7 +19,7 @@ import {
   getDescendantIds,
   applyDepthOnEdgeCreate,
   applyDepthOnEdgeDelete,
-} from '@/features/graph/utils/graphUtils';
+} from '@/features/graph/logic/traversal';
 
 const TRANSITION_DURATION = 300;
 const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;

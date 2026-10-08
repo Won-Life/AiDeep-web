@@ -285,3 +285,54 @@ export function buildCollapseButtons(
     },
   ];
 }
+
+export function getParentId(nodeId: string, edges: Edge[]): string | null {
+  const incoming = edges.find((edge) => edge.target === nodeId);
+  return incoming?.source ?? null;
+}
+
+function getAncestorIds(nodeId: string, edges: Edge[]): Set<string> {
+  const ancestors = new Set<string>();
+  let current = getParentId(nodeId, edges);
+  // 방문 체크로 순환에서 무한 루프 방지 (§10-4/10-5). 정상 트리에선 부모가 null이
+  // 되며 끝나지만, 레거시·경합으로 순환 엣지가 남으면 !has 조건이 루프를 끊는다.
+  while (current && !ancestors.has(current)) {
+    ancestors.add(current);
+    current = getParentId(current, edges);
+  }
+  return ancestors;
+}
+
+/*
+ * CONTEXT
+ * - Problem      : 그래프 기준 노드(대칭 축·같은 그래프 판정·방향 기준점)를 isMain 조상
+ *                  탐색으로 찾아서, 메인 노드 없는 그래프(일반 노드 루트)에서는 undefined가
+ *                  되어 해당 로직이 전부 무력화됐다 (#146).
+ * - Why          : root 판별 단일 기준인 depth === 0(isRootNode, #99)으로 조상 체인을
+ *                  탐색한다. 메인 노드는 항상 depth 0이므로 기존 메인 그래프 동작은 불변.
+ * - Alternatives : 엣지 스캔으로 "부모 없는 조상" 탐색 — #99에서 root 판별을 depth 단일
+ *                  기준으로 통일했으므로 기각 (두 기준 공존 시 WS 수신 타이밍에 분기).
+ * - Trade-offs   : depth가 서버와 어긋난 노드는 오판 가능 — 아래 Edge Case fallback으로 방어.
+ * - Edge Case    : 서버 deleteNode가 depth를 전파하지 않아(Aideep_backend#64) depth≠0인
+ *                  채 루트가 된 노드가 존재할 수 있다 → 조상 체인에 depth 0이 없으면
+ *                  체인 끝(부모 없는 노드)을 루트로 간주한다.
+ */
+export function getRootNodeForSubtree(
+  nodeId: string,
+  nodes: Node[],
+  edges: Edge[],
+): Node | undefined {
+  const currentNode = nodes.find((n) => n.id === nodeId);
+  if (!currentNode) return undefined;
+  if (isRootNode(currentNode)) return currentNode;
+
+  // getAncestorIds는 가까운 부모 → 최상위 순으로 삽입된 Set — 순회 후 last = 체인 끝
+  let last: Node = currentNode;
+  for (const ancestorId of getAncestorIds(nodeId, edges)) {
+    const ancestor = nodes.find((n) => n.id === ancestorId);
+    if (!ancestor) continue;
+    if (isRootNode(ancestor)) return ancestor;
+    last = ancestor;
+  }
+  return last;
+}
