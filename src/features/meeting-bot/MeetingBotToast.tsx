@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 
-export type MeetingBotToastKind = "success" | "error";
+export type MeetingBotToastKind = "success" | "error" | "pending";
 
 const TOAST_CONTENT: Record<MeetingBotToastKind, { message: string; color: string; background: string; border: string; icon: string }> = {
   success: {
@@ -18,6 +18,13 @@ const TOAST_CONTENT: Record<MeetingBotToastKind, { message: string; color: strin
     background: "#fcecec",
     border: "#f2d4d4",
     icon: "!",
+  },
+  pending: {
+    message: "회의 봇 기능은 준비 중이에요.",
+    color: "#5f6879",
+    background: "#eef0f4",
+    border: "#dcdfe6",
+    icon: "i",
   },
 };
 

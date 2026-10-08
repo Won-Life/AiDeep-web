@@ -263,9 +263,12 @@ export default function MeetingBotWidget({ workspaceId, status = null, limitReac
 
   const closeModal = useCallback(() => setIsOpen(false), []);
   const handleRequest = useCallback(async (meetingTarget: string, platform: MeetingBotPlatform) => {
+    if (!requestMeetingBot) {
+      setToast("pending");
+      return true;
+    }
     try {
-      const request = createMeetingBotRequest(meetingTarget, workspaceId, platform);
-      await requestMeetingBot?.(request);
+      await requestMeetingBot(createMeetingBotRequest(meetingTarget, workspaceId, platform));
       setToast("success");
       return true;
     } catch {
@@ -281,9 +284,14 @@ export default function MeetingBotWidget({ workspaceId, status = null, limitReac
         <button
           type="button"
           onClick={() => { setToast(null); setIsOpen(true); }}
-          className="pointer-events-auto rounded-[13px] bg-[var(--meeting-primary)] px-5 py-3 text-sm font-bold text-white shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-primary)] sm:text-base"
+          aria-label="회의 봇 추가"
+          className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-[var(--meeting-error)] bg-[var(--meeting-error-surface)] px-4 py-2 text-xs font-semibold text-[var(--meeting-ink)] shadow-md transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-error)]"
         >
-          회의 봇 추가
+          <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="10" cy="10" r="10" fill="var(--meeting-error)" />
+            <path d="M6 8.5v3M8 7v6M10 5.5v9M12 7v6M14 8.5v3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+          회의 녹음 시작
         </button>
       </div>
       {toast ? <MeetingBotToast kind={toast} onClose={() => setToast(null)} /> : null}
