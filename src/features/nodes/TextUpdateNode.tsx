@@ -554,8 +554,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         )}
         {/*
           CONTEXT
-          - Problem      : 프로젝트 탭이 단색 돌출부라 참고 이미지의 흰 폴더 외곽이 없다.
-          - Why          : 흰 외곽과 색상 탭을 겹쳐 기존 카드와 하나의 폴더로 보이게 한다.
+          - Problem      : 프로젝트의 돌출 탭이 본체와 같은 쌓임 순서여서 앞쪽 폴더 탭으로 보이지 않는다.
+          - Why          : 탭 전체를 본체·hover 배경보다 앞에 두어 흰 외곽과 파란 면을 온전히 노출한다.
           - Alternatives : 이미지 배경은 제목 길이와 그래프 색상 변화에 대응하기 어렵다.
           - Trade-offs   : 카드 밖 탭은 시각 장식이며 연결 핸들은 카드 중심을 유지한다.
           - Edge Case    : 선택·협업 강조는 탭에도 반영하고 긴 제목은 기존 두 줄 제한을 유지한다.
@@ -579,7 +579,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                */
               backgroundColor: mainFolderRing,
               borderRadius: mainHighlighted ? '26px 26px 0 0' : '18px 18px 0 0',
-              zIndex: 0,
+              zIndex: 2,
             }}
           >
             {mainHighlighted && <div style={{

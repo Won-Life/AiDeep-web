@@ -42,8 +42,8 @@ export function useGraphOnboardingSeen(): boolean {
 function MiniProjectNode() {
   return (
     <svg width="86" height="66" viewBox="0 0 86 66" fill="none" aria-hidden="true" className="max-w-full overflow-visible drop-shadow-[0_2px_2px_rgb(0_0_0/0.16)]">
-      <path d="M3 12V9a6 6 0 0 1 6-6h16a6 6 0 0 1 6 5v4" fill="var(--guide-blue)" stroke="white" strokeWidth="3" />
       <rect x="2" y="7" width="82" height="57" rx="5" fill="white" />
+      <path d="M3 12V9a6 6 0 0 1 6-6h16a6 6 0 0 1 6 5v4" fill="var(--guide-blue)" stroke="white" strokeWidth="3" />
       <text x="43" y="40" textAnchor="middle" fill="rgb(var(--ds-text-gray))" fontSize="14" fontWeight="700">OS</text>
     </svg>
   );

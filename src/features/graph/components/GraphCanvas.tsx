@@ -3008,8 +3008,10 @@ function GraphCanvasInner({
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-y-auto px-6 py-8">
           <div className="flex max-w-full flex-col items-center text-center sm:-translate-x-9">
             <svg width="108" height="82" viewBox="0 0 108 82" fill="none" aria-hidden="true" className="shrink-0 drop-shadow-[0_2px_1px_rgba(90,110,170,0.35)]">
-              <path d="M4 15V10a8 8 0 0 1 8-8h17a9 9 0 0 1 9 9v4" fill="#7889FF" stroke="white" strokeWidth="4" />
+              {/* 본체를 먼저 그리고 탭을 마지막에 겹쳐 앞면의 파란 탭이 가려지지 않게 한다. */}
               <rect x="2" y="7" width="104" height="72" rx="10" fill="white" />
+              <path d="M2 18V12A12 12 0 0 1 14 0H29A12 12 0 0 1 41 12V18Z" fill="white" />
+              <path d="M6 11A8 8 0 0 1 14 3H29A8 8 0 0 1 37 11Z" fill="#607AFF" />
               <text x="54" y="50" textAnchor="middle" fill="#CECECE" fontSize="20" fontWeight="600">?</text>
             </svg>
             <h2 className="mt-8 text-[17px] leading-6 font-bold text-[#292929]">첫 프로젝트 노드를 만들어보세요</h2>
