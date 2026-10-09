@@ -9,6 +9,7 @@ import { inviteMeetingBot } from "@/api/meeting";
 import { useFestivalPopup } from "@/features/festival/useFestivalPopup";
 import WorkspaceLoading from "@/components/ui/WorkspaceLoading";
 import GraphLoadError from "@/components/ui/GraphLoadError";
+import WorkspaceUnavailable from "@/features/workspace/WorkspaceUnavailable";
 import { useWorkspaceLayout } from "./context";
 
 /*
@@ -67,8 +68,9 @@ export default function WorkspacePage() {
     );
   }
 
+  // 불러오는 중이면 로딩, 불러왔는데 워크스페이스가 없으면(신규 사용자) 첫 프로젝트 만들기 빈 상태
   if (!workspaceId || !synced) {
-    return <WorkspaceLoading />;
+    return <WorkspaceUnavailable synced={synced} onCreated={() => setSynced(false)} />;
   }
 
   return (
