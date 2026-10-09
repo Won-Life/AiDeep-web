@@ -25,6 +25,7 @@ import {
   SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND,
 } from '@lexical/react/LexicalTypeaheadMenuPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { getTemplateSections } from './contentTemplates';
 import {
   $getRoot,
   $getSelection,
@@ -450,20 +451,25 @@ function insertTable(editor: LexicalEditor) {
 
 // ─── 콘텐츠 템플릿 (C3) ──────────────────────────────────────────────────────────
 // 섹션 제목을 h3 + 빈 문단으로 커서 위치에 삽입. G3 온보딩이 안내하는 "강의 필기/회의 메모
-// 템플릿으로 시작" 기능. 강의 필기는 Figma 08 C3 실측(핵심 개념/자세한 설명/헷갈린 점/참고),
-// 회의 메모는 일반 구조 근사치(디자인 확정되면 조정).
-const LECTURE_TEMPLATE = ['핵심 개념', '자세한 설명', '헷갈린 점', '참고'];
-const MEETING_TEMPLATE = ['안건', '논의 내용', '결정 사항', '할 일'];
+// 템플릿으로 시작" 기능. 섹션 정의는 콘텐츠 노드 만들기 메뉴(Figma C1)와 같은 contentTemplates.
+const LECTURE_TEMPLATE = getTemplateSections('lecture');
+const MEETING_TEMPLATE = getTemplateSections('meeting');
+const CONCEPT_TEMPLATE = getTemplateSections('concept');
+const MATERIAL_TEMPLATE = getTemplateSections('material');
+
+function templateNodes(sections: string[]): LexicalNode[] {
+  const nodes: LexicalNode[] = [];
+  sections.forEach((title) => {
+    const heading = $createHeadingNode('h3');
+    heading.append($createTextNode(title));
+    nodes.push(heading, $createParagraphNode());
+  });
+  return nodes;
+}
 
 function insertTemplate(editor: LexicalEditor, sections: string[]) {
   editor.update(() => {
-    const nodes: LexicalNode[] = [];
-    sections.forEach((title) => {
-      const heading = $createHeadingNode('h3');
-      heading.append($createTextNode(title));
-      nodes.push(heading, $createParagraphNode());
-    });
-    $insertNodes(nodes);
+    $insertNodes(templateNodes(sections));
   });
 }
 
@@ -1001,6 +1007,12 @@ function SlashCommandPlugin({
       ),
       new SlashMenuOption('회의 메모 템플릿', '🗒️', 'action', () =>
         insertTemplate(editor, MEETING_TEMPLATE),
+      ),
+      new SlashMenuOption('개념 정리 템플릿', '💡', 'action', () =>
+        insertTemplate(editor, CONCEPT_TEMPLATE),
+      ),
+      new SlashMenuOption('자료 정리 템플릿', '📚', 'action', () =>
+        insertTemplate(editor, MATERIAL_TEMPLATE),
       ),
       new SlashMenuOption('이미지', '🖼', 'image', () => {}),
       new SlashMenuOption('파일', '📎', 'file', () => {}),

@@ -1,5 +1,7 @@
 'use client';
 
+import { ContentNodeMenu } from '@/features/graph/components/ContentNodeMenu';
+import type { ContentTemplateId } from '@/features/editor/contentTemplates';
 import { useState, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
@@ -66,7 +68,7 @@ export type NodeView = {
   isRenaming?: boolean; // 인라인 이름 편집 중(G5·G7 "이름 바꾸기")
   onStartRename?: (nodeId: string) => void; // 인라인 이름 편집 시작
   onFinishRename?: (nodeId: string) => void; // 인라인 이름 편집 종료
-  onAddChild?: (nodeId: string, side?: 'left' | 'right') => void; // G4·C1 hover "+" 자식 노드 추가
+  onAddChild?: (nodeId: string, side?: 'left' | 'right', templateId?: ContentTemplateId) => void; // G4·C1 hover "+" 자식 노드 추가
   collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
   onDeleteNode?: (nodeId: string) => void; // 노드 삭제 (확인 모달 경유)
@@ -96,6 +98,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
 
   const [isNodeHovered, setIsNodeHovered] = useState(false);
   const [hoverSide, setHoverSide] = useState<'left' | 'right'>('right');
+  const [isContentMenuOpen, setIsContentMenuOpen] = useState(false);
   // 콘텐츠 배너 SVG를 노드 실제 px 크기에 맞춰 그리기 위한 측정
   const contentBoxRef = useRef<HTMLDivElement>(null);
   const [contentSize, setContentSize] = useState({ w: 0, h: 0 });
@@ -493,7 +496,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           </div>
         )}
         {/* G4·C1: hover "+" 자식 추가 버튼 — source(자식) 방향. 프로젝트→타이틀, 타이틀→콘텐츠. */}
-        {(isMain || isTitle) && isNodeHovered && !isRenaming && (
+        {(isMain || isTitle) && (isNodeHovered || isContentMenuOpen) && !isRenaming && (
           <div
             className="nodrag absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5"
             style={{
@@ -512,7 +515,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               aria-label="자식 노드 추가"
               onClick={(event) => {
                 event.stopPropagation();
-                nodeData.onAddChild?.(id, addSide);
+                if (isTitle) setIsContentMenuOpen((open) => !open);
+                else nodeData.onAddChild?.(id, addSide);
               }}
               className="flex items-center justify-center rounded-full text-white shadow-sm transition-opacity hover:opacity-90"
               style={{ width: 22, height: 22, backgroundColor: '#748DFD' }}
@@ -537,6 +541,17 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             >
               {isMain ? '새 타이틀 노드 추가' : '콘텐츠 노드 추가'}
             </span>
+            {isTitle && isContentMenuOpen && (
+              <div className="absolute top-full z-20 mt-2" style={addSide === 'left' ? { right: 10 } : { left: 10 }}>
+                <ContentNodeMenu
+                  onClose={() => setIsContentMenuOpen(false)}
+                  onSelect={(templateId) => {
+                    setIsContentMenuOpen(false);
+                    nodeData.onAddChild?.(id, addSide, templateId);
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
         {/* G1-H: 회의 녹음 버튼 (타이틀 노드 위) — 회의 기능 준비 중 시각 스텁.
