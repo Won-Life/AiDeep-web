@@ -885,6 +885,15 @@ function GraphCanvasInner({
   });
   if (connectingHandle?.nodeId) markDraftSide(connectingHandle.nodeId, connectingHandle.handleId);
 
+  /*
+   * CONTEXT
+   * - Problem      : 프로젝트 생성마다 예시 안내가 반복되어 첫 프로젝트만 안내할 수 없다.
+   * - Why          : 그래프 목록의 첫 프로젝트 ID를 한 번 구해 표시 데이터로 전달한다.
+   * - Alternatives : 노드마다 목록을 조회하면 같은 탐색이 반복되고 저장 필드는 UI 안내에 과하다.
+   * - Trade-offs   : 첫 프로젝트는 현재 그래프 목록 순서를 기준으로 한다.
+   * - Edge Case    : 일반 노드는 건너뛰고 프로젝트가 없으면 안내 대상도 없다.
+   */
+  const firstProjectId = nodes.find((node) => node.data.isMain)?.id;
   const nodesWithCallbacks = nodes.map((node) => {
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
     const hasParent = !isRootNode(node);
@@ -927,6 +936,7 @@ function GraphCanvasInner({
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
         isDraft: untitledDraftNodeIds.has(node.id),
         draftHandleSides: [...(draftSidesByNode.get(node.id) ?? [])],
+        isFirstProject: node.id === firstProjectId,
         isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
         onStartRename: handleStartRename,
         onFinishRename: handleFinishRename,

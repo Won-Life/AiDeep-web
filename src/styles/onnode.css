@@ -68,7 +68,25 @@
 .sidebar-profile .sidebar-caret { align-self: flex-start; margin-top: 20px; }
 
 /* Dock editor: title, path, document and attachments follow the reference layout. */
-.node-editor-dock { border-left: 1px solid var(--onnode-primary-200); color: var(--onnode-text); font-family: var(--font-onnode), var(--font-noto-sans-kr), sans-serif; }
+/*
+ * CONTEXT
+ * - Problem      : body에 포털로 열린 슬래시 메뉴가 z-index 100의 우측 패널 뒤에 가려진다.
+ * - Why          : Lexical이 absolute로 배치하는 실제 anchor에 z-index를 지정해 패널 위에 표시한다.
+ * - Alternatives : position이 없는 내부 메뉴에 z-index만 지정하면 표시 순서에 적용되지 않는다.
+ * - Trade-offs   : 모든 에디터 모드의 슬래시 메뉴가 같은 레이어를 사용한다.
+ * - Edge Case    : body 포털을 유지해 패널 스크롤 영역에 잘리지 않고 Lexical의 위치 보정도 유지한다.
+ */
+.editor-slash-menu-anchor { z-index: 110; }
+
+/*
+ * CONTEXT
+ * - Problem      : 내용 패널의 고정 340px 너비는 화면이 넓어질수록 참고 이미지보다 비율이 작아진다.
+ * - Why          : 이미지의 전체 1280px 중 패널 332px 비율을 viewport 너비에 적용한다.
+ * - Alternatives : 고정 px 확대는 다른 해상도에서 같은 비율을 유지하지 못한다.
+ * - Trade-offs   : 작은 화면에서는 입력 공간 확보를 위해 최소 320px을 우선한다.
+ * - Edge Case    : 320px보다 좁은 화면은 화면 너비로 제한하며 패널 높이와 내부 스크롤은 유지한다.
+ */
+.node-editor-dock { width: min(100vw, max(320px, 25.9375vw)); border-left: 1px solid var(--onnode-primary-200); color: var(--onnode-text); font-family: var(--font-onnode), var(--font-noto-sans-kr), sans-serif; }
 .editor-dock-header { min-height: 80px; margin: 0 8px; padding: 24px 18px 12px; border-bottom: 2px solid var(--onnode-primary-100); }
 .node-editor-dock .ne-root { padding: 28px 26px 32px; font-size: 12px; line-height: 1.5; color: var(--onnode-text); }
 .node-editor-dock .ne-h1, .node-editor-dock .ne-h2, .node-editor-dock .ne-h3 { margin: 24px 0 4px; font-size: 14px; font-weight: 700; line-height: 1.5; }

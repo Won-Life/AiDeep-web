@@ -274,7 +274,7 @@ export function NodeEditorPanel({
     if (typeof document === "undefined") return null;
     return createPortal(
       <div
-        className="node-editor-dock fixed inset-y-0 right-0 z-[100] flex w-[340px] max-w-full flex-col bg-background"
+        className="node-editor-dock fixed inset-y-0 right-0 z-[100] flex flex-col bg-background"
         role="complementary"
         aria-label="노트 에디터"
         data-node-id={nodeId}
