@@ -520,29 +520,51 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             }} />
           </div>
         )}
+        {/*
+         * CONTEXT
+         * - Problem      : 탭의 흰 면과 선택 stroke가 함께 본체에 겹쳐 양옆 색 테두리가 안쪽으로 돌출된다.
+         * - Why          : 탭을 52×10px로 넓고 낮게 조정하고 흰 fill만 본체에 2px 겹쳐 접합선을 덮는다.
+         * - Alternatives : 선택 링 전체를 제거하면 선택 상태를 구분하기 어려워 접합부만 수정한다.
+         * - Trade-offs   : 흰 면과 외곽선을 따로 그려 선택 링이 본체의 흰 테두리를 침범하지 않게 한다.
+         * - Edge Case    : 좌우 탭·선택 해제·캔버스 축소에서도 접합부가 벌어지지 않도록 겹침을 유지한다.
+         */}
         {isTitle && (
-          <div aria-hidden className="absolute" style={{
-            top: selected ? -20 : -14,
-            left: selected ? 16 : 22,
-            width: selected ? 50 : 38,
+          <svg
+            aria-hidden
+            className="absolute pointer-events-none"
+            width="68"
+            height="20"
+            viewBox="-8 -8 68 20"
             /*
              * CONTEXT
-             * - Problem      : 선택된 타이틀 탭의 양옆 테두리가 본체의 흰 테두리 아래까지 내려온다.
-             * - Why          : 본체 테두리 두께인 4px만큼 탭을 줄이고 내부 흰 레이어도 함께 잘라낸다.
-             * - Alternatives : 탭 전체를 올리면 상단 돌출 높이까지 바뀐다.
-             * - Trade-offs   : 선택 탭의 윗모양은 유지하며 아래 끝만 본체 외곽에 맞춘다.
-             * - Edge Case    : 선택하지 않은 타이틀과 프로젝트 탭은 기존 높이를 유지한다.
+             * - Problem      : 상단 탭이 프로젝트에서 먼 쪽에 있어 요청한 부모 방향 배치와 반대다.
+             * - Why          : 오른쪽 타이틀은 왼쪽 상단, 왼쪽 타이틀은 오른쪽 상단에 탭을 둔다.
+             * - Alternatives : 화면 좌표 비교는 드래그 중 연결 방향과 다르게 바뀔 수 있다.
+             * - Trade-offs   : 탭 위치는 순간 좌표 대신 그래프의 좌우 배치 방향을 따른다.
+             * - Edge Case    : 좌우 대칭 이동 시 handleSide 변경에 맞춰 탭도 함께 이동한다.
              */
-            height: selected ? 16 : 14,
-            overflow: 'hidden',
-            backgroundColor: selected ? selectionRing : '#ffffff',
-            borderRadius: selected ? '12px 12px 0 0' : '8px 8px 0 0',
-          }}>
-            {selected && <div style={{
-              position: 'absolute', top: 6, left: 6, width: 38, height: 14,
-              backgroundColor: '#ffffff', borderRadius: '8px 8px 0 0',
-            }} />}
-          </div>
+            style={{
+              top: -22,
+              ...(sideRelativeToParent === 'left' ? { right: 10 } : { left: 10 }),
+              overflow: 'hidden',
+            }}
+          >
+            {selected && (
+              <svg x="-8" y="-8" width="68" height="18" viewBox="-8 -8 68 18" overflow="hidden">
+                <path
+                  d="M 0 12 V 10 C 4 10 3 0 14 0 H 38 C 49 0 48 10 52 10 V 12"
+                  fill="none"
+                  stroke={selectionRing}
+                  strokeWidth={16}
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+            <path
+              d="M 0 12 V 10 C 4 10 3 0 14 0 H 38 C 49 0 48 10 52 10 V 12"
+              fill="#ffffff"
+            />
+          </svg>
         )}
         {isRenaming ? (
           // 인라인 이름 편집(G5·G7) — input onChange가 handleTitleChange로 즉시+디바운스 저장,
@@ -571,7 +593,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               color: filledTextColor,
               fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
               fontSize: isMain ? '30px' : undefined,
-              lineHeight: '1.4em',
+              lineHeight: isTitle ? '100%' : '1.4em',
+              ...(isTitle ? { fontFamily: 'Pretendard, sans-serif', fontSize: 13, fontWeight: 600, letterSpacing: 0 } : {}),
             }}
           />
         ) : (
@@ -588,8 +611,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               wordBreak: 'break-word',
-              lineHeight: '1.4em',
-              maxHeight: '2.8em',
+              lineHeight: isTitle ? '100%' : '1.4em',
+              ...(isTitle ? { fontFamily: 'Pretendard, sans-serif', fontSize: 13, fontWeight: 600, letterSpacing: 0 } : {}),
+              maxHeight: isTitle ? '2em' : '2.8em',
             }}
           >
             {isEmpty ? PLACEHOLDER : label}
