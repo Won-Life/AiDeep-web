@@ -593,8 +593,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               color: filledTextColor,
               fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
               fontSize: isMain ? '30px' : undefined,
-              lineHeight: isTitle ? '100%' : '1.4em',
-              ...(isTitle ? { fontFamily: 'Pretendard, sans-serif', fontSize: 13, fontWeight: 600, letterSpacing: 0 } : {}),
+              lineHeight: isMain ? '1.4em' : '100%',
+              ...(isMain ? {} : { fontFamily: 'Pretendard, sans-serif', fontSize: isTitle ? 13 : 11, fontWeight: isTitle ? 600 : 700, letterSpacing: 0 }),
             }}
           />
         ) : (
@@ -611,9 +611,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               wordBreak: 'break-word',
-              lineHeight: isTitle ? '100%' : '1.4em',
-              ...(isTitle ? { fontFamily: 'Pretendard, sans-serif', fontSize: 13, fontWeight: 600, letterSpacing: 0 } : {}),
-              maxHeight: isTitle ? '2em' : '2.8em',
+              lineHeight: isMain ? '1.4em' : '100%',
+              ...(isMain ? {} : { fontFamily: 'Pretendard, sans-serif', fontSize: isTitle ? 13 : 11, fontWeight: isTitle ? 600 : 700, letterSpacing: 0 }),
+              maxHeight: isMain ? '2.8em' : '2em',
             }}
           >
             {isEmpty ? PLACEHOLDER : label}
