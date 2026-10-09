@@ -1,4 +1,6 @@
 'use client';
+import { setPendingTemplate } from '@/features/editor/pendingTemplate';
+import type { ContentTemplateId } from '@/features/editor/contentTemplates';
 import {
   useState,
   useCallback,
@@ -650,7 +652,7 @@ function GraphCanvasInner({
   // 바로 인라인 이름 편집(G5). onConnectEnd(핸들 드래그 생성)과 동일한 생성 규칙을 노드 기준으로
   // 재사용한다. 겹침 bail 없이 source 높이에 놓고 D3 rectCollide가 분리하도록 맡긴다.
   const handleAddChild = useCallback(
-    async (parentId: string, requestedSide?: 'left' | 'right') => {
+    async (parentId: string, requestedSide?: 'left' | 'right', templateId?: ContentTemplateId) => {
       const sourceNode = nodes.find((n) => n.id === parentId);
       if (!sourceNode) return;
 
@@ -703,6 +705,7 @@ function GraphCanvasInner({
           color: colorPair.bg,
           textColor: colorPair.text,
         });
+        if (templateId) setPendingTemplate(nodeId, templateId);
         setNodes((prev) => [
           ...prev.map((node) =>
             colorAnchorIds.includes(node.id)
