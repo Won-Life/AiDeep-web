@@ -1068,6 +1068,7 @@ function SlashCommandPlugin({
       <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageInput} />
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileInput} />
       <LexicalTypeaheadMenuPlugin<SlashMenuOption>
+        anchorClassName="editor-slash-menu-anchor"
         onQueryChange={setQueryString}
         onSelectOption={(option, textNodeContainingQuery, closeMenu) => {
           editor.update(() => {
@@ -1100,7 +1101,6 @@ function SlashCommandPlugin({
                     maxHeight: 280,
                     overflowY: 'auto',
                     boxShadow: '0 4px 16px rgba(0,0,0,0.09)',
-                    zIndex: 9999,
                   }}
                 >
                   {options.map((option, index) => (

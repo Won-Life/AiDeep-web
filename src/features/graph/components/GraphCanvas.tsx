@@ -12,6 +12,7 @@ import {
   type SetStateAction,
   type DragEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ReactFlow,
   applyNodeChanges,
@@ -871,6 +872,15 @@ function GraphCanvasInner({
   const parentIdByChildId = new Map<string, string>();
   edges.forEach((e) => parentIdByChildId.set(e.target, e.source));
 
+  /*
+   * CONTEXT
+   * - Problem      : 프로젝트 생성마다 예시 안내가 반복되어 첫 프로젝트만 안내할 수 없다.
+   * - Why          : 그래프 목록의 첫 프로젝트 ID를 한 번 구해 표시 데이터로 전달한다.
+   * - Alternatives : 노드마다 목록을 조회하면 같은 탐색이 반복되고 저장 필드는 UI 안내에 과하다.
+   * - Trade-offs   : 첫 프로젝트는 현재 그래프 목록 순서를 기준으로 한다.
+   * - Edge Case    : 일반 노드는 건너뛰고 프로젝트가 없으면 안내 대상도 없다.
+   */
+  const firstProjectId = nodes.find((node) => node.data.isMain)?.id;
   const untitledDraftNodeIds = new Set(nodes.filter((node) =>
     draftNodeIds.has(node.id) && !String(node.data?.title ?? '').trim(),
   ).map((node) => node.id));
@@ -927,6 +937,7 @@ function GraphCanvasInner({
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
         isDraft: untitledDraftNodeIds.has(node.id),
         draftHandleSides: [...(draftSidesByNode.get(node.id) ?? [])],
+        isFirstProject: node.id === firstProjectId,
         isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
         onStartRename: handleStartRename,
         onFinishRename: handleFinishRename,
@@ -1879,8 +1890,17 @@ function GraphCanvasInner({
   /* =========================
      Empty pane right-click → create PROJECT node
      ========================= */
+  /*
+   * CONTEXT
+   * - Problem      : 첫 프로젝트 생성 직후 자동 편집이 시작돼 큰 placeholder 대신 작은 input이 보인다.
+   * - Why          : 첫 프로젝트는 표시 상태로 생성해 기존 32px placeholder를 보여주고 더블 클릭으로 편집한다.
+   * - Alternatives : input 글자를 키우면 편집 중 한 줄 입력과 기존 노드 크기까지 바뀐다.
+   * - Trade-offs   : 첫 프로젝트 이름 입력에 더블 클릭이 필요하며 이후 프로젝트의 자동 편집은 유지한다.
+   * - Edge Case    : 생성 버튼과 캔버스 메뉴가 같은 함수를 사용하고 빈 placeholder는 첫 글자 입력까지 유지한다.
+   */
   const createProjectNodeAt = useCallback(
     async (position: { x: number; y: number }) => {
+      const isFirstProject = !nodes.some((node) => node.data.isMain);
       try {
         // 그래프 색을 생성 시점에 확정한다 — 화면은 TextUpdateNode가 isMain이면
         // 항상 MAIN_NODE_COLOR(흰색)로 그리므로 표시는 그대로 흰색이다.
@@ -1905,12 +1925,12 @@ function GraphCanvasInner({
           },
         ]);
         setDraftNodeIds((prev) => new Set(prev).add(nodeId));
-        setRenamingNodeId(nodeId);
+        if (!isFirstProject) setRenamingNodeId(nodeId);
       } catch (err) {
         console.error('[createProjectNodeAt] createProjectNode failed', err);
       }
     },
-    [workspaceId, setNodes],
+    [workspaceId, setNodes, nodes],
   );
 
   const onPaneContextMenu = useCallback(
@@ -3043,7 +3063,7 @@ function GraphCanvasInner({
               + 프로젝트 노드 만들기
             </button>
             <p className="mt-7 text-[10px] leading-5 text-[#999999]">
-              ① 프로젝트 만들기 → ② 타이틀 추가 → ③ 타이틀 아래 <span className="text-[#E64B55]">● 회의 녹음</span> 으로 회의 시작
+              ① 프로젝트 만들기 → ② 타이틀 추가 → ③ 타이틀 아래 <span className="text-[#D14040]">● 회의 녹음</span> 으로 회의 시작
             </p>
           </div>
         </div>
@@ -3096,6 +3116,14 @@ function GraphCanvasInner({
         open={onboardingOpen}
         onClose={() => setOnboardingOpen(false)}
       />
+      {/*
+       * CONTEXT
+       * - Problem      : 캔버스 내부 dim만으로는 참고 이미지의 전체 화면 흐림과 삭제 확인창을 재현하지 못한다.
+       * - Why          : body portal의 고정 overlay로 사이드바까지 dim·blur 처리하고 시안의 작은 확인창을 중앙에 둔다.
+       * - Alternatives : 캔버스에만 필터를 주면 도구와 사이드바가 선명하게 남는다.
+       * - Trade-offs   : backdrop blur 비용이 있으나 삭제 확인 중에만 표시한다.
+       * - Edge Case    : Escape·바깥 클릭은 취소하며 기존 REST 삭제·로컬 상태 반영은 유지한다.
+       */}
       {/* D2 하위 삭제 확인 — 대상 노드 이름·타입·하위 개수를 카피에 반영(Figma 08 D2).
           보관함 UI 활성화 전까지 복구 수단이 없어 "삭제"로 안내(활성화 시 보관 문구로). */}
       {isArchiveModalOpen &&
@@ -3126,17 +3154,25 @@ function GraphCanvasInner({
             : isContentType
               ? '콘텐츠'
               : '타이틀';
-          return (
+          return createPortal(
             <div
-              className="absolute inset-0 z-50 flex items-center justify-center bg-black/40"
+              className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 backdrop-blur-[4px]"
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === 'Escape') handleCancelArchive();
+              }}
               onClick={handleCancelArchive}
             >
               <div
-                className="w-[360px] max-w-[90vw] rounded-[16px] bg-background p-5 shadow-xl"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="node-delete-title"
+                aria-describedby="node-delete-description"
+                className="w-[424px] max-w-[calc(100vw-32px)] rounded-[16px] bg-background px-7 py-6"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-start justify-between">
-                  <p className="text-[16px] font-bold text-foreground">
+                  <p id="node-delete-title" className="text-[14px] font-bold text-foreground">
                     ‘{delTitle}’를 삭제할까요?
                   </p>
                   <button
@@ -3148,7 +3184,7 @@ function GraphCanvasInner({
                     ✕
                   </button>
                 </div>
-                <p className="mt-2 text-[13px] text-muted">
+                <p id="node-delete-description" className="mt-2 text-[11px] text-muted">
                   {descendants > 0
                     ? `이 ${typeLabel} 아래의 노드 ${descendants}개도 함께 삭제되고, 되돌릴 수 없어요`
                     : '삭제하면 되돌릴 수 없어요'}
@@ -3157,7 +3193,8 @@ function GraphCanvasInner({
                   <button
                     type="button"
                     onClick={handleCancelArchive}
-                    className="h-[40px] flex-1 rounded-full border border-border text-[13px] font-semibold text-foreground transition-colors hover:bg-surface"
+                    className="h-[32px] flex-1 rounded-full border border-border text-[11px] font-semibold text-foreground transition-colors hover:bg-surface"
+                    autoFocus
                   >
                     취소
                   </button>
@@ -3165,13 +3202,14 @@ function GraphCanvasInner({
                     type="button"
                     onClick={handleConfirmArchive}
                     disabled={isArchiveDeleting}
-                    className="h-[40px] flex-1 rounded-full bg-red-500 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="h-[32px] flex-1 rounded-full bg-[#E63840] text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     삭제하기
                   </button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body,
           );
         })()}
     </div>

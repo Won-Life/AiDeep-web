@@ -155,6 +155,7 @@ interface NodeEditorPanelProps {
   dockIndex?: number;
   /** 도크 헤더 제목 — 노드명(첫 줄) */
   title?: string;
+  onTitleChange?: (title: string) => void;
   /** 도크 헤더 경로 — "프로젝트 > 타이틀" */
   breadcrumb?: string;
   updatedAt?: string;
@@ -180,6 +181,7 @@ export function NodeEditorPanel({
   inline = false,
   dockIndex,
   title,
+  onTitleChange,
   breadcrumb,
   updatedAt,
   onExpandClick,
@@ -274,7 +276,7 @@ export function NodeEditorPanel({
     if (typeof document === "undefined") return null;
     return createPortal(
       <div
-        className="node-editor-dock fixed inset-y-0 right-0 z-[100] flex w-[340px] max-w-full flex-col bg-background"
+        className="node-editor-dock fixed inset-y-0 right-0 z-[100] flex flex-col bg-background"
         role="complementary"
         aria-label="노트 에디터"
         data-node-id={nodeId}
@@ -296,7 +298,25 @@ export function NodeEditorPanel({
          */}
         <div className="editor-dock-header flex shrink-0 items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-[15px] font-bold">{title?.trim() || "제목 없음"}</h2>
+            {/*
+             * CONTEXT
+             * - Problem      : 에디터 제목이 읽기 전용이고 본문 첫 줄이 수동 제목을 덮는다.
+             * - Why          : 캔버스의 기존 제목 저장 콜백을 입력에 연결하고 본문과 제목을 분리한다.
+             * - Alternatives : 도크에서 별도 API를 호출하면 저장·로컬 반영 로직이 중복된다.
+             * - Trade-offs   : 본문 첫 줄 변경은 노드 이름을 자동 변경하지 않는다.
+             * - Edge Case    : 편집 콜백 없는 패널은 읽기 전용이며 한글 조합 중 Enter는 유지한다.
+             */}
+            <input
+              aria-label="노드 제목"
+              placeholder="제목 없음"
+              value={title ?? ""}
+              readOnly={!onTitleChange}
+              onChange={(event) => onTitleChange?.(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.currentTarget.blur();
+              }}
+              className="w-full min-w-0 rounded bg-transparent text-[15px] font-bold outline-none focus-visible:ring-1 focus-visible:ring-main-blue"
+            />
             {breadcrumb && <p className="mt-1 truncate text-[12px] text-muted" title={breadcrumb}>{breadcrumb}</p>}
           </div>
           <div className="flex shrink-0 items-center gap-0.5">

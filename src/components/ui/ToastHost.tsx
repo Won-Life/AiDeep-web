@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { pendingSaves } from './saveRetryStore';
 import { subscribeToasts, getToasts } from './toastStore';
 
 const EMPTY: ReturnType<typeof getToasts> = [];
@@ -9,9 +10,16 @@ const EMPTY: ReturnType<typeof getToasts> = [];
 export default function ToastHost() {
   const items = useSyncExternalStore(subscribeToasts, getToasts, () => EMPTY);
 
-  if (!items.length) return null;
+  const pending = useSyncExternalStore(pendingSaves.subscribe, pendingSaves.getCount, () => 0);
+
+  if (!items.length && !pending) return null;
 
   return (
+    <>
+    {pending > 0 && <div role="status" className="fixed right-8 bottom-[26%] z-[70] flex max-w-[calc(100vw-32px)] items-center gap-2 rounded-full bg-[#4062E5] px-6 py-3 text-[13px] text-white shadow-md">
+      저장하지 못했어요
+      <button type="button" className="font-semibold underline underline-offset-2" onClick={() => { void pendingSaves.retry(); }}>다시 시도</button>
+    </div>}
     <div className="pointer-events-none fixed bottom-6 left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center gap-2">
       {items.map((t) =>
         t.variant === 'announce' ? (
@@ -41,5 +49,6 @@ export default function ToastHost() {
         ),
       )}
     </div>
+    </>
   );
 }

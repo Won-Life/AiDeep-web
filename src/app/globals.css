@@ -483,26 +483,31 @@
   }
 }
 
-/* 워크스페이스 로딩 인디케이터 — 노드가 차례로 밝아지는 루프 (WorkspaceLoading.tsx) */
-@keyframes workspace-loading-pulse {
-  0%,
-  100% {
-    opacity: 0.25;
-  }
-  40%,
-  60% {
-    opacity: 1;
-  }
+/* 고정 그래프 위로 밝은 물결만 이동한다 — WorkspaceLoading.tsx */
+.workspace-graph-loading {
+  background: radial-gradient(ellipse at 0% 0%, #FCF5F8 0%, transparent 58%), radial-gradient(ellipse at 18% 100%, #E5EBFF 0%, transparent 65%), linear-gradient(135deg, #F5F6FF 0%, #EFF3FF 100%);
 }
 
-.workspace-loading-pulse {
-  animation: workspace-loading-pulse 1.8s ease-in-out infinite;
+.workspace-graph-loading-shape {
+  color: #c0ceff;
+  filter: drop-shadow(0 2px 1px rgb(80 95 145 / 16%));
+}
+
+.workspace-graph-loading-wave {
+  animation: workspace-graph-wave 2.6s linear -0.9s infinite;
+  will-change: transform;
+}
+
+@keyframes workspace-graph-wave {
+  from { transform: translateX(-320px); }
+  to { transform: translateX(1400px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workspace-loading-pulse {
+  .workspace-graph-loading-wave {
     animation: none;
-    opacity: 1;
+    display: none;
+    will-change: auto;
   }
 }
 

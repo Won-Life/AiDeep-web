@@ -185,8 +185,8 @@ export default function GraphOnboardingModal({
 
         <p className="mt-[24px] rounded-[24px] bg-[var(--guide-pale)] px-4 py-3 text-center text-[12px] leading-[19px] font-semibold text-[rgb(var(--ds-text-gray))]">
           회의는 타이틀 위{' '}
-          <span className="font-semibold whitespace-nowrap text-red-500">
-            <span className="text-red-500">●</span> 회의 녹음
+          <span className="font-semibold whitespace-nowrap text-[#D14040]">
+            ● 회의 녹음
           </span>{' '}
           버튼으로 녹음해요. 봇이 대화를 콘텐츠 노드로 정리해줘요
         </p>

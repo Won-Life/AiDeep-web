@@ -5,6 +5,7 @@ import axios, {
 } from 'axios';
 import type { ApiResponse } from './types';
 import { ApiError } from './types';
+import { pendingSaves } from '@/components/ui/saveRetryStore';
 import { showToast } from '@/components/ui/toastStore';
 import { isRefreshExcludedForError, isRefreshTokenRejected } from './authRefreshPolicy';
 import { REFRESH_TOKEN_KEY, readRefreshToken, readPersistence, writeRefreshToken, type TokenPersistence } from './tokenStorage';
@@ -15,6 +16,7 @@ declare module 'axios' {
     skipAuthRefresh?: boolean;
     skipAuthRefreshForErrorCodes?: readonly string[];
     _authSessionVersion?: number;
+    _handlesSaveRetry?: boolean;
   }
 }
 
@@ -181,6 +183,7 @@ client.interceptors.response.use(
       const url = originalRequest?.url ?? '';
       const status = error.response?.status;
       if (
+        !originalRequest?._handlesSaveRetry &&
         method &&
         ['POST', 'PATCH', 'DELETE'].includes(method) &&
         /\/(node|edge)(\/|$|\?)/.test(url) &&
@@ -213,16 +216,53 @@ export default client;
 
 // ─── Legacy helper (backward-compat with fetch-style callers) ────────
 
+/*
+ * CONTEXT
+ * - Problem      : 오프라인에서 그래프 변경이 실패하면 기존 catch 경로로 유실되고 재시도 UI도 없다.
+ * - Why          : 보내기 전 요청은 대기시키고 값 교체 PATCH의 일시 오류만 순서대로 재시도해 원래 호출자에게 응답한다.
+ * - Alternatives : 이미 보낸 POST의 자동 재전송은 서버에서 성공했을 때 중복 노드를 만들 수 있다.
+ * - Trade-offs   : 큐는 탭 메모리에만 유지하며 서버 오류 PATCH는 사용자의 재시도 또는 다음 연결을 기다린다.
+ * - Edge Case    : 계정 변경 시 이전 요청은 거부하며 refresh 처리는 기존 interceptor에 맡긴다.
+ */
 export async function api<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
   const method = (options.method ?? 'GET').toUpperCase();
-  const { data } = await client.request<T>({
-    url: path,
-    method,
-    data: options.body ? JSON.parse(options.body as string) : undefined,
-    headers: options.headers as Record<string, string> | undefined,
+  const graphWrite = ['POST', 'PATCH', 'DELETE'].includes(method) && /\/(node|edge)(\/|$|\?)/.test(path);
+  const version = sessionVersion;
+  const sessionId = typeof window === 'undefined' ? null : getAuthSessionId();
+  const offlineSavePending = new Error('Offline save pending');
+  const execute = async () => {
+    if (version !== sessionVersion || (typeof window !== 'undefined' && sessionId !== getAuthSessionId())) throw new Error('Auth session changed');
+    if (graphWrite && typeof navigator !== 'undefined' && !navigator.onLine) throw offlineSavePending;
+    const { data } = await client.request<T>({
+      url: path,
+      method,
+      data: options.body ? JSON.parse(options.body as string) : undefined,
+      headers: options.headers as Record<string, string> | undefined,
+      _handlesSaveRetry: graphWrite,
+    });
+    return data;
+  };
+  if (!graphWrite) return execute();
+  const offline = () => typeof navigator !== 'undefined' && !navigator.onLine;
+  // 값 교체 PATCH만 재시도한다. 전송된 POST/DELETE는 중복 생성·부분 성공 위험 때문에 자동 재전송하지 않는다.
+  const retryable = (error: unknown) => error === offlineSavePending || axios.isAxiosError(error) && !axios.isCancel(error)
+    && method === 'PATCH' && !path.endsWith('/restore') && (!error.response || error.response.status >= 500);
+  const enqueue = () => pendingSaves.enqueue(execute, retryable).catch((error) => {
+    showToast('저장하지 못했어요. 연결 상태를 확인해 주세요');
+    throw error;
   });
-  return data;
+  if (offline() || pendingSaves.getCount() > 0) {
+    const queued = enqueue();
+    if (!offline()) void pendingSaves.retry();
+    return queued;
+  }
+  try { return await execute(); }
+  catch (error) {
+    if (retryable(error)) return enqueue();
+    showToast('저장하지 못했어요. 연결 상태를 확인해 주세요');
+    throw error;
+  }
 }
