@@ -32,3 +32,33 @@ export function getTemplateSections(id: ContentTemplateId): string[] {
 export function describeTemplate(template: ContentTemplate): string {
   return template.sections.join(' · ');
 }
+
+/*
+ * CONTEXT
+ * - Problem      : 템플릿으로 만든 노드는 처음 열 때부터 섹션 제목이 본문에 있어야 한다.
+ * - Why          : 서버는 노드를 처음 열 때 yjs_state가 없으면 content.markdownBody를 에디터 형식으로 바꿔 채운다(Aideep_websocket loadDoc).
+ *                  생성 요청의 markdownBody에 섹션 제목(h3)을 담으면 모든 협업자가 같은 본문을 보고, 탭을 닫아도 남는다.
+ * - Alternatives : 에디터가 열릴 때 클라이언트가 삽입 → 열기 전 탭을 닫으면 빈 노드, 동시에 열면 중복 위험.
+ * - Trade-offs   : jsonBody도 같은 구조로 보내 DB의 두 본문 필드를 맞춘다(서버 본문 로딩은 markdownBody 기준).
+ * - Edge Case    : 섹션 제목 사이에 빈 문단을 둬 바로 이어 쓸 자리를 만든다.
+ */
+export function getTemplateBody(id: ContentTemplateId): { markdownBody: string; jsonBody: string } {
+  const sections = getTemplateSections(id);
+  const markdownBody = sections.map((title) => `### ${title}\n\n`).join('');
+  const children = sections.flatMap((title) => [
+    {
+      children: [{ detail: 0, format: 0, mode: 'normal', style: '', text: title, type: 'text', version: 1 }],
+      direction: null,
+      format: '',
+      indent: 0,
+      type: 'heading',
+      version: 1,
+      tag: 'h3',
+    },
+    { children: [], direction: null, format: '', indent: 0, type: 'paragraph', version: 1 },
+  ]);
+  const jsonBody = JSON.stringify({
+    root: { children, direction: null, format: '', indent: 0, type: 'root', version: 1 },
+  });
+  return { markdownBody, jsonBody };
+}

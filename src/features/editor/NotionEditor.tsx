@@ -26,7 +26,6 @@ import {
 } from '@lexical/react/LexicalTypeaheadMenuPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { getTemplateSections } from './contentTemplates';
-import { takePendingTemplate } from './pendingTemplate';
 import {
   $getRoot,
   $getSelection,
@@ -458,10 +457,6 @@ const MEETING_TEMPLATE = getTemplateSections('meeting');
 const CONCEPT_TEMPLATE = getTemplateSections('concept');
 const MATERIAL_TEMPLATE = getTemplateSections('material');
 
-// 노드를 만들 때 고른 템플릿으로 빈 본문을 채우는 업데이트의 태그 — 제목 추적이 첫 섹션 제목을
-// 노드 이름으로 덮어쓰지 않도록 구분한다.
-const TEMPLATE_SEED_TAG = 'template-seed';
-
 function templateNodes(sections: string[]): LexicalNode[] {
   const nodes: LexicalNode[] = [];
   sections.forEach((title) => {
@@ -476,40 +471,6 @@ function insertTemplate(editor: LexicalEditor, sections: string[]) {
   editor.update(() => {
     $insertNodes(templateNodes(sections));
   });
-}
-
-function seedTemplate(editor: LexicalEditor, sections: string[]) {
-  editor.update(
-    () => {
-      const root = $getRoot();
-      root.clear();
-      root.append(...templateNodes(sections));
-    },
-    { tag: TEMPLATE_SEED_TAG },
-  );
-}
-
-/*
- * CONTEXT
- * - Problem      : 본문은 협업 문서에서만 채워져(shouldBootstrap=false) 노드 생성 API로 템플릿을 넣을 수 없다.
- * - Why          : 노드를 만든 클라이언트가 에디터가 처음 동기화된 뒤 본문이 비어 있으면 한 번만 섹션을 넣는다.
- * - Alternatives : 모든 클라이언트가 삽입 → 동시에 열면 템플릿이 중복된다.
- * - Trade-offs   : 동기화 직후 문서가 반영될 시간을 짧게 기다린다.
- * - Edge Case    : StrictMode 재실행(타이머 안에서 꺼냄), 이미 내용이 있는 문서(삽입 안 함), 템플릿 없는 노드.
- */
-function TemplateSeedPlugin({ nodeId, ready }: { nodeId: string; ready: boolean }) {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    if (!ready) return;
-    const timer = setTimeout(() => {
-      const templateId = takePendingTemplate(nodeId);
-      if (!templateId) return;
-      const isEmpty = editor.getEditorState().read(() => $getRoot().getTextContent().trim() === '');
-      if (isEmpty) seedTemplate(editor, getTemplateSections(templateId));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [editor, nodeId, ready]);
-  return null;
 }
 
 // ─── Media helpers ────────────────────────────────────────────────────────────
@@ -1220,16 +1181,15 @@ function TitleTrackerPlugin({
   }, [suppressed]);
 
   useEffect(() => {
-    return editor.registerUpdateListener(({ editorState, tags }) => {
-      const seeding = tags.has(TEMPLATE_SEED_TAG);
-      if (!seeding && (suppressedRef.current || suppressedSyncRef?.current)) return;
+    return editor.registerUpdateListener(({ editorState }) => {
+      if (suppressedRef.current || suppressedSyncRef?.current) return;
       editorState.read(() => {
         const firstChild = $getRoot().getFirstChild();
         const title = firstChild ? firstChild.getTextContent().trim() : '';
-        if (title === prevTitleRef.current) return;
-        prevTitleRef.current = title;
-        // 템플릿으로 채운 첫 섹션 제목은 노드 이름이 아니므로 기준값만 갱신하고 내보내지 않는다.
-        if (!seeding) onChange(title);
+        if (title !== prevTitleRef.current) {
+          prevTitleRef.current = title;
+          onChange(title);
+        }
       });
     });
   }, [editor, onChange, suppressedSyncRef]);
@@ -1361,7 +1321,6 @@ export function NotionEditor({
           </div>
 
           <TablePlugin />
-          <TemplateSeedPlugin nodeId={nodeId} ready={collabProvider ? providerSynced : true} />
           <ListPlugin />
           <CheckListPlugin />
           <LinkPlugin />

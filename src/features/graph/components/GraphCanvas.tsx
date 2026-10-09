@@ -1,5 +1,5 @@
 'use client';
-import { setPendingTemplate } from '@/features/editor/pendingTemplate';
+import { getTemplateBody } from '@/features/editor/contentTemplates';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
 import {
   useState,
@@ -700,12 +700,12 @@ function GraphCanvasInner({
 
       try {
         const { nodeId } = await createMdNode(workspaceId, '', adjustedPosition, {
-          markdownBody: '',
-          jsonBody: EMPTY_LEXICAL_JSON,
+          ...(templateId
+            ? getTemplateBody(templateId)
+            : { markdownBody: '', jsonBody: EMPTY_LEXICAL_JSON }),
           color: colorPair.bg,
           textColor: colorPair.text,
         });
-        if (templateId) setPendingTemplate(nodeId, templateId);
         setNodes((prev) => [
           ...prev.map((node) =>
             colorAnchorIds.includes(node.id)

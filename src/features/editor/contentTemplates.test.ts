@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   CONTENT_TEMPLATES,
   describeTemplate,
+  getTemplateBody,
   getTemplateSections,
   isContentTemplateId,
 } from './contentTemplates';
-import { setPendingTemplate, takePendingTemplate } from './pendingTemplate';
 
 describe('content templates', () => {
   it('follows the Figma C1 menu: four templates with their section order', () => {
@@ -24,18 +24,18 @@ describe('content templates', () => {
   });
 });
 
-describe('pending template', () => {
-  it('hands a template to the node that was created with it exactly once', () => {
-    setPendingTemplate('node-1', 'lecture');
-    expect(takePendingTemplate('node-1')).toBe('lecture');
-    expect(takePendingTemplate('node-1')).toBeNull();
+describe('template body for node creation', () => {
+  it('sends section titles as h3 markdown so the server seeds the editor with them', () => {
+    const { markdownBody } = getTemplateBody('lecture');
+    expect(markdownBody).toBe('### 핵심 개념\n\n### 자세한 설명\n\n### 헷갈린 점\n\n### 참고\n\n');
   });
 
-  it('keeps nodes separate and returns null for a node without a template', () => {
-    setPendingTemplate('a', 'meeting');
-    setPendingTemplate('b', 'concept');
-    expect(takePendingTemplate('b')).toBe('concept');
-    expect(takePendingTemplate('a')).toBe('meeting');
-    expect(takePendingTemplate('never')).toBeNull();
+  it('keeps jsonBody in step with markdownBody: heading + empty paragraph per section', () => {
+    const json = JSON.parse(getTemplateBody('material').jsonBody);
+    const children = json.root.children;
+    expect(children).toHaveLength(6);
+    expect(children[0]).toMatchObject({ type: 'heading', tag: 'h3' });
+    expect(children[0].children[0].text).toBe('출처');
+    expect(children[1]).toMatchObject({ type: 'paragraph', children: [] });
   });
 });
