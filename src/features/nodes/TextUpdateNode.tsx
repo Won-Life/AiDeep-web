@@ -215,10 +215,18 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const pointRight = sideRelativeToParent === 'right';
   const baseContentFill = fig?.light ?? nodeData.color ?? 'rgb(var(--ds-sub-gray))';
   const contentFill = nodeData.isDraft ? `color-mix(in srgb, ${baseContentFill} 55%, white)` : baseContentFill;
-  const contentRing = isHovered
-    ? '#93C5FD'
-    : selected
-      ? 'var(--onnode-selection)'
+  /*
+   * CONTEXT
+   * - Problem      : 텍스트 노드의 선택 테두리가 요청한 색과 다르고 hover 색에 덮인다.
+   * - Why          : 선택을 우선 판정해 지정 색 #3F62E0를 그대로 사용한다.
+   * - Alternatives : 전역 선택 토큰 변경은 다른 노드의 선택 색까지 바꾼다.
+   * - Trade-offs   : 콘텐츠 선택 색을 이 컴포넌트에서 명시적으로 관리한다.
+   * - Edge Case    : 선택 중 hover에도 색을 유지하고 미선택 협업 테두리는 유지한다.
+   */
+  const contentRing = selected
+    ? '#3F62E0'
+    : isHovered
+      ? '#93C5FD'
       : (viewerBorderColor ?? '#ffffff');
 
   // main 노드 기본 테두리는 자기 그래프 색 — 흰 배경 유지 규칙 안에서 소속 그래프를 드러낸다.
