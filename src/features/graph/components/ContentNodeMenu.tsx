@@ -21,7 +21,10 @@ export function ContentNodeMenu({ onSelect, onClose }: ContentNodeMenuProps) {
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) onClose();
+      const target = event.target as Element;
+      // "+" 버튼은 자체 토글로 닫으므로, 여기서 먼저 닫으면 곧바로 다시 열린다.
+      if (target.closest?.('[aria-label="자식 노드 추가"]')) return;
+      if (ref.current && !ref.current.contains(target)) onClose();
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
