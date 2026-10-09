@@ -1,14 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { type Node } from '@xyflow/react';
 import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
-import ChipHeader from '@/components/layout/ChipHeader';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
 import { showToast } from '@/components/ui/toastStore';
-import DropDown from '@/components/ui/DropDown';
 import AiChatPanel, {
   AI_CHAT_HANDLE_WIDTH,
   AI_CHAT_PANEL_WIDTH,
@@ -16,23 +12,19 @@ import AiChatPanel, {
 import ArchiveModal from '@/components/layout/ArchiveModal';
 import SessionLoadError from '@/features/auth/SessionLoadError';
 import { getMe } from '@/api/user';
-import { logout } from '@/api/auth';
 import { getWorkspaces } from '@/api/workspace';
 import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/api/mappers';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
 import { onPresenceState } from '@/api/ws';
 import { getCursorColor } from '@/utils/cursorColor';
-import { type NodeView } from '@/features/nodes/TextUpdateNode';
 import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
 
 // 마지막으로 보던 워크스페이스 — 새로고침 후에도 유지 (sync effect가 읽고/쓴다)
 const LAST_WORKSPACE_KEY = 'aideep_last_workspace_id';
 
 function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const {
-    focusedNodeId,
     setFocusedNodeId,
     setUserMe,
     userMe,
@@ -255,13 +247,6 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     };
   }, [workspaceId, userMe?.userId, setCollaborators]);
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await logout();
-    } catch {}
-    router.replace('/login');
-  }, [router]);
-
   return (
     <div className="relative w-full h-screen overflow-hidden">
       <div
@@ -271,21 +256,19 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         {children}
       </div>
 
-      <Sidebar isOpen={isSidebarOpen} onToggle={handleToggleSidebar} />
-
-      <ChipHeader
-        sidebarWidth={sidebarWidth}
-        nodes={nodes as Node<NodeView>[]}
-        onNodeFocus={setFocusedNodeId}
-        activeProjectId={focusedNodeId}
-        user={userMe}
-        onLogout={handleLogout}
-        workspaceId={workspaceId}
+      {/*
+       * CONTEXT
+       * - Problem      : the separate top header adds a permanent chrome row above the graph.
+       * - Why          : the Figma workspace layout places navigation and profile actions in the sidebar.
+       * - Alternatives : keeping the chip bar preserves project shortcuts but conflicts with the requested header-free canvas.
+       * - Trade-offs   : project navigation moves to the existing sidebar tree; profile settings and logout stay in its profile menu.
+       * - Edge Case    : archive remains gated by SHOW_TEMP_HIDDEN_UI and can still be opened through the sidebar callback when enabled.
+       */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onToggle={handleToggleSidebar}
         onOpenArchive={() => setIsArchiveOpen(true)}
-        onSettings={() => router.push('/settings')}
       />
-
-      <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setChatOpen(true)} />
 
       <AiChatPanel isOpen={isChatOpen} onToggle={handleToggleChat} />
 

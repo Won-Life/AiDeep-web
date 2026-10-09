@@ -646,11 +646,23 @@ function GraphCanvasInner({
     setDraftNodeId(null);
   }, []);
 
-  // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 빈 자식 노드 생성 + 엣지 + 색 상속 후
+  /*
+   * CONTEXT
+   * - Problem      : template choices need to create their starter content along with the child node.
+   * - Why          : pass optional title and markdown through the existing REST create path and serialize matching Lexical paragraphs.
+   * - Alternatives : create the node blank then patch it; that adds a second request and can expose an empty editor first.
+   * - Trade-offs   : template formatting stays simple paragraphs so drafts remain editable with the existing editor.
+   * - Edge Case    : calls without a template keep the existing empty-node behavior and payload.
+   */
+  // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 자식 노드 생성 + 엣지 + 색 상속 후
   // 바로 인라인 이름 편집(G5). onConnectEnd(핸들 드래그 생성)과 동일한 생성 규칙을 노드 기준으로
   // 재사용한다. 겹침 bail 없이 source 높이에 놓고 D3 rectCollide가 분리하도록 맡긴다.
   const handleAddChild = useCallback(
-    async (parentId: string, requestedSide?: 'left' | 'right') => {
+    async (
+      parentId: string,
+      requestedSide?: 'left' | 'right',
+      template?: { title: string; markdownBody: string },
+    ) => {
       const sourceNode = nodes.find((n) => n.id === parentId);
       if (!sourceNode) return;
 
@@ -697,12 +709,47 @@ function GraphCanvasInner({
       );
 
       try {
-        const { nodeId } = await createMdNode(workspaceId, '', adjustedPosition, {
-          markdownBody: '',
-          jsonBody: EMPTY_LEXICAL_JSON,
-          color: colorPair.bg,
-          textColor: colorPair.text,
-        });
+        const jsonBody = template
+          ? JSON.stringify({
+              root: {
+                children: template.markdownBody
+                  .split('\n')
+                  .filter((line) => line.length > 0)
+                  .map((line) => ({
+                    children: [{
+                      detail: 0,
+                      format: 0,
+                      mode: 'normal',
+                      style: '',
+                      text: line,
+                      type: 'text',
+                      version: 1,
+                    }],
+                    direction: null,
+                    format: '',
+                    indent: 0,
+                    type: 'paragraph',
+                    version: 1,
+                  })),
+                direction: null,
+                format: '',
+                indent: 0,
+                type: 'root',
+                version: 1,
+              },
+            })
+          : EMPTY_LEXICAL_JSON;
+        const { nodeId } = await createMdNode(
+          workspaceId,
+          template?.title ?? '',
+          adjustedPosition,
+          {
+            markdownBody: template?.markdownBody ?? '',
+            jsonBody,
+            color: colorPair.bg,
+            textColor: colorPair.text,
+          },
+        );
         setNodes((prev) => [
           ...prev.map((node) =>
             colorAnchorIds.includes(node.id)
@@ -721,7 +768,7 @@ function GraphCanvasInner({
             type: 'textUpdater',
             position: adjustedPosition,
             data: {
-              title: '',
+              title: template?.title ?? '',
               isMain: false,
               depth: 0,
               color: colorPair.bg,
@@ -2921,11 +2968,17 @@ function GraphCanvasInner({
     <div
       ref={wrapperRef}
       className="relative w-full h-full bg-background"
-      // Figma 08 '그래프뷰 배경' 스타일 실측값: 각지형(conic) 그라데이션, 아주 옅은 라벤더/핑크 5색.
-      // 앱 토큰에 대응 값이 없어 Figma 디자인 hex를 그대로 사용.
+      /*
+       * CONTEXT
+       * - Problem      : conic-gradient creates a visible focal point and color seam at the center of the graph.
+       * - Why          : a linear gradient keeps the same soft palette without concentrating color transitions at one point.
+       * - Alternatives : radial gradients still create a center; a solid fill would remove the intended color variation.
+       * - Trade-offs   : colors now flow across the canvas in one direction.
+       * - Edge Case    : the gradient remains continuous when the canvas resizes.
+       */
       style={{
         background:
-          'conic-gradient(from 90deg at 50% 50%, #E5EBFF, #FFF7FB, #F1F4FE, #EDF2FF, #FAF4F8, #E5EBFF)',
+          'linear-gradient(135deg, #E5EBFF 0%, #FFF7FB 25%, #F1F4FE 50%, #EDF2FF 70%, #FAF4F8 85%, #E5EBFF 100%)',
       }}
       onDoubleClick={onPaneDoubleClick}
     >

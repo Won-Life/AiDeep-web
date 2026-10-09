@@ -67,6 +67,18 @@ export default function WorkspacePage() {
     );
   }
 
+  /*
+   * CONTEXT
+   * - Problem      : an account with no workspace has no graph to load, but the missing workspaceId keeps the loading view mounted forever.
+   * - Why          : after sync confirms the empty account, render the intentionally blank canvas surface.
+   * - Alternatives : showing the graph CTA without a workspace makes its create action a no-op.
+   * - Trade-offs   : workspace creation remains available from the sidebar switcher.
+   * - Edge Case    : actual loading and sync errors still use their existing screens.
+   */
+  if (synced && !workspaceId) {
+    return <main className="h-full w-full bg-background" aria-label="빈 워크스페이스" />;
+  }
+
   if (!workspaceId || !synced) {
     return <WorkspaceLoading />;
   }
@@ -94,7 +106,7 @@ export default function WorkspacePage() {
         target={getDefaultMeetingTarget(nodes, edges)}
         requestMeetingBot={inviteMeetingBot}
       />
-      {!overlayGone && (
+      {!overlayGone && nodes.length > 0 && (
         <div
           className={`absolute inset-0 z-50 transition-opacity duration-300 ${
             canvasPainted ? "pointer-events-none opacity-0" : "opacity-100"

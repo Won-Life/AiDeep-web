@@ -24,6 +24,7 @@ import { applyDepthOnEdgeCreate } from '@/features/graph/logic/traversal';
 import { createProjectNode } from '@/features/graph/api/nodes';
 import { getRandomColorPair } from '@/features/graph/constants/colors';
 import type { WorkspaceListItem } from '@/api/types';
+import { SHOW_TEMP_HIDDEN_UI } from '@/lib/uiFlags';
 
 /*
  * CONTEXT
@@ -736,7 +737,7 @@ function LogoutIcon() {
   );
 }
 
-function ProfileRow({ collapsed }: { collapsed?: boolean }) {
+function ProfileRow({ collapsed, onOpenArchive }: { collapsed?: boolean; onOpenArchive?: () => void }) {
   const router = useRouter();
   const { userMe } = useWorkspaceLayout();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -791,10 +792,15 @@ function ProfileRow({ collapsed }: { collapsed?: boolean }) {
               </span>
             </div>
             <div className="border-t border-border" />
-            <MenuItem disabled title="계정 설정 화면은 준비 중이에요">
+            <MenuItem onClick={() => { setMenuOpen(false); router.push('/settings'); }}>
               <GearIcon />
               설정
             </MenuItem>
+            {SHOW_TEMP_HIDDEN_UI && onOpenArchive && (
+              <MenuItem onClick={() => { setMenuOpen(false); onOpenArchive(); }}>
+                보관함
+              </MenuItem>
+            )}
             <MenuItem
               onClick={() => {
                 setMenuOpen(false);
@@ -1019,9 +1025,11 @@ function RailItem({
 function CollapsedRail({
   onExpand,
   onExpandToSearch,
+  onOpenArchive,
 }: {
   onExpand: () => void;
   onExpandToSearch: () => void;
+  onOpenArchive?: () => void;
 }) {
   // hover한 Y좌표 — null이면 펼치기 필 숨김
   const [hoverY, setHoverY] = useState<number | null>(null);
@@ -1080,7 +1088,7 @@ function CollapsedRail({
 
         <div className="flex-1" />
 
-        <ProfileRow collapsed />
+        <ProfileRow collapsed onOpenArchive={onOpenArchive} />
       </div>
 
       {/* hover 위치 추종 펼치기 필 (X4) */}
@@ -1127,9 +1135,11 @@ function CollapseEdgeStrip({ onCollapse }: { onCollapse: () => void }) {
 export default function Sidebar({
   isOpen,
   onToggle,
+  onOpenArchive,
 }: {
   isOpen: boolean;
   onToggle: () => void;
+  onOpenArchive?: () => void;
 }) {
   const {
     workspaceId,
@@ -1347,13 +1357,14 @@ export default function Sidebar({
             onAddTitle={addTitleNode}
           />
 
-          <ProfileRow />
+          <ProfileRow onOpenArchive={onOpenArchive} />
 
           <CollapseEdgeStrip onCollapse={onToggle} />
         </>
       ) : (
         <CollapsedRail
           onExpand={onToggle}
+          onOpenArchive={onOpenArchive}
           onExpandToSearch={() => {
             pendingSearchFocusRef.current = true;
             onToggle();
