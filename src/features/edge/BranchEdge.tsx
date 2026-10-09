@@ -1,8 +1,22 @@
 import type { EdgeProps } from "@xyflow/react";
-import { BaseEdge } from "@xyflow/react";
+import { BaseEdge, Position, useInternalNode } from "@xyflow/react";
 
 export function BranchEdge(props: EdgeProps) {
-  const { id, sourceX, sourceY, targetX, targetY, data, markerEnd } = props;
+  const { id, sourceY, targetY, data, markerEnd } = props;
+  /*
+   * CONTEXT
+   * - Problem      : 28px 클릭 영역의 끝에서 선이 시작해 안쪽 14px 포트와 틈이 생긴다.
+   * - Why          : React Flow가 측정한 좌우 핸들의 중심까지 선을 연장하고 흰 포트가 선을 덮게 한다.
+   * - Alternatives : 클릭 영역 축소는 조작성을 낮추고 고정 보정값은 핸들 크기 변경에 취약하다.
+   * - Trade-offs   : 핸들 측정값을 구독하며 원 아래에 선이 반지름만큼 겹친다.
+   * - Edge Case    : 좌우 방향·source/target 크기를 각각 반영하고 측정 전에는 원래 좌표를 쓴다.
+   */
+  const sourceNode = useInternalNode(props.source);
+  const targetNode = useInternalNode(props.target);
+  const sourceHandle = sourceNode?.internals.handleBounds?.source?.find((handle) => handle.id === props.sourceHandleId);
+  const targetHandle = targetNode?.internals.handleBounds?.target?.find((handle) => handle.id === props.targetHandleId);
+  const sourceX = props.sourceX + (props.sourcePosition === Position.Left ? 1 : -1) * (sourceHandle?.width ?? 0) / 2;
+  const targetX = props.targetX + (props.targetPosition === Position.Left ? 1 : -1) * (targetHandle?.width ?? 0) / 2;
   const hubX: number = (data?.hubX as number) ?? (sourceX + targetX) / 2;
   const hubY: number = sourceY;
 
