@@ -112,3 +112,24 @@ export function getRandomColorPair() {
   const randomIndex = Math.floor(Math.random() * RANDOM_COLOR_POOL.length);
   return RANDOM_COLOR_POOL[randomIndex];
 }
+
+/*
+ * CONTEXT
+ * - Problem      : 파란 타이틀만 밝은 placeholder를 써 다른 어두운 노드에서 회색 글자가 묻힌다.
+ * - Why          : 팔레트의 실제 배경색 밝기를 기준으로 밝은 회색이 필요한지 결정한다.
+ * - Alternatives : 색 이름만 비교하면 사용자 지정 hex 색상과 다른 톤을 놓친다.
+ * - Trade-offs   : DOM 계산 없이 처리하며 해석할 수 없는 CSS 토큰은 기존 회색으로 유지한다.
+ * - Edge Case    : 짧은 hex·RGB 저장값과 잘못된 입력도 처리한다.
+ */
+export function isDarkNodeBackground(color: string | undefined): boolean {
+  if (!color) return false;
+  const hex = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)?.[1];
+  const expanded = hex?.length === 3 ? [...hex].map((digit) => digit + digit).join('') : hex;
+  const rgb = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+  const channels = expanded
+    ? [0, 2, 4].map((offset) => parseInt(expanded.slice(offset, offset + 2), 16))
+    : rgb?.slice(1).map(Number);
+  if (!channels || channels.some((value) => value > 255)) return false;
+  const [red, green, blue] = channels;
+  return (0.299 * red + 0.587 * green + 0.114 * blue) / 255 < 0.72;
+}

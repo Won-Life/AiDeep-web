@@ -75,7 +75,7 @@ function OnNodeMark({ size = 28, round = false }: { size?: number; round?: boole
         width: size,
         height: size,
         borderRadius: round ? '50%' : Math.round(size * 0.3),
-        backgroundColor: 'rgb(var(--ds-main-blue))',
+        backgroundColor: round ? '#607AFF' : 'rgb(var(--ds-main-blue))',
       }}
       aria-hidden="true"
     >
@@ -752,14 +752,15 @@ function ProfileRow({ collapsed, onOpenArchive }: { collapsed?: boolean; onOpenA
   };
 
   return (
-    <div className={`relative shrink-0 ${collapsed ? 'p-2.5' : 'sidebar-profile-wrap'}`}>
+    <div className={`relative shrink-0 ${collapsed ? 'px-3 pt-3 pb-8' : 'sidebar-profile-wrap'}`}>
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
         aria-expanded={menuOpen}
-        className={`flex w-full items-center gap-2.5 transition-colors ${collapsed ? "rounded-[8px] px-1.5 py-1.5 hover:bg-surface" : "sidebar-profile"}`}
+        aria-label={collapsed ? "프로필 메뉴" : undefined}
+        className={`flex w-full items-center gap-2.5 transition-colors ${collapsed ? "justify-center rounded-full hover:bg-surface" : "sidebar-profile"}`}
       >
-        <Avatar name={name} size={collapsed ? 28 : 32} />
+        <Avatar name={name} size={collapsed ? 48 : 32} />
         {!collapsed && (
           <>
             <span className="min-w-0 flex-1 text-left">
@@ -980,6 +981,14 @@ function clampHoverY(clientY: number): number {
   return Math.min(Math.max(clientY, 28), window.innerHeight - 28);
 }
 
+/*
+ * CONTEXT
+ * - Problem      : 접힌 사이드바의 여백·선택 탭·아이콘·작은 프로필이 참고 이미지와 다르다.
+ * - Why          : 72px 레일을 기준으로 로고 40px, 60px 탐색 행, 프로필 48px와 비례 간격을 맞춘다.
+ * - Alternatives : 이미지 자체를 배경으로 쓰면 검색·프로필·펼치기 동작을 제공할 수 없다.
+ * - Trade-offs   : 레일 브랜드 색상과 아이콘 윤곽을 참고 이미지 기준으로 고정한다.
+ * - Edge Case    : 키보드 포커스와 기존 메뉴 동작은 유지하며 화면이 낮아도 탐색 행은 축소하지 않는다.
+ */
 /** 레일 네비 항목 — 아이콘 + 하단 라벨, active면 Main Blue 0.25 배경 + 좌측 액센트 탭 */
 function RailItem({
   label,
@@ -997,14 +1006,14 @@ function RailItem({
       type="button"
       onClick={onClick}
       title={label}
-      className={`relative flex w-full flex-col items-center gap-1.5 py-2.5 transition-colors ${
-        active ? 'bg-main-blue-pale' : 'hover:bg-surface'
+      aria-current={active ? "page" : undefined}
+      className={`relative flex h-[60px] w-full shrink-0 flex-col items-center justify-center gap-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#607AFF] ${
+        active ? 'bg-[#E5EAFF]' : 'hover:bg-surface'
       }`}
     >
       {active && (
         <span
-          className="absolute top-1/2 left-0 h-9 w-[5px] -translate-y-1/2 rounded-r-full"
-          style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
+          className="absolute inset-y-0 left-0 w-[5px] bg-[#607AFF] before:absolute before:top-1/2 before:left-full before:h-6 before:w-[5px] before:-translate-y-1/2 before:rounded-r-[4px] before:bg-[#607AFF]"
           aria-hidden="true"
         />
       )}
@@ -1012,8 +1021,8 @@ function RailItem({
       <span
         className={`text-[10px] leading-none ${
           active
-            ? 'font-semibold text-main-blue-deep'
-            : 'font-medium text-main-blue-light'
+            ? 'font-semibold text-[#3159E8]'
+            : 'font-medium text-[#829AFF]'
         }`}
       >
         {label}
@@ -1050,24 +1059,25 @@ function CollapsedRail({
           type="button"
           onClick={onExpand}
           title="사이드바 펼치기 ⌘\"
-          className="flex justify-center pt-4 pb-3"
+          className="flex shrink-0 justify-center pt-5 pb-4"
         >
           <OnNodeMark size={40} round />
         </button>
-        <div className="mx-3.5 border-t border-border" />
+        <div className="mx-4 shrink-0 border-t border-[#DCE3FF]" />
 
         {/* 네비: 그래프(현재 뷰)·검색·프로젝트 */}
-        <div className="flex flex-col pt-2.5">
+        <div className="flex shrink-0 flex-col pt-[22px]">
           <RailItem label="그래프" active onClick={onExpand}>
             {/* 겹친 사각형 — 뒤 외곽선 + 앞 채움 */}
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect x="8.5" y="3.5" width="12" height="12" rx="3" stroke="rgb(var(--ds-main-blue-deep))" strokeWidth="2" />
-              <rect x="3" y="8" width="13" height="13" rx="3" fill="rgb(var(--ds-main-blue-deep))" />
+              <path d="M4 8v13h13" stroke="#3159E8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <rect x="8" y="3" width="14" height="15" rx="1.5" fill="#3159E8" />
+              <path d="M10.5 6h9" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </RailItem>
           <RailItem label="검색" onClick={onExpandToSearch}>
             {/* 돋보기 + 내부 플러스(줌 인) */}
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgb(var(--ds-main-blue-light))" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#829AFF" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="10.5" cy="10.5" r="6.5" />
               <path d="m20.5 20.5-5.3-5.3" />
               <path d="M10.5 8.2v4.6M8.2 10.5h4.6" />
@@ -1076,12 +1086,12 @@ function CollapsedRail({
           <RailItem label="프로젝트" onClick={onExpand}>
             {/* 막대 차트 + 우상단 플러스 */}
             <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
-              <g fill="rgb(var(--ds-main-blue))">
+              <g fill="#829AFF">
                 <rect x="3" y="13" width="4" height="8" rx="1.5" />
                 <rect x="9.5" y="8" width="4" height="13" rx="1.5" />
                 <rect x="16" y="13" width="4" height="8" rx="1.5" />
               </g>
-              <path d="M19.2 2.2v5.6M16.4 5h5.6" stroke="rgb(var(--ds-main-blue))" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+              <path d="M19.2 2.2v5.6M16.4 5h5.6" stroke="#829AFF" strokeWidth="1.8" strokeLinecap="round" fill="none" />
             </svg>
           </RailItem>
         </div>

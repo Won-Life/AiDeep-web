@@ -5,7 +5,7 @@ import type { ContentTemplateId } from '@/features/editor/contentTemplates';
 import { useState, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
+import { NodeEditorPanel, type Attachment } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
 import { useWorkspaceLayout } from '@/app/workspace/context';
 import { showToast } from '@/components/ui/toastStore';
@@ -14,6 +14,7 @@ import {
   MAIN_NODE_COLOR,
   figmaNodeColorOf,
   titleTextOnDeep,
+  isDarkNodeBackground,
 } from '@/features/graph/constants/colors';
 import NodeContextMenu from '@/components/ui/NodeContextMenu';
 import type {
@@ -31,14 +32,23 @@ function getUserCursorColor(userId: string): string {
   return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length].text;
 }
 
-// 콘텐츠 노드 뾰족 배너 path — 왼쪽(또는 우측) 둥근 모서리 + 자식 방향 뾰족 점.
-// SVG stroke로 그려야 테두리 두께가 어느 변에서도 균일하다(clip-path 스케일링은 점 쪽이 두꺼워짐).
+/*
+ * CONTEXT
+ * - Problem      : 콘텐츠 배너 끝이 직선 두 개로 만나 참고 이미지보다 날카롭다.
+ * - Why          : 높이에 비례한 사선 끝을 quadratic 곡선으로 연결해 둥근 끝을 만든다.
+ * - Alternatives : strokeLinejoin만으로는 내부 배경의 뾰족한 끝을 둥글게 만들 수 없다.
+ * - Trade-offs   : 사선 깊이가 높이에 따라 늘어나므로 텍스트 쪽 여백도 확보한다.
+ * - Edge Case    : 좌우 방향을 대칭으로 그리고 작은 노드에서는 반경을 제한한다.
+ */
 function contentBannerPath(w: number, h: number, pointRight: boolean): string {
-  const p = 14; // 점 깊이(크기와 무관하게 고정)
-  const r = Math.max(2, Math.min(10, h / 2 - 1)); // 둥근 모서리 반경
+  const p = Math.min(28, h / 2, w / 3);
+  const r = Math.max(2, Math.min(10, h / 2 - 1));
+  const tip = Math.min(6, p / 2, h / 4);
+  const mid = h / 2;
+  const inset = tip * p / mid;
   return pointRight
-    ? `M ${r},0 H ${w - p} L ${w},${h / 2} L ${w - p},${h} H ${r} Q 0,${h} 0,${h - r} V ${r} Q 0,0 ${r},0 Z`
-    : `M ${w - r},0 H ${p} L 0,${h / 2} L ${p},${h} H ${w - r} Q ${w},${h} ${w},${h - r} V ${r} Q ${w},0 ${w - r},0 Z`;
+    ? `M ${r},0 H ${w - p} L ${w - inset},${mid - tip} Q ${w},${mid} ${w - inset},${mid + tip} L ${w - p},${h} H ${r} Q 0,${h} 0,${h - r} V ${r} Q 0,0 ${r},0 Z`
+    : `M ${w - r},0 H ${p} L ${inset},${mid - tip} Q 0,${mid} ${inset},${mid + tip} L ${p},${h} H ${w - r} Q ${w},${h} ${w},${h - r} V ${r} Q ${w},0 ${w - r},0 Z`;
 }
 
 export interface NodeViewer {
@@ -96,6 +106,15 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const userName = userMe?.username ?? 'Anonymous';
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
 
+  /*
+   * CONTEXT
+   * - Problem      : 단일 패널 전환으로 에디터를 unmount하면 패널 내부 첨부 목록이 사라진다.
+   * - Why          : 첨부 UI 상태를 노드가 소유해 다른 노트를 열었다 돌아와도 유지한다.
+   * - Alternatives : 숨겨진 에디터를 계속 마운트하면 단일 패널과 협업 연결 정리가 어긋난다.
+   * - Trade-offs   : 기존 첨부 상태는 현재 그래프 세션 안에서 유지하며 새 저장 형식은 도입하지 않는다.
+   * - Edge Case    : 업로드 중 패널을 전환해도 완료 결과는 원래 노드의 목록에 반영한다.
+   */
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isNodeHovered, setIsNodeHovered] = useState(false);
   const [hoverSide, setHoverSide] = useState<'left' | 'right'>('right');
   const [isContentMenuOpen, setIsContentMenuOpen] = useState(false);
@@ -127,8 +146,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const viewers = (nodeData.viewers ?? []) as NodeViewer[];
   const isHovered = nodeData.isHovered ?? false;
 
-  // 플레이스홀더는 온보딩·사용법과 동일한 "주제" 어휘로 통일 (#204 용어 정리)
-  const PLACEHOLDER = isMain ? '중심 주제' : isTitle ? '타이틀 이름 입력' : '콘텐츠 이름 입력';
+  // 생성 안내와 같은 프로젝트 이름 용어를 사용한다.
+  const PLACEHOLDER = isMain ? '프로젝트 이름' : isTitle ? '타이틀 이름 입력' : '콘텐츠 이름 입력';
 
   const label = nodeData.title || '';
   const isEmpty = label === '';
@@ -141,15 +160,20 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
     : nodeData.textColor || 'rgb(var(--foreground))';
   /*
    * CONTEXT
-   * - Problem      : one gray placeholder color loses contrast on the dark blue title-node background.
-   * - Why          : reuse titleTextOnDeep so placeholder contrast follows the same palette decision as filled text.
-   * - Alternatives : a fixed light gray would be hard to read on pale nodes; checking every CSS color needs DOM measurement.
-   * - Trade-offs   : dark title nodes get a translucent white placeholder, while other nodes keep the existing gray.
-   * - Edge Case    : the shared color check also covers legacy nodes mapped to the blue Figma palette.
+   * - Problem      : 어두운 타이틀·콘텐츠에 기존 회색 placeholder의 명도가 부족하다.
+   * - Why          : 실제 표시 톤을 판정해 밝은 회색 #E5E7EB를 읽기·편집 상태에 같이 적용한다.
+   * - Alternatives : 전체 노드에 밝은 색을 적용하면 흰 프로젝트와 밝은 노드에서 잘 안 보인다.
+   * - Trade-offs   : 밝은 노드는 기존 회색을 유지한다.
+   * - Edge Case    : 흰색이 섞인 콘텐츠 draft는 밝은 배경으로 취급하고 타이틀 draft는 light 톤을 판정한다.
    */
-  const hasDarkTitleBackground = isTitle && titleTextOnDeep(fig?.deep) !== null;
-  const placeholderColor = hasDarkTitleBackground
-    ? 'rgba(255, 255, 255, 0.72)'
+  const placeholderBackground = isTitle && !nodeData.isDraft
+    ? fig?.deep ?? nodeData.color
+    : fig?.light ?? nodeData.color;
+  const hasDarkPlaceholderBackground = !isMain
+    && !(isContent && nodeData.isDraft)
+    && isDarkNodeBackground(placeholderBackground);
+  const placeholderColor = hasDarkPlaceholderBackground
+    ? '#E5E7EB'
     : 'rgb(var(--ds-gray-500))';
 
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
@@ -162,6 +186,29 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
    * - Trade-offs   : 프로젝트 박스의 좌상단만 작은 곡률을 쓰고 나머지 모서리는 유지된다.
    * - Edge Case    : 선택·hover 모두 같은 모양을 쓰며 타이틀·콘텐츠 노드는 유지한다.
    */
+  /*
+   * CONTEXT
+   * - Problem      : 타이틀·콘텐츠의 얇은 상하 여백과 프로젝트 글자 크기가 참고 이미지 비율과 다르다.
+   * - Why          : 프로젝트 32px/142px, 타이틀 16px/58px, 콘텐츠 14px/54px로 글자와 한 줄 높이를 맞춘다.
+   * - Alternatives : 고정 높이는 두 줄 제목을 잘라내므로 최소 높이와 패딩으로 구성한다.
+   * - Trade-offs   : 노드 높이가 커져 기존 자동 배치가 측정된 크기로 위치를 조정한다.
+   * - Edge Case    : 인라인 편집도 같은 글자 크기를 사용하고 긴 제목은 두 줄까지 늘어난다.
+   */
+  const labelFontSize = isMain ? 32 : isTitle ? 16 : 14;
+  const labelFontWeight = isMain ? 700 : 600;
+  /*
+   * CONTEXT
+   * - Problem      : 고정 폭과 짧은 placeholder 기준 최소 폭이 참고 이미지의 넉넉한 가로 비율을 보장하지 못한다.
+   * - Why          : 타이틀은 글자 수 배율, 콘텐츠는 글자당 1em과 여백 7em을 합산하고 최소·최대·화면 폭으로 제한한다.
+   * - Alternatives : 텍스트 픽셀 측정은 폰트 로드·편집마다 DOM 측정이 필요하다.
+   * - Trade-offs   : 글리프마다 실제 폭은 다르지만 제목 길이에 비례한 예측 가능한 여백을 제공한다.
+   * - Edge Case    : 빈 제목도 최소 폭을 유지하며 긴 제목·좁은 화면은 기존 두 줄 표시로 처리한다.
+   */
+  const labelCharacterCount = Array.from(label || PLACEHOLDER).length;
+  const minimumWidthEm = isTitle ? 15 : 16;
+  const maximumWidthEm = isTitle ? 28 : 30;
+  const preferredWidthEm = isTitle ? labelCharacterCount * 1.25 : labelCharacterCount + 7;
+  const responsiveNodeWidth = `clamp(${minimumWidthEm}em, ${preferredWidthEm}em, ${maximumWidthEm}em)`;
   const containerClasses = isMain
     ? 'text-updater-node rounded-[14px] rounded-tl-[1px]'
     : isContent
@@ -280,7 +327,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           border: 'none',
         }
       : {
-          // 타이틀 노드(main 직계 자손): Node Deep fill + 흰 테두리 4px + 소프트 섀도 + 흰 꽁다리(아래).
+          // 타이틀 노드(main 직계 자손): Node Deep fill + 흰 테두리 6px + 소프트 섀도 + 흰 꽁다리(아래).
           // 글자는 어두운 Deep(파랑)만 흰색, 밝은 Deep은 계열 어두운색. (Figma 08 실측)
           backgroundColor:
             (nodeData.isDraft ? fig?.light : fig?.deep) ??
@@ -289,12 +336,12 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.28)`
             : '0 3px 4px rgba(53, 62, 112, 0.28)',
           border: isHovered
-            ? '4px solid #93C5FD'
+            ? '6px solid #93C5FD'
             : selected
-              ? '4px solid #ffffff'
+              ? '6px solid #ffffff'
               : viewerBorderColor
-                ? `4px solid ${viewerBorderColor}`
-                : '4px solid #ffffff',
+                ? `6px solid ${viewerBorderColor}`
+                : '6px solid #ffffff',
         };
 
   // 최대 3명 표시, 이후 +N
@@ -371,7 +418,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
       {/* 노션 에디터 패널 - 노드 뒤에 배치 */}
       {showInputBox && (
         <NodeEditorPanel
+          key={id}
           nodeId={id}
+          attachments={attachments}
+          onAttachmentsChange={setAttachments}
           handleSide={sideRelativeToParent}
           workspaceId={nodeData.workspaceId}
           dockIndex={nodeData.dockIndex}
@@ -408,18 +458,40 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           ...containerStyle,
           position: 'relative',
           zIndex: 40,
-          // 타이틀(main 직계 자손)은 사진처럼 넓은 pill — 짧은 제목도 넓게, 더 길면 확장(최대 300)
-          maxWidth: isTitle ? '300px' : '200px',
-          minWidth: isMain ? '200px' : isTitle ? '200px' : `${PLACEHOLDER.length}em`,
-          minHeight: isMain ? 140 : undefined,
+          fontSize: labelFontSize,
+          /*
+           * CONTEXT
+           * - Problem      : 프로젝트의 최소 높이와 큰 상하 패딩이 제목 줄 수에 따라 박스 비율을 바꾼다.
+           * - Why          : 참고 이미지 본체의 약 1.41:1 비율을 200×142px로 고정하고 제목을 수직 중앙에 둔다.
+           * - Alternatives : min-height만 지정하면 두 줄 제목에서 세로로 늘어난다.
+           * - Trade-offs   : 긴 프로젝트 이름은 기존 두 줄 제한 안에서 표시한다.
+           * - Edge Case    : 편집·선택·hover에서도 본체 크기를 유지하고 돌출 탭은 본체 밖에 둔다.
+           */
+          boxSizing: 'border-box',
+          width: isMain ? '200px' : responsiveNodeWidth,
+          height: isMain ? 142 : undefined,
+          /*
+           * CONTEXT
+           * - Problem      : 타이틀과 텍스트도 최소 높이 안에서 글자가 세로 중앙에 있어야 한다.
+           * - Why          : 본체를 column flex로 통일해 라벨과 이름 입력 모두 중앙에 둔다.
+           * - Alternatives : 위치 보정은 두 줄 제목과 입력 전환 시 어긋난다.
+           * - Trade-offs   : 가로 정렬은 기존 타이틀 중앙·텍스트 왼쪽을 유지한다.
+           * - Edge Case    : 절대 위치 탭·핸들·버튼은 본체 정렬에 참여하지 않는다.
+           */
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          maxWidth: isMain ? '200px' : `min(${maximumWidthEm}em, calc(100vw - 48px))`,
+          minWidth: isMain ? '200px' : `min(${minimumWidthEm}em, calc(100vw - 48px))`,
+          minHeight: isMain ? 142 : isTitle ? 58 : 54,
           // 콘텐츠는 뾰족한 쪽에 여유 패딩(글자가 점에 안 겹치게)
           padding: isMain
-            ? '48px 24px'
+            ? '12px 24px'
             : isContent
               ? pointRight
-                ? '6px 24px 6px 14px'
-                : '6px 14px 6px 24px'
-              : '6px 12px',
+                ? '17px 38px 17px 14px'
+                : '17px 14px 17px 38px'
+              : '12px 12px',
         }}
         onMouseEnter={() => setIsNodeHovered(true)}
         onMouseMove={(event) => {
@@ -451,8 +523,14 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               [hoverSide]: 0, width: '50%', backgroundColor: mainHoverFill }} />
           </div>
         )}
-        {/* 콘텐츠 노드 뾰족 배너 — SVG path를 연한 fill + 흰색 uniform stroke로 그린다.
-            stroke는 어느 변에서도 두께가 균일(점 쪽도). 핸들은 컨테이너 직속이라 안 잘린다. */}
+        {/*
+         * CONTEXT
+         * - Problem      : 콘텐츠 노드의 3px 테두리가 참고 이미지보다 얇다.
+         * - Why          : SVG stroke를 4px로 맞춰 직선과 둥근 끝의 두께를 균일하게 유지한다.
+         * - Alternatives : CSS border는 배너의 사선·곡선 외곽을 따라가지 못한다.
+         * - Trade-offs   : 기존 경로 양쪽으로 테두리가 0.5px씩 더 넓어진다.
+         * - Edge Case    : 선택·hover에도 같은 두께를 쓰고 기존 색상과 그림자는 유지한다.
+         */}
         {isContent && contentSize.w > 0 && (
           <svg
             aria-hidden
@@ -469,7 +547,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               d={contentBannerPath(contentSize.w, contentSize.h, pointRight)}
               fill={contentFill}
               stroke={contentRing}
-              strokeWidth={3}
+              strokeWidth={4}
               strokeLinejoin="round"
             />
           </svg>
@@ -520,28 +598,63 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             }} />
           </div>
         )}
+        {/*
+         * CONTEXT
+         * - Problem      : 탭의 흰 면과 선택 stroke가 함께 본체에 겹쳐 양옆 색 테두리가 안쪽으로 돌출된다.
+         * - Why          : 선택 stroke는 본체 외곽 높이에서 자르고 흰 fill만 2px 겹쳐 접합선을 덮는다.
+         * - Alternatives : 선택 링 전체를 제거하면 선택 상태를 구분하기 어려워 접합부만 수정한다.
+         * - Trade-offs   : 흰 면과 외곽선을 따로 그려 선택 링이 본체의 흰 테두리를 침범하지 않게 한다.
+         * - Edge Case    : 좌우 탭·선택 해제·캔버스 축소에서도 접합부가 벌어지지 않도록 겹침을 유지한다.
+         */}
         {isTitle && (
-          <div aria-hidden className="absolute" style={{
-            top: selected ? -20 : -14,
-            left: selected ? 16 : 22,
-            width: selected ? 50 : 38,
+          <svg
+            aria-hidden
+            className="absolute pointer-events-none"
+            width="60"
+            height="22"
+            viewBox="-8 -8 60 22"
             /*
              * CONTEXT
-             * - Problem      : 선택된 타이틀 탭의 양옆 테두리가 본체의 흰 테두리 아래까지 내려온다.
-             * - Why          : 본체 테두리 두께인 4px만큼 탭을 줄이고 내부 흰 레이어도 함께 잘라낸다.
-             * - Alternatives : 탭 전체를 올리면 상단 돌출 높이까지 바뀐다.
-             * - Trade-offs   : 선택 탭의 윗모양은 유지하며 아래 끝만 본체 외곽에 맞춘다.
-             * - Edge Case    : 선택하지 않은 타이틀과 프로젝트 탭은 기존 높이를 유지한다.
+             * - Problem      : 상단 탭이 프로젝트에서 먼 쪽에 있어 요청한 부모 방향 배치와 반대다.
+             * - Why          : 오른쪽 타이틀은 왼쪽 상단, 왼쪽 타이틀은 오른쪽 상단에 탭을 둔다.
+             * - Alternatives : 화면 좌표 비교는 드래그 중 연결 방향과 다르게 바뀔 수 있다.
+             * - Trade-offs   : 탭 위치는 순간 좌표 대신 그래프의 좌우 배치 방향을 따른다.
+             * - Edge Case    : 좌우 대칭 이동 시 handleSide 변경에 맞춰 탭도 함께 이동한다.
              */
-            height: selected ? 16 : 14,
-            overflow: 'hidden',
-            backgroundColor: selected ? selectionRing : '#ffffff',
-            borderRadius: selected ? '12px 12px 0 0' : '8px 8px 0 0',
-          }}>
-            {selected && <div style={{
-              position: 'absolute', top: 6, left: 6, width: 38, height: 14,
-              backgroundColor: '#ffffff', borderRadius: '8px 8px 0 0',
-            }} />}
+            style={{
+              top: -26,
+              ...(sideRelativeToParent === 'left' ? { right: 10 } : { left: 10 }),
+              overflow: 'hidden',
+            }}
+          >
+            {selected && (
+              <svg x="-8" y="-8" width="60" height="20" viewBox="-8 -8 60 20" overflow="hidden">
+                <path
+                  d="M 0 14 V 12 C 4 12 3 0 14 0 H 30 C 41 0 40 12 44 12 V 14"
+                  fill="none"
+                  stroke={selectionRing}
+                  strokeWidth={16}
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+            <path
+              d="M 0 14 V 12 C 4 12 3 0 14 0 H 30 C 41 0 40 12 44 12 V 14"
+              fill="#ffffff"
+            />
+          </svg>
+        )}
+        {/*
+         * CONTEXT
+         * - Problem      : 새 프로젝트를 만든 직후 이름 입력과 저장 방법이 드러나지 않는다.
+         * - Why          : 최초 이름 편집 동안만 노드 아래에 예시와 blur 저장 안내를 표시한다.
+         * - Alternatives : 모달은 캔버스에서 직접 이름을 짓는 흐름을 끊는다.
+         * - Trade-offs   : 안내는 일시적이며 저장 방식은 기존 디바운스 API를 유지한다.
+         * - Edge Case    : 긴 안내는 좁은 화면에서 줄바꿈하며 기존 이름 변경에는 표시하지 않는다.
+         */}
+        {isMain && nodeData.isDraft && isRenaming && (
+          <div className="pointer-events-none absolute top-full left-1/2 mt-7 w-max max-w-[calc(100vw-48px)] -translate-x-1/2 rounded-full bg-[#607AFF] px-8 py-3 text-center text-[18px] leading-6 font-medium text-white shadow-[0_3px_5px_rgba(80,100,170,0.18)]">
+            예: 운영체제, 캡스톤 · 바깥을 클릭하면 저장
           </div>
         )}
         {isRenaming ? (
@@ -563,14 +676,14 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             className={`nodrag w-full bg-transparent outline-none ${
               isContent ? 'text-left' : 'text-center'
             } ${
-              hasDarkTitleBackground
-                ? 'placeholder:text-[rgba(255,255,255,0.72)]'
+              hasDarkPlaceholderBackground
+                ? 'placeholder:text-[#E5E7EB]'
                 : 'placeholder:text-gray-500'
             }`}
             style={{
               color: filledTextColor,
-              fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
-              fontSize: isMain ? '30px' : undefined,
+              fontWeight: labelFontWeight,
+              fontSize: isMain && isEmpty ? 24 : labelFontSize,
               lineHeight: '1.4em',
             }}
           />
@@ -581,8 +694,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               // 타이틀: 어두운 Deep(파랑)만 흰 글자, 밝은 Deep은 계열 어두운색.
               // 콘텐츠/프로젝트: 계열 어두운색(--ds-text-*). (Figma 08 실측)
               color: isEmpty ? placeholderColor : filledTextColor,
-              fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
-              fontSize: isMain ? '30px' : undefined,
+              fontWeight: labelFontWeight,
+              fontSize: labelFontSize,
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
@@ -670,21 +783,33 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             )}
           </div>
         )}
-        {/* G1-H: 회의 녹음 버튼 (타이틀 노드 위) — 회의 기능 준비 중 시각 스텁.
-            녹음 자체(M1~M4)는 별도 담당이라, 지금은 안내 토스트만 띄운다. */}
+        {/*
+         * CONTEXT
+         * - Problem      : 회의 버튼이 타이틀 위에 있어 시안의 하단 배치·문구와 다르다.
+         * - Why          : 하단 중앙에 음파 아이콘과 ‘회의 녹음 시작’ 라벨을 배치한다.
+         * - Alternatives : margin으로 간격을 만들면 포인터가 버튼으로 이동할 때 hover가 끊긴다.
+         * - Trade-offs   : 패딩 래퍼가 노드와 버튼 사이의 hover 영역을 유지한다.
+         * - Edge Case    : 이름 편집 중에는 숨기며 기존 준비 중 안내 동작을 유지한다.
+         */}
         {isTitle && isNodeHovered && !isRenaming && (
-          <button
-            type="button"
-            aria-label="회의 녹음"
-            onClick={(event) => {
-              event.stopPropagation();
-              showToast('회의 녹음 기능은 준비 중이에요');
-            }}
-            className="nodrag absolute bottom-full left-1/2 z-10 mb-2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-red-200 bg-background px-3 py-1.5 text-[12px] font-semibold text-red-500 shadow-sm transition-colors hover:bg-red-50"
-          >
-            <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden="true" />
-            회의 녹음
-          </button>
+          <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3">
+            <button
+              type="button"
+              aria-label="회의 녹음 시작"
+              onClick={(event) => {
+                event.stopPropagation();
+                showToast('회의 녹음 기능은 준비 중이에요');
+              }}
+              className="flex items-center gap-2 whitespace-nowrap rounded-full border border-[#F23240] bg-[#FFF0EF] px-4 py-1.5 text-[12px] font-semibold leading-[18px] text-[#111111] transition-colors hover:bg-[#FFE3E2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F23240]"
+            >
+              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#E63840]" aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M3 6v4M5.5 4v8M8 2v12M10.5 5v6M13 6.5v3" />
+                </svg>
+              </span>
+              회의 녹음 시작
+            </button>
+          </div>
         )}
         {/* S1: 회의 녹음으로 자동 생성된 노드 배지 — 회의 기능이 autoGenerated 플래그를
             넣으면 표시된다(지금은 그 데이터가 없어 미노출). */}

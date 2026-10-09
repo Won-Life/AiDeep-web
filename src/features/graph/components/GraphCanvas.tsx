@@ -1777,11 +1777,17 @@ function GraphCanvasInner({
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     onNodeVisited?.(node.id);
     if (node.data.isMain || !node.data.isContentNode) return;
-    // 우측 도크 에디터는 한 번에 하나만 (Figma C3) — 다른 노드 클릭 시 교체
-    setMyOpenEditorNodeIds((prev) => {
-      if (prev.length === 1 && prev[0] === node.id) return prev; // 같은 노드 재클릭 → 변화 없음
-      return [node.id];
-    });
+    /*
+     * CONTEXT
+     * - Problem      : 콘텐츠를 누를 때마다 열린 노드 배열에 추가돼 에디터가 여러 개 쌓인다.
+     * - Why          : 열린 목록을 현재 노드 하나로 교체해 기존 awareness·닫기 동작을 유지한다.
+     * - Alternatives : 패널만 숨기면 이전 에디터와 협업 편집 상태가 계속 열린 채로 남는다.
+     * - Trade-offs   : 여러 본문을 나란히 편집하는 동작은 제공하지 않는다.
+     * - Edge Case    : 같은 노드를 다시 누르면 배열을 유지해 편집 상태를 보존한다.
+     */
+    setMyOpenEditorNodeIds((prev) =>
+      prev.length === 1 && prev[0] === node.id ? prev : [node.id],
+    );
     setWorkingOnEditorNodeId(node.id);
   }, [onNodeVisited]);
 
@@ -1875,6 +1881,8 @@ function GraphCanvasInner({
             },
           },
         ]);
+        setDraftNodeId(nodeId);
+        setRenamingNodeId(nodeId);
       } catch (err) {
         console.error('[createProjectNodeAt] createProjectNode failed', err);
       }
@@ -1909,7 +1917,7 @@ function GraphCanvasInner({
     });
     setIsCreatingProject(true);
     try {
-      await createProjectNodeAt(position);
+      await createProjectNodeAt({ x: position.x - 100, y: position.y - 71 });
     } finally {
       setIsCreatingProject(false);
     }
@@ -2924,15 +2932,15 @@ function GraphCanvasInner({
       className="relative w-full h-full bg-background"
       /*
        * CONTEXT
-       * - Problem      : conic-gradient creates a visible focal point and color seam at the center of the graph.
-       * - Why          : a linear gradient keeps the same soft palette without concentrating color transitions at one point.
-       * - Alternatives : radial gradients still create a center; a solid fill would remove the intended color variation.
-       * - Trade-offs   : colors now flow across the canvas in one direction.
-       * - Edge Case    : the gradient remains continuous when the canvas resizes.
+       * - Problem      : 첫 진입 시안은 좌상단의 옅은 분홍과 하단의 하늘색이 자연스럽게 섞인다.
+       * - Why          : 넓은 타원형 그라데이션을 겹쳐 중심 경계 없이 시안의 색 분포를 따른다.
+       * - Alternatives : 여러 색을 반복하는 선형 그라데이션은 대각선 띠를 만든다.
+       * - Trade-offs   : 캔버스 색은 요청된 시안에 맞춰 고정한다.
+       * - Edge Case    : 백분율 크기로 뷰포트 변화에도 부드러운 색 분포를 유지한다.
        */
       style={{
         background:
-          'linear-gradient(135deg, #E5EBFF 0%, #FFF7FB 25%, #F1F4FE 50%, #EDF2FF 70%, #FAF4F8 85%, #E5EBFF 100%)',
+          'radial-gradient(ellipse at 0% 0%, #FCF5F8 0%, transparent 58%), radial-gradient(ellipse at 18% 100%, #E5EBFF 0%, transparent 65%), linear-gradient(135deg, #F5F6FF 0%, #EFF3FF 100%)',
       }}
       onDoubleClick={onPaneDoubleClick}
     >
@@ -2977,67 +2985,38 @@ function GraphCanvasInner({
         connectionLineType={ConnectionLineType.SmoothStep}
         proOptions={{ hideAttribution: true }}
       >
-        <GraphMiniMap />
+        {nodes.length > 0 && <GraphMiniMap />}
       </ReactFlow>
       {!savedViewport && <InitialViewport mainNodeId={mainNodeId} />}
       {onFirstPaint && (
         <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
       )}
       <CursorOverlay cursors={cursors} />
-      {/* 빈 캔버스 empty state (G2) — 프로젝트 노드부터 만들도록 첫 행동을 안내하고,
-          프로젝트 → 타이틀 → 회의 녹음으로 이어지는 핵심 흐름을 단계로 보여준다 */}
+      {/*
+       * CONTEXT
+       * - Problem      : 빈 화면이 제공된 첫 진입 시안의 프로젝트 모형과 안내 비율을 따르지 않는다.
+       * - Why          : 폴더 모형·제목·설명·생성 버튼·순서 안내를 한 묶음으로 중앙에 배치한다.
+       * - Alternatives : 실제 노드는 데이터와 그래프 이벤트가 필요하므로 장식용 SVG를 사용한다.
+       * - Trade-offs   : 안내 문구는 현재 녹음 버튼 위치인 타이틀 아래에 맞춘다.
+       * - Edge Case    : 작은 화면에서 설명이 줄바꿈되고 중복 생성은 기존 disabled로 막는다.
+       */}
       {nodes.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
-          {/* 점선 프로젝트 노드 모형 */}
-          <span
-            className="rounded-full border-[1.5px] border-dashed border-gray-700 px-7 py-2.5 text-[13px] text-gray-500"
-            aria-hidden="true"
-          >
-            프로젝트
-          </span>
-          <p className="mt-5 text-xl font-bold text-foreground">
-            첫 프로젝트 노드를 만들어보세요
-          </p>
-          <p className="mt-2 text-[13.5px] text-muted">
-            과목이나 팀 프로젝트 이름으로 시작하면 좋아요. 예: 운영체제, 캡스톤
-          </p>
-          <button
-            type="button"
-            onClick={createProjectAtViewportCenter}
-            disabled={isCreatingProject}
-            style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
-            className="pointer-events-auto mt-6 rounded-[20px] px-6 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            + 프로젝트 노드 만들기
-          </button>
-          {/* 핵심 흐름 3단계 */}
-          <div className="mt-8 flex items-center gap-2 text-[12.5px] text-muted">
-            {(
-              [
-                ['1', '프로젝트 만들기'],
-                ['2', '타이틀 추가'],
-              ] as const
-            ).map(([step, label]) => (
-              <span key={step} className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5">
-                  <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-700 text-[11px]">
-                    {step}
-                  </span>
-                  {label}
-                </span>
-                <span aria-hidden="true">→</span>
-              </span>
-            ))}
-            <span className="flex items-center gap-1.5">
-              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-700 text-[11px]">
-                3
-              </span>
-              타이틀 위{' '}
-              <span className="font-semibold text-foreground whitespace-nowrap">
-                <span className="text-red-500">●</span> 회의 녹음
-              </span>{' '}
-              으로 회의 시작
-            </span>
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-y-auto px-6 py-8">
+          <div className="flex max-w-full flex-col items-center text-center sm:-translate-x-9">
+            <svg width="108" height="82" viewBox="0 0 108 82" fill="none" aria-hidden="true" className="shrink-0 drop-shadow-[0_2px_1px_rgba(90,110,170,0.35)]">
+              <path d="M4 15V10a8 8 0 0 1 8-8h17a9 9 0 0 1 9 9v4" fill="#7889FF" stroke="white" strokeWidth="4" />
+              <rect x="2" y="7" width="104" height="72" rx="10" fill="white" />
+              <text x="54" y="50" textAnchor="middle" fill="#CECECE" fontSize="20" fontWeight="600">?</text>
+            </svg>
+            <h2 className="mt-8 text-[17px] leading-6 font-bold text-[#292929]">첫 프로젝트 노드를 만들어보세요</h2>
+            <p className="mt-1.5 text-[12px] leading-5 text-[#858585]">과목이나 팀 프로젝트 이름으로 시작하면 좋아요. 예: 운영체제, 캡스톤</p>
+            <button type="button" onClick={createProjectAtViewportCenter} disabled={isCreatingProject}
+              className="pointer-events-auto mt-3 rounded-full bg-[#7889FF] px-[26px] py-3 text-[13px] leading-[18px] font-semibold text-white shadow-[0_2px_2px_rgba(100,120,180,0.1)] hover:opacity-90 disabled:opacity-50">
+              + 프로젝트 노드 만들기
+            </button>
+            <p className="mt-7 text-[10px] leading-5 text-[#999999]">
+              ① 프로젝트 만들기 → ② 타이틀 추가 → ③ 타이틀 아래 <span className="text-[#E64B55]">● 회의 녹음</span> 으로 회의 시작
+            </p>
           </div>
         </div>
       )}
