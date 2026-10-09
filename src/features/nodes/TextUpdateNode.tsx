@@ -601,7 +601,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         {/*
          * CONTEXT
          * - Problem      : 탭의 흰 면과 선택 stroke가 함께 본체에 겹쳐 양옆 색 테두리가 안쪽으로 돌출된다.
-         * - Why          : 선택 stroke는 본체 외곽 높이에서 자르고 흰 fill만 2px 겹쳐 접합선을 덮는다.
+         * - Why          : 탭을 52×10px로 넓고 낮게 조정하고 흰 fill만 본체에 2px 겹쳐 접합선을 덮는다.
          * - Alternatives : 선택 링 전체를 제거하면 선택 상태를 구분하기 어려워 접합부만 수정한다.
          * - Trade-offs   : 흰 면과 외곽선을 따로 그려 선택 링이 본체의 흰 테두리를 침범하지 않게 한다.
          * - Edge Case    : 좌우 탭·선택 해제·캔버스 축소에서도 접합부가 벌어지지 않도록 겹침을 유지한다.
@@ -610,9 +610,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           <svg
             aria-hidden
             className="absolute pointer-events-none"
-            width="60"
-            height="22"
-            viewBox="-8 -8 60 22"
+            width="68"
+            height="20"
+            viewBox="-8 -8 68 20"
             /*
              * CONTEXT
              * - Problem      : 상단 탭이 프로젝트에서 먼 쪽에 있어 요청한 부모 방향 배치와 반대다.
@@ -622,15 +622,15 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
              * - Edge Case    : 좌우 대칭 이동 시 handleSide 변경에 맞춰 탭도 함께 이동한다.
              */
             style={{
-              top: -26,
+              top: -24,
               ...(sideRelativeToParent === 'left' ? { right: 10 } : { left: 10 }),
               overflow: 'hidden',
             }}
           >
             {selected && (
-              <svg x="-8" y="-8" width="60" height="20" viewBox="-8 -8 60 20" overflow="hidden">
+              <svg x="-8" y="-8" width="68" height="18" viewBox="-8 -8 68 18" overflow="hidden">
                 <path
-                  d="M 0 14 V 12 C 4 12 3 0 14 0 H 30 C 41 0 40 12 44 12 V 14"
+                  d="M 0 12 V 10 C 4 10 3 0 14 0 H 38 C 49 0 48 10 52 10 V 12"
                   fill="none"
                   stroke={selectionRing}
                   strokeWidth={16}
@@ -639,7 +639,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               </svg>
             )}
             <path
-              d="M 0 14 V 12 C 4 12 3 0 14 0 H 30 C 41 0 40 12 44 12 V 14"
+              d="M 0 12 V 10 C 4 10 3 0 14 0 H 38 C 49 0 48 10 52 10 V 12"
               fill="#ffffff"
             />
           </svg>
@@ -684,7 +684,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               color: filledTextColor,
               fontWeight: labelFontWeight,
               fontSize: isMain && isEmpty ? 24 : labelFontSize,
-              lineHeight: '1.4em',
+              lineHeight: isMain ? '1.4em' : '100%',
+              ...(isMain ? {} : { fontFamily: 'Pretendard, sans-serif', fontSize: isTitle ? 13 : 11, fontWeight: isTitle ? 600 : 700, letterSpacing: 0 }),
             }}
           />
         ) : (
@@ -701,8 +702,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               wordBreak: 'break-word',
-              lineHeight: '1.4em',
-              maxHeight: '2.8em',
+              lineHeight: isMain ? '1.4em' : '100%',
+              ...(isMain ? {} : { fontFamily: 'Pretendard, sans-serif', fontSize: isTitle ? 13 : 11, fontWeight: isTitle ? 600 : 700, letterSpacing: 0 }),
+              maxHeight: isMain ? '2.8em' : '2em',
             }}
           >
             {isEmpty ? PLACEHOLDER : label}
