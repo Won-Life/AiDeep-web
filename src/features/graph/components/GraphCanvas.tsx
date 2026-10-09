@@ -3050,9 +3050,15 @@ function GraphCanvasInner({
           </svg>
         </button>
       )}
-      {/* top-20: 캔버스가 inset-0으로 ChipHeader(fixed h-16, z-30) 뒤까지 깔리므로
-          top-4는 헤더에 가려진다. 헤더 높이(64px) + 16px 아래에 배치. */}
-      <div className="absolute top-20 right-4 z-40 flex items-start gap-2">
+      {/*
+       * CONTEXT
+       * - Problem      : 헤더가 제거됐는데도 도움말이 옛 헤더 높이 아래에 남아 있다.
+       * - Why          : 시안대로 위 21px·오른쪽 32px에 고정해 로딩 화면과 위치를 통일한다.
+       * - Alternatives : 헤더 오프셋 유지는 버튼을 필요 이상으로 아래에 배치한다.
+       * - Trade-offs   : 에디터 닫기는 버튼 왼쪽에 두어 도움말 위치를 유지한다.
+       * - Edge Case    : 좁은 화면에서는 오른쪽 여백만 16px로 줄인다.
+       */}
+      <div className="absolute top-[21px] right-4 z-40 flex flex-row-reverse items-start gap-2 sm:right-8">
         <HelpMenu onOpenGuide={() => setOnboardingOpen(true)} />
         {myOpenEditorNodeIds.length > 0 && (
           <button

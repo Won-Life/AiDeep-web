@@ -32,7 +32,7 @@ export default function HelpMenu({
         onClick={() => setMenuOpen((v) => !v)}
         aria-label="도움말"
         aria-expanded={menuOpen}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-700 bg-background text-[14px] text-muted transition-colors hover:bg-surface hover:text-foreground"
+        className="flex size-[38px] items-center justify-center rounded-full border border-[#7889FF] bg-white text-[13px] font-semibold text-[#7889FF] shadow-[0_2px_2px_rgba(53,62,112,0.16)] hover:bg-[#F4F6FF] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7889FF]"
       >
         ?
       </button>

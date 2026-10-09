@@ -1,4 +1,7 @@
 'use client';
+import { useState } from 'react';
+import HelpMenu from './HelpMenu';
+import GraphOnboardingModal from './GraphOnboardingModal';
 
 /*
  * CONTEXT
@@ -18,8 +21,14 @@
 const PULSE = 'workspace-loading-pulse';
 
 export default function WorkspaceLoading() {
+  const [guideOpen, setGuideOpen] = useState(false);
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 bg-background">
+    <div className="relative flex h-full flex-col items-center justify-center gap-6 bg-background">
+      {/* 로딩 중에도 같은 위치에서 그래프 안내를 열 수 있다. */}
+      <div className="absolute top-[21px] right-4 z-40 sm:right-8">
+        <HelpMenu onOpenGuide={() => setGuideOpen(true)} />
+      </div>
+      <GraphOnboardingModal open={guideOpen} onClose={() => setGuideOpen(false)} />
       {/* 중심 주제 → 연결선 → 하위 주제 순으로 밝아지는 미니 그래프 */}
       <div className="flex items-center" aria-hidden="true">
         <span
