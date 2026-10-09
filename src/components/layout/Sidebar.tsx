@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import localFont from 'next/font/local';
 import type { Node } from '@xyflow/react';
 import { useWorkspaceLayout } from '@/app/workspace/context';
@@ -265,6 +266,14 @@ function MeetingBanner({
 
 // ─── 워크스페이스 스위처 (X6) + 새 워크스페이스 모달 (X7) ────────────────────
 
+/*
+ * CONTEXT
+ * - Problem      : 워크스페이스 메뉴 폭·선택 표시·행 간격이 X6 시안과 다르다.
+ * - Why          : 303px 팝업과 44px 목록 행, 파란 선택 탭과 구분선으로 시안의 위계를 재현한다.
+ * - Alternatives : 공통 MenuItem 수정은 프로필 등 다른 메뉴에 영향을 주므로 이 메뉴만 조정한다.
+ * - Trade-offs   : 메뉴는 사이드바 밖으로 펼쳐지며 작은 화면에서는 뷰포트 폭으로 제한한다.
+ * - Edge Case    : 긴 이름은 말줄임하고 현재 항목·전환·생성·설정과 Escape 닫기를 유지한다.
+ */
 function WorkspaceSwitcher({
   open,
   currentId,
@@ -297,54 +306,65 @@ function WorkspaceSwitcher({
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute top-full left-0 z-50 mt-1 w-[232px] overflow-hidden rounded-[16px] border border-main-blue-light bg-background pb-1 shadow-md">
-        <p className="border-b border-main-blue-pale px-4 pt-3 pb-2 text-[12px] text-main-blue-light">
+      <div id="workspace-switcher-menu" role="menu" aria-label="워크스페이스" className="sidebar-workspace-menu absolute top-full -left-[5px] z-50 mt-4 w-[303px] max-w-[calc(100vw-22px)] overflow-hidden rounded-[21px] border border-[#7A89FF] bg-background shadow-[0_3px_2px_rgba(53,62,112,0.16)]"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+        }}>
+
+        <p className="flex h-[30px] items-center px-[13px] text-[10px] text-[#7A89FF]">
           워크스페이스
         </p>
         {list === null ? (
           <p className="px-4 py-2.5 text-[12px] text-muted">불러오는 중…</p>
         ) : (
-          list.map((ws) => {
+          list.map((ws, index) => {
             const isCurrent = ws.workspaceId === currentId;
             return (
               <button
                 key={ws.workspaceId}
                 type="button"
+                role="menuitemradio"
+                aria-checked={isCurrent}
+                autoFocus={isCurrent || (!currentId && index === 0)}
                 onClick={() => {
                   onClose();
                   if (!isCurrent) onSwitch(ws);
                 }}
-                className={`flex w-full items-center gap-3 border-b border-main-blue-pale px-4 py-2.5 text-left text-[13px] transition-colors ${
-                  isCurrent
-                    ? 'bg-main-blue-pale font-semibold text-foreground shadow-[inset_3px_0_0_0_rgb(var(--ds-main-blue))]'
-                    : 'text-main-blue-light hover:bg-surface'
+                className={`sidebar-workspace-option relative flex h-11 w-full items-center gap-[11px] px-[13px] text-left text-[10px] transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[#7A89FF] ${
+                  isCurrent ? 'bg-[#E9EDFF] font-semibold text-[#3454C3]' : 'text-[#A9B9FF] hover:bg-[#F3F5FF]'
                 }`}
               >
-                <WorkspaceIcon name={ws.title} size={28} muted={!isCurrent} />
+                <span aria-hidden="true" className={`flex size-[29px] shrink-0 items-center justify-center rounded-[6px] text-[12px] font-semibold text-white ${isCurrent ? 'bg-[#3454C3]' : 'bg-[#C3CDFF]'}`}>
+                  {ws.title.trim().charAt(0) || 'W'}
+                </span>
                 <span className="min-w-0 flex-1 truncate">{ws.title}</span>
               </button>
             );
           })
         )}
-        <div className="pt-1">
-          <MenuItem
-            className="font-medium text-main-blue-deep"
+        <div className="border-t border-[#7A89FF] px-[13px] py-[5px]">
+          <button
+            type="button"
+            role="menuitem"
+            className="flex h-[26px] w-full items-center rounded px-[10px] text-left text-[10px] font-medium text-[#3454C3] hover:bg-[#F3F5FF]"
             onClick={() => {
               onClose();
               onNewWorkspace();
             }}
           >
             + 새 워크스페이스
-          </MenuItem>
-          <MenuItem
-            className="font-medium text-main-blue-deep"
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="flex h-[26px] w-full items-center rounded px-[10px] text-left text-[10px] font-medium text-[#3454C3] hover:bg-[#F3F5FF]"
             onClick={() => {
               onClose();
               onSettings();
             }}
           >
             워크스페이스 설정
-          </MenuItem>
+          </button>
         </div>
       </div>
     </>
@@ -380,33 +400,36 @@ function NewWorkspaceModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      className={`workspace-dialog-backdrop ${sidebarFont.className}`}
       onClick={onClose}
     >
       <div
-        className="flex w-[360px] max-w-[90vw] flex-col gap-[14px] rounded-[16px] border border-gray-700 bg-background p-[20px]"
+        role="dialog"
+        aria-labelledby="new-workspace-heading"
+        aria-modal="true"
+        className="workspace-dialog"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between">
-          <h2 className="text-[16px] font-bold text-foreground">새 워크스페이스</h2>
+        <div className="workspace-dialog-heading">
+          <h2 id="new-workspace-heading" className="text-[16px] font-bold text-foreground">새 워크스페이스</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="text-muted hover:text-foreground"
+            className="workspace-dialog-close"
           >
-            ✕
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
           </button>
         </div>
-        <p className="text-[12.5px] text-muted">
-          과목 묶음이나 팀 단위로 워크스페이스를 나눠 쓸 수 있어요.
+        <p className="workspace-dialog-subtitle">
+          과목, 사이드 프로젝트처럼 따로 모아두고 싶은 주제마다 만들어보세요.
         </p>
         <div>
-          <p className="mb-1.5 text-[12px] font-semibold text-foreground">이름</p>
+          <p className="mb-1.5 text-[11px] font-semibold text-foreground">이름</p>
           <div className="flex items-center gap-2">
-            <WorkspaceIcon name={title || '새'} size={32} />
+            <span aria-hidden="true" className="workspace-dialog-icon">{title.trim().charAt(0) || '새'}</span>
             <input
               autoFocus
               value={title}
@@ -415,10 +438,11 @@ function NewWorkspaceModal({
                 if (e.key === 'Enter') submit();
               }}
               placeholder="새 워크스페이스"
-              className="h-[36px] min-w-0 flex-1 rounded-[8px] border border-gray-700 bg-background px-3 text-[13px] text-foreground outline-none placeholder:text-gray-500"
+              aria-label="워크스페이스 이름"
+              className="workspace-dialog-input min-w-0 flex-1"
             />
           </div>
-          <p className="mt-1.5 text-[11px] text-gray-500">
+          <p className="mt-1.5 pl-[52px] text-[10px] text-gray-500">
             아이콘은 이름 첫 글자로 자동 생성돼요.
           </p>
         </div>
@@ -426,7 +450,7 @@ function NewWorkspaceModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-[38px] flex-1 rounded-[8px] border border-border bg-background text-[13px] font-semibold text-muted transition-colors hover:bg-surface"
+            className="workspace-dialog-button workspace-dialog-cancel"
           >
             취소
           </button>
@@ -434,13 +458,14 @@ function NewWorkspaceModal({
             type="button"
             onClick={submit}
             disabled={!title.trim() || submitting}
-            className="h-[38px] flex-1 rounded-[8px] bg-foreground text-[13px] font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="workspace-dialog-button workspace-dialog-primary"
           >
             만들기
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -480,33 +505,36 @@ function WorkspaceDeleteConfirmModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30"
+      className={`workspace-dialog-backdrop ${sidebarFont.className}`}
       onClick={onClose}
     >
       <div
-        className="flex w-[360px] max-w-[90vw] flex-col gap-[14px] rounded-[16px] border border-gray-700 bg-background p-[20px]"
+        role="dialog"
+        aria-labelledby="delete-workspace-heading"
+        aria-modal="true"
+        className="workspace-dialog"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between">
-          <h2 className="text-[16px] font-bold text-foreground">
+        <div className="workspace-dialog-heading">
+          <h2 id="delete-workspace-heading" className="text-[16px] font-bold text-foreground">
             ‘{workspaceTitle}’를 삭제할까요?
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="shrink-0 text-muted hover:text-foreground"
+            className="workspace-dialog-close"
           >
-            ✕
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
           </button>
         </div>
-        <p className="text-[12.5px] text-muted">
+        <p className="workspace-dialog-subtitle">
           이 워크스페이스의 프로젝트와 노드가 모두 삭제되고, 되돌릴 수 없어요.
         </p>
         <div>
-          <p className="mb-1.5 text-[12px] font-semibold text-foreground">
+          <p className="mb-1.5 text-[11px] font-semibold text-foreground">
             확인을 위해 워크스페이스 이름을 입력해주세요
           </p>
           <input
@@ -517,9 +545,10 @@ function WorkspaceDeleteConfirmModal({
               if (e.key === 'Enter') submit();
             }}
             placeholder="워크스페이스 이름 입력"
-            className="h-[36px] w-full rounded-[8px] border border-gray-700 bg-background px-3 text-[13px] text-foreground outline-none placeholder:text-gray-500"
+            aria-label="삭제할 워크스페이스 이름 확인"
+            className="workspace-dialog-input w-full"
           />
-          <p className="mt-1.5 text-[11px] text-gray-500">
+          <p className="mt-1.5 text-[10px] text-gray-500">
             이름이 일치해야 삭제 버튼이 켜져요.
           </p>
         </div>
@@ -528,7 +557,7 @@ function WorkspaceDeleteConfirmModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-[38px] flex-1 rounded-[8px] border border-border bg-background text-[13px] font-semibold text-muted transition-colors hover:bg-surface"
+            className="workspace-dialog-button workspace-dialog-cancel"
           >
             취소
           </button>
@@ -536,13 +565,14 @@ function WorkspaceDeleteConfirmModal({
             type="button"
             onClick={submit}
             disabled={!matched || deleting}
-            className="h-[38px] flex-1 rounded-[8px] bg-red-500 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="workspace-dialog-button workspace-dialog-delete"
           >
             삭제
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -598,36 +628,39 @@ function WorkspaceSettingsModal({
     }
   };
 
-  return (
+  return createPortal(
     <>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      {!confirmOpen && <div
+        className={`workspace-dialog-backdrop ${sidebarFont.className}`}
         onClick={onClose}
       >
         <div
-          className="flex w-[360px] max-w-[90vw] flex-col gap-[14px] rounded-[16px] border border-gray-700 bg-background p-[20px]"
+          role="dialog"
+          aria-labelledby="workspace-settings-heading"
+          aria-modal="true"
+          className="workspace-dialog"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between">
-            <h2 className="text-[16px] font-bold text-foreground">
+          <div className="workspace-dialog-heading">
+            <h2 id="workspace-settings-heading" className="text-[16px] font-bold text-foreground">
               워크스페이스 설정
             </h2>
             <button
               type="button"
               onClick={onClose}
               aria-label="닫기"
-              className="text-muted hover:text-foreground"
+              className="workspace-dialog-close"
             >
-              ✕
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
             </button>
           </div>
-          <p className="text-[12.5px] text-muted">
+          <p className="workspace-dialog-subtitle">
             이름을 바꾸거나, 워크스페이스를 삭제할 수 있어요.
           </p>
           <div>
-            <p className="mb-1.5 text-[12px] font-semibold text-foreground">이름</p>
+            <p className="mb-1.5 text-[11px] font-semibold text-foreground">이름</p>
             <div className="flex items-center gap-2">
-              <WorkspaceIcon name={title || '새'} size={32} />
+              <span aria-hidden="true" className="workspace-dialog-icon">{title.trim().charAt(0) || '새'}</span>
               <input
                 autoFocus
                 value={title}
@@ -635,25 +668,26 @@ function WorkspaceSettingsModal({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') save();
                 }}
-                className="h-[36px] min-w-0 flex-1 rounded-[8px] border border-gray-700 bg-background px-3 text-[13px] text-foreground outline-none placeholder:text-gray-500"
+                aria-label="워크스페이스 이름"
+              className="workspace-dialog-input min-w-0 flex-1"
               />
             </div>
-            <p className="mt-1.5 text-[11px] text-gray-500">
+            <p className="mt-1.5 pl-[52px] text-[10px] text-gray-500">
               아이콘은 이름 첫 글자로 자동 생성돼요.
             </p>
           </div>
           {isOwner && (
-            <div className="rounded-[10px] border border-red-300 p-3">
-              <p className="text-[12.5px] font-semibold text-red-500">
+            <div className="rounded-[20px] border border-[#F23240] px-4 py-3">
+              <p className="text-[11px] font-semibold text-[#D14040]">
                 되돌릴 수 없는 작업
               </p>
-              <p className="mt-0.5 text-[11.5px] text-muted">
+              <p className="mt-0.5 text-[10px] text-gray-500">
                 삭제하면 이 워크스페이스의 프로젝트와 노드가 모두 사라져요.
               </p>
               <button
                 type="button"
                 onClick={() => setConfirmOpen(true)}
-                className="mt-2 rounded-[8px] border border-red-300 px-3 py-1.5 text-[12px] font-semibold text-red-500 transition-colors hover:bg-red-50"
+                className="mt-2 rounded-full border border-[#F23240] px-3 py-0.5 text-[10px] font-semibold text-[#D14040] transition-colors hover:bg-red-50"
               >
                 워크스페이스 삭제
               </button>
@@ -663,7 +697,7 @@ function WorkspaceSettingsModal({
             <button
               type="button"
               onClick={onClose}
-              className="h-[38px] flex-1 rounded-[8px] border border-border bg-background text-[13px] font-semibold text-muted transition-colors hover:bg-surface"
+              className="workspace-dialog-button workspace-dialog-cancel"
             >
               취소
             </button>
@@ -671,14 +705,13 @@ function WorkspaceSettingsModal({
               type="button"
               onClick={save}
               disabled={!title.trim() || saving}
-              className="h-[38px] flex-1 rounded-[8px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: 'rgb(var(--ds-main-blue))' }}
+              className="workspace-dialog-button workspace-dialog-primary"
             >
               저장
             </button>
           </div>
         </div>
-      </div>
+      </div>}
       {confirmOpen && (
         <WorkspaceDeleteConfirmModal
           workspaceTitle={loadedTitle}
@@ -690,7 +723,8 @@ function WorkspaceSettingsModal({
           }}
         />
       )}
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -1310,6 +1344,8 @@ export default function Sidebar({
                 type="button"
                 onClick={() => setSwitcherOpen((v) => !v)}
                 aria-expanded={switcherOpen}
+                aria-haspopup="menu"
+                aria-controls={switcherOpen ? "workspace-switcher-menu" : undefined}
                 className="sidebar-workspace flex w-full min-w-0 items-center text-left"
               >
                 <WorkspaceIcon name={workspaceTitle} size={42} />
