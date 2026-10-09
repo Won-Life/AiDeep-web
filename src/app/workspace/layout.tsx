@@ -1,12 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
 import { showToast } from '@/components/ui/toastStore';
-import DropDown from '@/components/ui/DropDown';
 import AiChatPanel, {
   AI_CHAT_HANDLE_WIDTH,
   AI_CHAT_PANEL_WIDTH,
@@ -15,7 +13,6 @@ import ArchiveModal from '@/components/layout/ArchiveModal';
 import SessionLoadError from '@/features/auth/SessionLoadError';
 import { getMe } from '@/api/user';
 import { ensureNickname } from '@/features/auth/defaultNickname';
-import { logout } from '@/api/auth';
 import { getWorkspaces } from '@/api/workspace';
 import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/api/mappers';
@@ -28,9 +25,7 @@ import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
 const LAST_WORKSPACE_KEY = 'aideep_last_workspace_id';
 
 function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const {
-    focusedNodeId,
     setFocusedNodeId,
     setUserMe,
     userMe,
@@ -253,13 +248,6 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     };
   }, [workspaceId, userMe?.userId, setCollaborators]);
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await logout();
-    } catch {}
-    router.replace('/login');
-  }, [router]);
-
   return (
     <div className="relative w-full h-screen overflow-hidden">
       <div
@@ -269,13 +257,19 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         {children}
       </div>
 
-      <Sidebar isOpen={isSidebarOpen} onToggle={handleToggleSidebar} />
-
-      {/* 상단 ChipHeader는 렌더하지 않는다 — 캔버스 상단바를 없애 우측 도크 에디터를
-          full-height(Figma C3)로 띄우기 위함. 프로필·설정·아카이브·프로젝트 칩 기능은
-          좌측 사이드바로 이전 중(별도 세션). 컴포넌트 파일(ChipHeader.tsx)은 유지. */}
-
-      <DropDown sidebarWidth={sidebarWidth} onChatOpen={() => setChatOpen(true)} />
+      {/*
+       * CONTEXT
+       * - Problem      : the separate top header adds a permanent chrome row above the graph.
+       * - Why          : the Figma workspace layout places navigation and profile actions in the sidebar.
+       * - Alternatives : keeping the chip bar preserves project shortcuts but conflicts with the requested header-free canvas.
+       * - Trade-offs   : project navigation moves to the existing sidebar tree; profile settings and logout stay in its profile menu.
+       * - Edge Case    : archive remains gated by SHOW_TEMP_HIDDEN_UI and can still be opened through the sidebar callback when enabled.
+       */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onToggle={handleToggleSidebar}
+        onOpenArchive={() => setIsArchiveOpen(true)}
+      />
 
       <AiChatPanel isOpen={isChatOpen} onToggle={handleToggleChat} />
 

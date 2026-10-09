@@ -96,7 +96,7 @@ export default function WorkspacePage() {
         target={getDefaultMeetingTarget(nodes, edges)}
         requestMeetingBot={inviteMeetingBot}
       />
-      {!overlayGone && (
+      {!overlayGone && nodes.length > 0 && (
         <div
           className={`absolute inset-0 z-50 transition-opacity duration-300 ${
             canvasPainted ? "pointer-events-none opacity-0" : "opacity-100"

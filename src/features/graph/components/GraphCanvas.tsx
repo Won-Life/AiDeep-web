@@ -648,7 +648,7 @@ function GraphCanvasInner({
     setDraftNodeId(null);
   }, []);
 
-  // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 빈 자식 노드 생성 + 엣지 + 색 상속 후
+  // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 자식 노드 생성 + 엣지 + 색 상속 후
   // 바로 인라인 이름 편집(G5). onConnectEnd(핸들 드래그 생성)과 동일한 생성 규칙을 노드 기준으로
   // 재사용한다. 겹침 bail 없이 source 높이에 놓고 D3 rectCollide가 분리하도록 맡긴다.
   const handleAddChild = useCallback(
@@ -2922,11 +2922,17 @@ function GraphCanvasInner({
     <div
       ref={wrapperRef}
       className="relative w-full h-full bg-background"
-      // Figma 08 '그래프뷰 배경' 스타일 실측값: 각지형(conic) 그라데이션, 아주 옅은 라벤더/핑크 5색.
-      // 앱 토큰에 대응 값이 없어 Figma 디자인 hex를 그대로 사용.
+      /*
+       * CONTEXT
+       * - Problem      : conic-gradient creates a visible focal point and color seam at the center of the graph.
+       * - Why          : a linear gradient keeps the same soft palette without concentrating color transitions at one point.
+       * - Alternatives : radial gradients still create a center; a solid fill would remove the intended color variation.
+       * - Trade-offs   : colors now flow across the canvas in one direction.
+       * - Edge Case    : the gradient remains continuous when the canvas resizes.
+       */
       style={{
         background:
-          'conic-gradient(from 90deg at 50% 50%, #E5EBFF, #FFF7FB, #F1F4FE, #EDF2FF, #FAF4F8, #E5EBFF)',
+          'linear-gradient(135deg, #E5EBFF 0%, #FFF7FB 25%, #F1F4FE 50%, #EDF2FF 70%, #FAF4F8 85%, #E5EBFF 100%)',
       }}
       onDoubleClick={onPaneDoubleClick}
     >

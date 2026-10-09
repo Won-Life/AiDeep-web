@@ -1,6 +1,7 @@
 'use client';
 
-import { useEdges, useNodes, useReactFlow, useStore, useViewport, getNodesBounds } from '@xyflow/react';
+import { useRef } from 'react';
+import { useEdges, useNodes, useReactFlow, useStore, useViewport } from '@xyflow/react';
 import type { Node } from '@xyflow/react';
 
 /*
@@ -39,11 +40,11 @@ function MiniMapNode({ node, accent }: { node: Node; accent: string }) {
 
 /*
  * CONTEXT
- * - Problem      : 기본 미니맵은 연결선·노드 형태가 생략되고 배율 조작이 카드 밖에 있다.
- * - Why          : React Flow의 현재 데이터로 SVG를 그려 실제 구조와 화면 영역을 함께 표시한다.
- * - Alternatives : 기본 MiniMap의 nodeComponent만 교체하면 연결선을 표현할 수 없다.
- * - Trade-offs   : 별도 SVG 렌더링 비용이 생기지만 데이터와 뷰포트는 기존 store를 따른다.
- * - Edge Case    : 숨긴 노드·엣지는 제외하고 빈 그래프와 화면 밖 뷰포트도 bounds에 포함한다.
+ * - Problem      : 전체 그래프를 맞추면 멀리 떨어진 노드 때문에 모든 실루엣이 작아진다.
+ * - Why          : 고정 1:4 배율로 현재 화면 중심 주변을 표시해 200px 노드를 50px로 유지한다.
+ * - Alternatives : 전체 bounds 기준 확대는 노드 추가·이동마다 표시 크기가 달라진다.
+ * - Trade-offs   : 먼 노드는 미니맵 밖으로 잘리지만 현재 작업 주변의 모양은 더 잘 보인다.
+ * - Edge Case    : 드래그 시작 좌표계를 유지해 화면 중심 추적으로 이동량이 누적되지 않게 한다.
  */
 export default function GraphMiniMap() {
   const nodes = useNodes().filter((node) => !node.hidden);
@@ -53,16 +54,12 @@ export default function GraphMiniMap() {
   const height = useStore((state) => state.height);
   const { setCenter, zoomIn, zoomOut, fitView } = useReactFlow();
   const viewport = { x: -x / zoom, y: -y / zoom, width: width / zoom, height: height / zoom };
-  const bounds = nodes.length ? getNodesBounds(nodes) : viewport;
-  const left = Math.min(bounds.x, viewport.x) - 60;
-  const top = Math.min(bounds.y, viewport.y) - 60;
-  const mapWidth = Math.max(bounds.x + bounds.width, viewport.x + viewport.width) - left + 60;
-  const mapHeight = Math.max(bounds.y + bounds.height, viewport.y + viewport.height) - top + 60;
-  const scale = Math.max(mapWidth / 260, mapHeight / 156, 1);
+  const scale = 4;
   const viewWidth = scale * 260;
   const viewHeight = scale * 156;
-  const viewLeft = left - (viewWidth - mapWidth) / 2;
-  const viewTop = top - (viewHeight - mapHeight) / 2;
+  const viewLeft = viewport.x + viewport.width / 2 - viewWidth / 2;
+  const viewTop = viewport.y + viewport.height / 2 - viewHeight / 2;
+  const dragOrigin = useRef({ x: viewLeft, y: viewTop });
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const accent = '#7B87FF';
 
@@ -75,13 +72,14 @@ export default function GraphMiniMap() {
         className="block h-[156px] w-full touch-none cursor-crosshair"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
+          dragOrigin.current = { x: viewLeft, y: viewTop };
           const rect = event.currentTarget.getBoundingClientRect();
-          void setCenter(viewLeft + (event.clientX - rect.left) / rect.width * viewWidth, viewTop + (event.clientY - rect.top) / rect.height * viewHeight, { zoom });
+          void setCenter(dragOrigin.current.x + (event.clientX - rect.left) / rect.width * viewWidth, dragOrigin.current.y + (event.clientY - rect.top) / rect.height * viewHeight, { zoom });
         }}
         onPointerMove={(event) => {
           if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
           const rect = event.currentTarget.getBoundingClientRect();
-          void setCenter(viewLeft + (event.clientX - rect.left) / rect.width * viewWidth, viewTop + (event.clientY - rect.top) / rect.height * viewHeight, { zoom });
+          void setCenter(dragOrigin.current.x + (event.clientX - rect.left) / rect.width * viewWidth, dragOrigin.current.y + (event.clientY - rect.top) / rect.height * viewHeight, { zoom });
         }}
         onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
       >

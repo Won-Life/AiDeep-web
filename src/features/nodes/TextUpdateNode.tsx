@@ -139,6 +139,18 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
       nodeData.textColor ??
       'rgb(var(--foreground))')
     : nodeData.textColor || 'rgb(var(--foreground))';
+  /*
+   * CONTEXT
+   * - Problem      : one gray placeholder color loses contrast on the dark blue title-node background.
+   * - Why          : reuse titleTextOnDeep so placeholder contrast follows the same palette decision as filled text.
+   * - Alternatives : a fixed light gray would be hard to read on pale nodes; checking every CSS color needs DOM measurement.
+   * - Trade-offs   : dark title nodes get a translucent white placeholder, while other nodes keep the existing gray.
+   * - Edge Case    : the shared color check also covers legacy nodes mapped to the blue Figma palette.
+   */
+  const hasDarkTitleBackground = isTitle && titleTextOnDeep(fig?.deep) !== null;
+  const placeholderColor = hasDarkTitleBackground
+    ? 'rgba(255, 255, 255, 0.72)'
+    : 'rgb(var(--ds-gray-500))';
 
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
@@ -196,6 +208,20 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   // 파스텔 톤(--ds-sub-*)은 1px로는 식별이 어려워 색이 있으면 2px로 표시.
   // 색 미저장 legacy main은 회색(EDGE_COLOR) 폴백.
   const mainOwnBorderColor = nodeData.color || null;
+  /*
+   * CONTEXT
+   * - Problem      : selection was drawn on the card alone, leaving the folder tab outside the selected silhouette.
+   * - Why          : use one pale-blue outer ring for the card and extend the same layered folder shape over its upper-left tab.
+   * - Alternatives : a rectangular outline clips the folder profile; a tinted card changes its white surface.
+   * - Trade-offs   : the selection ring adds visual space around the main node without changing its content dimensions.
+   * - Edge Case    : title nodes keep their pill shape and receive a matching ring around their small upper-left cap.
+   */
+  const selectionRing = '#B7C7FF';
+  const mainFolderRing = selected
+    ? selectionRing
+    : isHovered
+      ? '#93C5FD'
+      : (viewerBorderColor ?? '#ffffff');
 
   const containerStyle = isMain
     ? {
@@ -204,11 +230,13 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         // 소속 그래프를 드러낸다 → 기존 '색 테두리'를 폴더 탭(mainOwnBorderColor)으로 대체,
         // 기본 테두리 없음. hover/selected/viewer만 테두리로 표시.
         backgroundColor: MAIN_NODE_COLOR.bg,
-        boxShadow: '0 3px 4px rgba(53, 62, 112, 0.24)',
-        border: isHovered
-          ? '2px solid #93C5FD'
-          : selected
-            ? '2px solid var(--onnode-selection)'
+        boxShadow: selected
+          ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.24)`
+          : '0 3px 4px rgba(53, 62, 112, 0.24)',
+        border: selected
+          ? 'none'
+          : isHovered
+            ? '3px solid #93C5FD'
             : viewerBorderColor
               ? `2px solid ${viewerBorderColor}`
               : 'none',
@@ -226,11 +254,13 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           backgroundColor:
             (nodeData.isDraft ? fig?.light : fig?.deep) ??
             `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
-          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.10)',
+          boxShadow: selected
+            ? `0 0 0 8px ${selectionRing}, 0 4px 14px rgba(0, 0, 0, 0.10)`
+            : '0 4px 14px rgba(0, 0, 0, 0.10)',
           border: isHovered
             ? '4px solid #93C5FD'
             : selected
-              ? '4px solid var(--onnode-selection)'
+              ? '4px solid #ffffff'
               : viewerBorderColor
                 ? `4px solid ${viewerBorderColor}`
                 : '4px solid #ffffff',
@@ -382,7 +412,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           - Trade-offs   : 절반 강조는 프로젝트에만 적용하며 기존 타이틀 생성은 유지한다.
           - Edge Case    : 버튼으로 이동해도 마지막 hover 방향을 유지한다.
         */}
-        {isMain && isNodeHovered && (
+        {isMain && isNodeHovered && !selected && (
           <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[14px]" style={{
             border: '3px solid #C4CCFF', overflow: 'hidden', zIndex: -1,
           }}>
@@ -426,27 +456,53 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             aria-hidden
             className="absolute pointer-events-none"
             style={{
-              top: -12, left: 0, width: 74, height: 28,
-              backgroundColor: MAIN_NODE_COLOR.bg,
-              borderRadius: '18px 18px 0 0',
-              outline: isHovered ? '2px solid #93C5FD' : selected
-                ? '2px solid var(--onnode-selection)' : viewerBorderColor
-                  ? `2px solid ${viewerBorderColor}` : undefined,
-              zIndex: -1,
+              top: selected ? -22 : -12,
+              left: selected ? -8 : 0,
+              width: selected ? 90 : 74,
+              height: selected ? 22 : 28,
+              /*
+               * CONTEXT
+               * - Problem      : the white folder-tab shell creates a detached clip-like cap on hover.
+               * - Why          : using the node ring color for the shell makes the tab join the card outline.
+               * - Alternatives : removing the shell loses the folder shape; keeping white preserves the visible gap.
+               * - Trade-offs   : the tab shell follows hover, selection, and collaborator outline colors.
+               * - Edge Case    : unhighlighted main nodes use a soft blue shell matching the card outline.
+               */
+              backgroundColor: mainFolderRing,
+              borderRadius: selected ? '26px 26px 0 0' : '18px 18px 0 0',
+              zIndex: 0,
             }}
           >
+            {selected && <div style={{
+              position: 'absolute', top: 8, left: 8, width: 74, height: 14,
+              borderRadius: '20px 20px 0 0',
+              backgroundColor: MAIN_NODE_COLOR.bg,
+            }} />}
             <div style={{
-              position: 'absolute', top: 5, left: 7, width: 59, height: 16,
-              borderRadius: '12px 12px 0 0',
+              position: 'absolute',
+              top: selected ? 13 : 5,
+              left: selected ? 15 : 7,
+              width: 59,
+              height: 15,
+              borderRadius: selected ? '12px 12px 0 0' : '10px 10px 0 0',
               backgroundColor: fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR,
             }} />
           </div>
         )}
         {isTitle && (
           <div aria-hidden className="absolute" style={{
-            top: -14, left: 22, width: 38, height: 14,
-            backgroundColor: '#ffffff', borderRadius: '8px 8px 0 0',
-          }} />
+            top: selected ? -20 : -14,
+            left: selected ? 16 : 22,
+            width: selected ? 50 : 38,
+            height: selected ? 20 : 14,
+            backgroundColor: selected ? selectionRing : '#ffffff',
+            borderRadius: selected ? '12px 12px 0 0' : '8px 8px 0 0',
+          }}>
+            {selected && <div style={{
+              position: 'absolute', top: 6, left: 6, width: 38, height: 14,
+              backgroundColor: '#ffffff', borderRadius: '8px 8px 0 0',
+            }} />}
+          </div>
         )}
         {isRenaming ? (
           // 인라인 이름 편집(G5·G7) — input onChange가 handleTitleChange로 즉시+디바운스 저장,
@@ -466,6 +522,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             onDoubleClick={(e) => e.stopPropagation()}
             className={`nodrag w-full bg-transparent outline-none ${
               isContent ? 'text-left' : 'text-center'
+            } ${
+              hasDarkTitleBackground
+                ? 'placeholder:text-[rgba(255,255,255,0.72)]'
+                : 'placeholder:text-gray-500'
             }`}
             style={{
               color: filledTextColor,
@@ -480,7 +540,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             style={{
               // 타이틀: 어두운 Deep(파랑)만 흰 글자, 밝은 Deep은 계열 어두운색.
               // 콘텐츠/프로젝트: 계열 어두운색(--ds-text-*). (Figma 08 실측)
-              color: isEmpty ? 'rgb(var(--ds-gray-500))' : filledTextColor,
+              color: isEmpty ? placeholderColor : filledTextColor,
               fontWeight: isMain ? 700 : isTitle ? 600 : undefined,
               fontSize: isMain ? '30px' : undefined,
               display: '-webkit-box',
@@ -512,7 +572,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           >
             <button
               type="button"
-              aria-label="자식 노드 추가"
+              aria-label={isTitle ? '콘텐츠 노드 메뉴 열기' : '타이틀 노드 추가'}
+              aria-expanded={isTitle ? isContentMenuOpen : undefined}
               onClick={(event) => {
                 event.stopPropagation();
                 if (isTitle) setIsContentMenuOpen((open) => !open);
@@ -531,7 +592,14 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                 />
               </svg>
             </button>
-            <span
+            <button
+              type="button"
+              aria-expanded={isTitle ? isContentMenuOpen : undefined}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isTitle) setIsContentMenuOpen((open) => !open);
+                else nodeData.onAddChild?.(id, addSide);
+              }}
               className="whitespace-nowrap rounded-full text-white select-none"
               style={{
                 backgroundColor: '#748DFD',
@@ -540,7 +608,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               }}
             >
               {isMain ? '새 타이틀 노드 추가' : '콘텐츠 노드 추가'}
-            </span>
+            </button>
             {isTitle && isContentMenuOpen && (
               <div className="absolute top-full z-20 mt-2" style={addSide === 'left' ? { right: 10 } : { left: 10 }}>
                 <ContentNodeMenu
