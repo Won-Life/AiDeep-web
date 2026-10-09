@@ -154,8 +154,16 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
 
   // 중심 노드: 네모난 형태, 큰 패딩, 배경 없이 테두리만
   // 서브 노드: 동그란 형태, 작은 패딩, 배경색 채움
+  /*
+   * CONTEXT
+   * - Problem      : 프로젝트 박스의 좌상단 곡선이 폴더 탭과 겹쳐 선택 시 틈처럼 보인다.
+   * - Why          : 박스와 hover 레이어의 좌상단 반경을 1px로 줄여 탭과 자연스럽게 이어 붙인다.
+   * - Alternatives : 탭 위치 조정은 기존 폴더 실루엣까지 바꾸므로 제외한다.
+   * - Trade-offs   : 프로젝트 박스의 좌상단만 작은 곡률을 쓰고 나머지 모서리는 유지된다.
+   * - Edge Case    : 선택·hover 모두 같은 모양을 쓰며 타이틀·콘텐츠 노드는 유지한다.
+   */
   const containerClasses = isMain
-    ? 'text-updater-node rounded-[14px]'
+    ? 'text-updater-node rounded-[14px] rounded-tl-[1px]'
     : isContent
       ? 'text-updater-node' // 모양은 아래 clip-path 배경 레이어가 그린다(오른쪽 뾰족 배너)
       : 'text-updater-node rounded-full';
@@ -413,7 +421,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           - Edge Case    : 버튼으로 이동해도 마지막 hover 방향을 유지한다.
         */}
         {isMain && isNodeHovered && !selected && (
-          <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[14px]" style={{
+          <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[14px] rounded-tl-[1px]" style={{
             border: '3px solid #C4CCFF', overflow: 'hidden', zIndex: -1,
           }}>
             <div style={{ position: 'absolute', top: 0, bottom: 0,
@@ -494,7 +502,16 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             top: selected ? -20 : -14,
             left: selected ? 16 : 22,
             width: selected ? 50 : 38,
-            height: selected ? 20 : 14,
+            /*
+             * CONTEXT
+             * - Problem      : 선택된 타이틀 탭의 양옆 테두리가 본체의 흰 테두리 아래까지 내려온다.
+             * - Why          : 본체 테두리 두께인 4px만큼 탭을 줄이고 내부 흰 레이어도 함께 잘라낸다.
+             * - Alternatives : 탭 전체를 올리면 상단 돌출 높이까지 바뀐다.
+             * - Trade-offs   : 선택 탭의 윗모양은 유지하며 아래 끝만 본체 외곽에 맞춘다.
+             * - Edge Case    : 선택하지 않은 타이틀과 프로젝트 탭은 기존 높이를 유지한다.
+             */
+            height: selected ? 16 : 14,
+            overflow: 'hidden',
             backgroundColor: selected ? selectionRing : '#ffffff',
             borderRadius: selected ? '12px 12px 0 0' : '8px 8px 0 0',
           }}>
