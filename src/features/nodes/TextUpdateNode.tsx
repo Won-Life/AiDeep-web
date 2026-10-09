@@ -4,7 +4,8 @@ import { ContentNodeMenu } from '@/features/graph/components/ContentNodeMenu';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
 import { useState, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Position, type NodeProps } from '@xyflow/react';
+import { GraphHandle as Handle } from './GraphHandle';
 import { NodeEditorPanel, type Attachment } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
 import { useWorkspaceLayout } from '@/app/workspace/context';
@@ -75,6 +76,7 @@ export type NodeView = {
   viewers?: NodeViewer[]; // 이 노드를 보고 있는 다른 유저들
   isContextMenuOpen?: boolean; // 컨텍스트 메뉴 표시 여부
   isDraft?: boolean;
+  draftHandleSides?: ('left' | 'right')[];
   isRenaming?: boolean; // 인라인 이름 편집 중(G5·G7 "이름 바꾸기")
   onStartRename?: (nodeId: string) => void; // 인라인 이름 편집 시작
   onFinishRename?: (nodeId: string) => void; // 인라인 이름 편집 종료
@@ -791,11 +793,13 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           <>
             <Handle
               type="source"
+              enlarged={isMain}
               position={Position.Left}
               id="source-left"
               style={{
                 ...PORT_DOT_STYLE,
-                opacity: childSides.has('left') || isNodeHovered ? 1 : 0,
+                borderStyle: nodeData.isDraft || nodeData.draftHandleSides?.includes('left') ? 'dashed' : 'solid',
+                opacity: childSides.has('left') || isNodeHovered || nodeData.draftHandleSides?.includes('left') ? 1 : 0,
               }}
             />
             <Handle
@@ -807,11 +811,13 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             />
             <Handle
               type="source"
+              enlarged={isMain}
               position={Position.Right}
               id="source-right"
               style={{
                 ...PORT_DOT_STYLE,
-                opacity: childSides.has('right') || isNodeHovered ? 1 : 0,
+                borderStyle: nodeData.isDraft || nodeData.draftHandleSides?.includes('right') ? 'dashed' : 'solid',
+                opacity: childSides.has('right') || isNodeHovered || nodeData.draftHandleSides?.includes('right') ? 1 : 0,
               }}
             />
             <Handle
@@ -841,12 +847,14 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             />
             <Handle
               type="source"
+              enlarged={isMain}
               position={sourceHandlePosition}
               id={`source-${sideRelativeToParent}`}
               style={{
                 ...PORT_DOT_STYLE,
+                borderStyle: nodeData.isDraft || nodeData.draftHandleSides?.includes(sideRelativeToParent) ? 'dashed' : 'solid',
                 opacity:
-                  childSides.has(sideRelativeToParent) || isNodeHovered ? 1 : 0,
+                  childSides.has(sideRelativeToParent) || isNodeHovered || nodeData.draftHandleSides?.includes(sideRelativeToParent) ? 1 : 0,
               }}
             />
           </>

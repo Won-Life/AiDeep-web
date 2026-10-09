@@ -29,6 +29,7 @@ import {
   useNodesInitialized,
   useStore,
   type FinalConnectionState,
+  type OnConnectStart,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import GraphMiniMap from './GraphMiniMap';
@@ -319,13 +320,14 @@ function GraphCanvasInner({
   // 인라인 이름 편집(G5·G7 "이름 바꾸기") 중인 노드 — 해당 노드 제목이 input으로 전환
   /*
    * CONTEXT
-   * - Problem      : 핸들 드롭 생성 직후 확정 노드와 이름 입력 중인 노드를 구분할 수 없다.
-   * - Why          : 로컬 draft ID로 입력 중 색상·점선을 표시하고 편집 종료 시 해제한다.
-   * - Alternatives : 임시 색상을 서버에 저장하면 협업 데이터에 UI 상태가 섞인다.
-   * - Trade-offs   : 입력 중 표현은 생성한 사용자에게만 표시된다.
-   * - Edge Case    : Enter·Escape·blur 모두 기존 이름 저장 방식대로 편집을 끝낸다.
+   * - Problem      : 한 개의 draft ID를 blur에서 지우면 이름 없는 연결까지 실선으로 바뀐다.
+   * - Why          : 생성된 ID들을 유지하고 실제 이름의 공백 여부로 각 연결의 임시 상태를 판단한다.
+   * - Alternatives : 편집 여부에 묶으면 Escape나 바깥 클릭만으로 입력 완료로 잘못 처리된다.
+   * - Trade-offs   : 입력 전 노드의 임시 상태는 현재 그래프 세션에서 유지된다.
+   * - Edge Case    : 여러 미입력 노드와 공백 입력은 점선을 유지하며 정상 이름 입력 즉시 해제된다.
    */
-  const [draftNodeId, setDraftNodeId] = useState<string | null>(null);
+  const [draftNodeIds, setDraftNodeIds] = useState<Set<string>>(() => new Set());
+  const [connectingHandle, setConnectingHandle] = useState<{ nodeId: string | null; handleId: string | null } | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isArchiveDeleting, setIsArchiveDeleting] = useState(false);
@@ -647,7 +649,6 @@ function GraphCanvasInner({
   }, []);
   const handleFinishRename = useCallback(() => {
     setRenamingNodeId(null);
-    setDraftNodeId(null);
   }, []);
 
   // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 자식 노드 생성 + 엣지 + 색 상속 후
@@ -769,6 +770,7 @@ function GraphCanvasInner({
           });
 
         // G5: 생성 직후 바로 인라인 이름 편집
+        setDraftNodeIds((prev) => new Set(prev).add(nodeId));
         setRenamingNodeId(nodeId);
         setContextMenuNodeId(null);
       } catch (err) {
@@ -869,6 +871,20 @@ function GraphCanvasInner({
   const parentIdByChildId = new Map<string, string>();
   edges.forEach((e) => parentIdByChildId.set(e.target, e.source));
 
+  const untitledDraftNodeIds = new Set(nodes.filter((node) =>
+    draftNodeIds.has(node.id) && !String(node.data?.title ?? '').trim(),
+  ).map((node) => node.id));
+  const draftSidesByNode = new Map<string, Set<'left' | 'right'>>();
+  const markDraftSide = (nodeId: string, handleId?: string | null) => {
+    const sides = draftSidesByNode.get(nodeId) ?? new Set<'left' | 'right'>();
+    sides.add(handleId?.includes('left') ? 'left' : 'right');
+    draftSidesByNode.set(nodeId, sides);
+  };
+  edges.forEach((edge) => {
+    if (untitledDraftNodeIds.has(edge.target)) markDraftSide(edge.source, edge.sourceHandle);
+  });
+  if (connectingHandle?.nodeId) markDraftSide(connectingHandle.nodeId, connectingHandle.handleId);
+
   const nodesWithCallbacks = nodes.map((node) => {
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
     const hasParent = !isRootNode(node);
@@ -909,7 +925,8 @@ function GraphCanvasInner({
         dockIndex: isEditorOpen ? myOpenEditorNodeIds.indexOf(node.id) : undefined, // C3/C4 우측 도크 순번
         editorBreadcrumb, // 도크 헤더 경로
         isContextMenuOpen, // 컨텍스트 메뉴 표시 여부
-        isDraft: draftNodeId === node.id,
+        isDraft: untitledDraftNodeIds.has(node.id),
+        draftHandleSides: [...(draftSidesByNode.get(node.id) ?? [])],
         isRenaming: renamingNodeId === node.id, // 인라인 이름 편집 중(G5·G7)
         onStartRename: handleStartRename,
         onFinishRename: handleFinishRename,
@@ -1113,13 +1130,13 @@ function GraphCanvasInner({
     () =>
       edges.map((edge) => ({
         ...buildEdgePresentation(edge, nodes, edges),
-        style: { ...edge.style, strokeDasharray: edge.target === draftNodeId ? '4 4' : edge.style?.strokeDasharray },
+        style: { ...edge.style, strokeDasharray: draftNodeIds.has(edge.target) && !String(nodes.find((node) => node.id === edge.target)?.data?.title ?? '').trim() ? '4 4' : edge.style?.strokeDasharray },
         // 양 끝 중 하나라도 숨겨진 노드면 엣지도 숨김
         hidden:
           collapseState.hiddenIds.has(edge.source) ||
           collapseState.hiddenIds.has(edge.target),
       })),
-    [nodes, edges, collapseState, draftNodeId],
+    [nodes, edges, collapseState, draftNodeIds],
   );
 
   const onEdgesChange = useCallback(
@@ -1568,12 +1585,16 @@ function GraphCanvasInner({
   /* =========================
      핸들 드래그로 빈 공간에 새 노드 생성
      ========================= */
-  const onConnectStart = useCallback(() => {
+  const onConnectStart = useCallback<OnConnectStart>((_event, params) => {
+    setConnectingHandle(params);
     isConnectingRef.current = true;
   }, []);
 
   const onConnectEnd = useCallback(
     async (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      setConnectingHandle(null);
+      // early return도 드래그 플래그를 해제하고 직후 pane 클릭만 한 틱 차단한다.
+      setTimeout(() => { isConnectingRef.current = false; }, 0);
       // 핸들에서 직접 뽑은 엣지가 다른 노드에 연결되지 않았을 때 (엣지를 빈 공간에 드롭) 새 노드 생성하며 연결 생성
       if (!connectionState.isValid) {
         const fromNode = connectionState.fromNode;
@@ -1682,7 +1703,7 @@ function GraphCanvasInner({
             },
           );
 
-          setDraftNodeId(nodeId);
+          setDraftNodeIds((prev) => new Set(prev).add(nodeId));
           setRenamingNodeId(nodeId);
 
           // WS NODE_CREATE 필터링(useWorkspaceWS)으로 race condition이 제거됨.
@@ -1883,7 +1904,7 @@ function GraphCanvasInner({
             },
           },
         ]);
-        setDraftNodeId(nodeId);
+        setDraftNodeIds((prev) => new Set(prev).add(nodeId));
         setRenamingNodeId(nodeId);
       } catch (err) {
         console.error('[createProjectNodeAt] createProjectNode failed', err);
@@ -2981,6 +3002,7 @@ function GraphCanvasInner({
         zoomOnDoubleClick={false}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
+        connectionLineStyle={{ stroke: '#666666', strokeWidth: 2, strokeDasharray: '4 4' }}
         proOptions={{ hideAttribution: true }}
       >
         {nodes.length > 0 && <GraphMiniMap />}
