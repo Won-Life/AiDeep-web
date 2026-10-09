@@ -189,11 +189,20 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
    */
   const childSides = new Set(collapseButtons.map((b) => b.side));
   // Figma 08 실측: 포트 점 지름 14px, 흰 fill + 2px #727272 링(엣지선과 동일 색)
+  /*
+   * CONTEXT
+   * - Problem      : 타이틀·콘텐츠·핸들의 그림자가 흐리거나 없어 참고 이미지의 깊이감이 부족하다.
+   * - Why          : 본체는 아래 3px, 작은 핸들은 아래 2px 그림자로 크기에 맞춰 강조한다.
+   * - Alternatives : 전체 노드 필터는 자식 버튼과 핸들까지 중복으로 그림자를 적용한다.
+   * - Trade-offs   : 콘텐츠 SVG는 외곽을 따르는 필터 렌더링 비용이 유지된다.
+   * - Edge Case    : 선택 링과 핸들의 숨김·연결 영역은 기존 동작을 유지한다.
+   */
   const PORT_DOT_STYLE = {
     width: 14,
     height: 14,
     minWidth: 14,
     minHeight: 14,
+    boxShadow: '0 2px 2px rgba(53, 62, 112, 0.28)',
     background: '#ffffff',
     border: `2px ${nodeData.isDraft ? 'dashed' : 'solid'} #727272`,
     borderRadius: '50%',
@@ -225,11 +234,19 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
    * - Edge Case    : title nodes keep their pill shape and receive a matching ring around their small upper-left cap.
    */
   const selectionRing = '#B7C7FF';
-  const mainFolderRing = selected
+  /*
+   * CONTEXT
+   * - Problem      : hover 테두리와 탭 배경이 본체의 선택 실루엣·절반 강조와 분리된다.
+   * - Why          : hover와 선택의 외곽을 공유하고 왼쪽 강조색을 탭 내부까지 연결한다.
+   * - Alternatives : 별도 hover 테두리는 두께와 탭 접합부가 어긋난다.
+   * - Trade-offs   : hover에서도 선택과 같은 외곽이 보이며 절반 배경으로 방향을 구분한다.
+   * - Edge Case    : 오른쪽 hover는 탭 내부의 흰색을 유지하고 선택 중에도 방향을 강조한다.
+   */
+  const mainHighlighted = selected || isNodeHovered || isHovered;
+  const mainHoverFill = '#EAEDFF';
+  const mainFolderRing = mainHighlighted
     ? selectionRing
-    : isHovered
-      ? '#93C5FD'
-      : (viewerBorderColor ?? '#ffffff');
+    : (viewerBorderColor ?? '#ffffff');
 
   const containerStyle = isMain
     ? {
@@ -238,16 +255,14 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         // 소속 그래프를 드러낸다 → 기존 '색 테두리'를 폴더 탭(mainOwnBorderColor)으로 대체,
         // 기본 테두리 없음. hover/selected/viewer만 테두리로 표시.
         backgroundColor: MAIN_NODE_COLOR.bg,
-        boxShadow: selected
+        boxShadow: mainHighlighted
           ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.24)`
           : '0 3px 4px rgba(53, 62, 112, 0.24)',
-        border: selected
+        border: mainHighlighted
           ? 'none'
-          : isHovered
-            ? '3px solid #93C5FD'
-            : viewerBorderColor
-              ? `2px solid ${viewerBorderColor}`
-              : 'none',
+          : viewerBorderColor
+            ? `2px solid ${viewerBorderColor}`
+            : 'none',
       }
     : isContent
       ? {
@@ -263,8 +278,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             (nodeData.isDraft ? fig?.light : fig?.deep) ??
             `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
           boxShadow: selected
-            ? `0 0 0 8px ${selectionRing}, 0 4px 14px rgba(0, 0, 0, 0.10)`
-            : '0 4px 14px rgba(0, 0, 0, 0.10)',
+            ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.28)`
+            : '0 3px 4px rgba(53, 62, 112, 0.28)',
           border: isHovered
             ? '4px solid #93C5FD'
             : selected
@@ -420,12 +435,12 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           - Trade-offs   : 절반 강조는 프로젝트에만 적용하며 기존 타이틀 생성은 유지한다.
           - Edge Case    : 버튼으로 이동해도 마지막 hover 방향을 유지한다.
         */}
-        {isMain && isNodeHovered && !selected && (
+        {isMain && isNodeHovered && (
           <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[14px] rounded-tl-[1px]" style={{
-            border: '3px solid #C4CCFF', overflow: 'hidden', zIndex: -1,
+            overflow: 'hidden', zIndex: -1,
           }}>
             <div style={{ position: 'absolute', top: 0, bottom: 0,
-              [hoverSide]: 0, width: '50%', backgroundColor: '#EAEDFF' }} />
+              [hoverSide]: 0, width: '50%', backgroundColor: mainHoverFill }} />
           </div>
         )}
         {/* 콘텐츠 노드 뾰족 배너 — SVG path를 연한 fill + 흰색 uniform stroke로 그린다.
@@ -439,7 +454,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             style={{
               zIndex: -1,
               overflow: 'visible',
-              filter: 'drop-shadow(0 2px 5px rgba(0, 0, 0, 0.12))',
+              filter: 'drop-shadow(0 3px 2px rgba(53, 62, 112, 0.28))',
             }}
           >
             <path
@@ -464,10 +479,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             aria-hidden
             className="absolute pointer-events-none"
             style={{
-              top: selected ? -22 : -12,
-              left: selected ? -8 : 0,
-              width: selected ? 90 : 74,
-              height: selected ? 22 : 28,
+              top: mainHighlighted ? -22 : -12,
+              left: mainHighlighted ? -8 : 0,
+              width: mainHighlighted ? 90 : 74,
+              height: mainHighlighted ? 22 : 28,
               /*
                * CONTEXT
                * - Problem      : the white folder-tab shell creates a detached clip-like cap on hover.
@@ -477,22 +492,22 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                * - Edge Case    : unhighlighted main nodes use a soft blue shell matching the card outline.
                */
               backgroundColor: mainFolderRing,
-              borderRadius: selected ? '26px 26px 0 0' : '18px 18px 0 0',
+              borderRadius: mainHighlighted ? '26px 26px 0 0' : '18px 18px 0 0',
               zIndex: 0,
             }}
           >
-            {selected && <div style={{
+            {mainHighlighted && <div style={{
               position: 'absolute', top: 8, left: 8, width: 74, height: 14,
               borderRadius: '20px 20px 0 0',
-              backgroundColor: MAIN_NODE_COLOR.bg,
+              backgroundColor: isNodeHovered && hoverSide === 'left' ? mainHoverFill : MAIN_NODE_COLOR.bg,
             }} />}
             <div style={{
               position: 'absolute',
-              top: selected ? 13 : 5,
-              left: selected ? 15 : 7,
+              top: mainHighlighted ? 13 : 5,
+              left: mainHighlighted ? 15 : 7,
               width: 59,
               height: 15,
-              borderRadius: selected ? '12px 12px 0 0' : '10px 10px 0 0',
+              borderRadius: mainHighlighted ? '12px 12px 0 0' : '10px 10px 0 0',
               backgroundColor: fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR,
             }} />
           </div>
@@ -572,6 +587,14 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
             {isEmpty ? PLACEHOLDER : label}
           </div>
         )}
+        {/*
+         * CONTEXT
+         * - Problem      : 자식 추가 버튼에 참고 이미지의 흰 테두리와 입체감이 없다.
+         * - Why          : 원형 버튼과 라벨에 같은 파란 바탕·흰 외곽·하단 그림자를 적용한다.
+         * - Alternatives : 이미지 버튼은 확대와 텍스트 접근성에 불리하다.
+         * - Trade-offs   : 테두리를 포함한 버튼 크기가 조금 커진다.
+         * - Edge Case    : 좌우 배치와 기존 추가·메뉴 동작은 그대로 유지한다.
+         */}
         {/* G4·C1: hover "+" 자식 추가 버튼 — source(자식) 방향. 프로젝트→타이틀, 타이틀→콘텐츠. */}
         {(isMain || isTitle) && (isNodeHovered || isContentMenuOpen) && !isRenaming && (
           <div
@@ -596,8 +619,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                 if (isTitle) setIsContentMenuOpen((open) => !open);
                 else nodeData.onAddChild?.(id, addSide);
               }}
-              className="flex items-center justify-center rounded-full text-white shadow-sm transition-opacity hover:opacity-90"
-              style={{ width: 22, height: 22, backgroundColor: '#748DFD' }}
+              className="flex items-center justify-center rounded-full border-2 border-white text-white shadow-[0_2px_3px_rgba(53,62,112,0.24)] transition-opacity hover:opacity-90"
+              style={{ width: 26, height: 26, backgroundColor: '#627AFF' }}
             >
               {/* SVG 십자로 배경원 정중앙 정렬 (텍스트 "+"의 베이스라인 쏠림 제거) */}
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -617,10 +640,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                 if (isTitle) setIsContentMenuOpen((open) => !open);
                 else nodeData.onAddChild?.(id, addSide);
               }}
-              className="whitespace-nowrap rounded-full text-white select-none"
+              className="whitespace-nowrap rounded-full border-2 border-white text-white select-none shadow-[0_2px_3px_rgba(53,62,112,0.24)]"
               style={{
-                backgroundColor: '#748DFD',
-                fontSize: 12,
+                backgroundColor: '#627AFF',
+                fontSize: 10,
                 padding: '4px 10px',
               }}
             >

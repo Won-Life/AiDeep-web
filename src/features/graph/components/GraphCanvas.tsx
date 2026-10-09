@@ -2961,6 +2961,17 @@ function GraphCanvasInner({
         onViewportChange={handleViewportChange}
         {...(savedViewport ? { defaultViewport: savedViewport } : {})}
         minZoom={0.25}
+        /*
+         * CONTEXT
+         * - Problem      : 트랙패드 두 손가락 스크롤이 화면 이동 대신 확대·축소된다.
+         * - Why          : React Flow의 스크롤 이동과 핀치 확대 옵션을 분리한다.
+         * - Alternatives : 직접 wheel 처리는 브라우저별 핀치 판별과 이벤트 제어를 중복한다.
+         * - Trade-offs   : 마우스 휠도 이동하며 확대는 핀치·보조키·미니맵 버튼으로 한다.
+         * - Edge Case    : 가로·세로 이동을 모두 허용하고 기존 더블 클릭 노드 생성을 유지한다.
+         */
+        panOnScroll
+        zoomOnScroll={false}
+        zoomOnPinch
         zoomOnDoubleClick={false}
         connectionMode={ConnectionMode.Loose}
         connectionLineType={ConnectionLineType.SmoothStep}
