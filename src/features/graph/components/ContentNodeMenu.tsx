@@ -13,9 +13,16 @@ interface ContentNodeMenuProps {
 }
 
 const ITEM_CLASS =
-  'flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#EAEDFF]';
+  'flex min-h-[52px] w-full flex-col items-start justify-center gap-1 px-[22px] text-left hover:bg-[#E6EBFF] focus-visible:bg-[#E6EBFF] focus-visible:outline-none';
 
-/* Figma 08 C1 "콘텐츠 노드 만들기": 바로 쓰기 + 템플릿 4종. */
+/*
+ * CONTEXT
+ * - Problem      : hover 메뉴가 시안의 여백·테두리·템플릿 구분을 따르지 않는다.
+ * - Why          : 256px 흰 패널에 파란 외곽과 전체 폭 강조 행으로 계층을 구분한다.
+ * - Alternatives : 별도 템플릿 목록 복제 대신 기존 공통 정의를 유지한다.
+ * - Trade-offs   : 노드와 함께 확대되며 설명은 줄바꿈할 수 있다.
+ * - Edge Case    : 선택은 기존 템플릿 생성 API를 사용하고 Escape로 닫힌다.
+ */
 export function ContentNodeMenu({ onSelect, onClose }: ContentNodeMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -42,14 +49,15 @@ export function ContentNodeMenu({ onSelect, onClose }: ContentNodeMenuProps) {
       ref={ref}
       role="menu"
       aria-label="콘텐츠 노드 만들기"
-      className="nodrag nopan w-[248px] rounded-xl border border-[#D9DEFF] bg-background p-1.5 shadow-lg"
+      className="nodrag nopan w-[256px] overflow-hidden rounded-[22px] border border-[#627AFF] bg-white pb-3 shadow-[0_2px_2px_rgba(53,62,112,0.22)]"
       onClick={(event) => event.stopPropagation()}
     >
-      <p className="px-3 pb-1 pt-1.5 text-[12px] font-semibold text-[#748DFD]">콘텐츠 노드 만들기</p>
-      <button type="button" role="menuitem" className={ITEM_CLASS} onClick={() => onSelect()}>
-        <span className="text-[13px] font-semibold text-foreground">바로 쓰기</span>
-        <span className="text-[11px] text-muted-foreground">빈 노드에서 시작</span>
+      <p className="px-[22px] py-[11px] text-[9px] leading-3 font-semibold text-[#999999]">콘텐츠 노드 만들기</p>
+      <button type="button" role="menuitem" className={`${ITEM_CLASS} bg-[#E6EBFF]`} onClick={() => onSelect()}>
+        <span className="text-[11px] leading-4 font-semibold text-[#222222]">바로 쓰기</span>
+        <span className="text-[9px] leading-3 text-[#777777]">빈 콘텐츠에서 바로 입력해요</span>
       </button>
+      <p className="px-[22px] pt-[11px] pb-1 text-[9px] leading-3 font-semibold text-[#999999]">템플릿으로 추가</p>
       {CONTENT_TEMPLATES.map((template) => (
         <button
           key={template.id}
@@ -58,8 +66,8 @@ export function ContentNodeMenu({ onSelect, onClose }: ContentNodeMenuProps) {
           className={ITEM_CLASS}
           onClick={() => onSelect(template.id)}
         >
-          <span className="text-[13px] font-semibold text-foreground">{template.label}</span>
-          <span className="text-[11px] text-muted-foreground">{describeTemplate(template)}</span>
+          <span className="text-[11px] leading-4 font-semibold text-[#222222]">{template.label}</span>
+          <span className="text-[9px] leading-3 text-[#777777]">{describeTemplate(template)}</span>
         </button>
       ))}
     </div>

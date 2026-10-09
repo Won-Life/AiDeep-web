@@ -249,9 +249,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
     height: 14,
     minWidth: 14,
     minHeight: 14,
-    boxShadow: '0 2px 2px rgba(53, 62, 112, 0.28)',
+    boxShadow: '0 2px 2px rgba(0, 0, 0, 0.24)',
     background: '#ffffff',
-    border: `2px ${nodeData.isDraft ? 'dashed' : 'solid'} #727272`,
+    border: `3px ${nodeData.isDraft ? 'dashed' : 'solid'} #666666`,
     borderRadius: '50%',
   } as const;
 
@@ -332,7 +332,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           backgroundColor:
             (nodeData.isDraft ? fig?.light : fig?.deep) ??
             `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
-          boxShadow: selected
+          boxShadow: selected || isContentMenuOpen
             ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.28)`
             : '0 3px 4px rgba(53, 62, 112, 0.28)',
           border: isHovered
@@ -493,13 +493,13 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                 : '17px 14px 17px 38px'
               : '12px 12px',
         }}
-        onMouseEnter={() => setIsNodeHovered(true)}
+        onMouseEnter={() => { setIsNodeHovered(true); if (isTitle) setIsContentMenuOpen(true); }}
         onMouseMove={(event) => {
           if (!isMain) return;
           const rect = event.currentTarget.getBoundingClientRect();
           setHoverSide(event.clientX < rect.left + rect.width / 2 ? 'left' : 'right');
         }}
-        onMouseLeave={() => setIsNodeHovered(false)}
+        onMouseLeave={() => { setIsNodeHovered(false); setIsContentMenuOpen(false); }}
         onDoubleClick={(event) => {
           if (isContent || isRenaming) return;
           if ((event.target as HTMLElement).closest('button, .react-flow__handle')) return;
@@ -627,7 +627,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               overflow: 'hidden',
             }}
           >
-            {selected && (
+            {(selected || isContentMenuOpen) && (
               <svg x="-8" y="-8" width="68" height="18" viewBox="-8 -8 68 18" overflow="hidden">
                 <path
                   d="M 0 12 V 10 C 4 10 3 0 14 0 H 38 C 49 0 48 10 52 10 V 12"
@@ -718,71 +718,32 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
          * - Trade-offs   : 테두리를 포함한 버튼 크기가 조금 커진다.
          * - Edge Case    : 좌우 배치와 기존 추가·메뉴 동작은 그대로 유지한다.
          */}
-        {/* G4·C1: hover "+" 자식 추가 버튼 — source(자식) 방향. 프로젝트→타이틀, 타이틀→콘텐츠. */}
-        {(isMain || isTitle) && (isNodeHovered || isContentMenuOpen) && !isRenaming && (
-          <div
-            className="nodrag absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5"
-            style={{
-              ...(addSide === 'left'
-                ? {
-                    right: '100%',
-                    paddingRight: 10,
-                    flexDirection: 'row-reverse',
-                  }
-                : { left: '100%', paddingLeft: 10 }),
-              zIndex: 10,
-            }}
-          >
-            <button
-              type="button"
-              aria-label={isTitle ? '콘텐츠 노드 메뉴 열기' : '타이틀 노드 추가'}
-              aria-expanded={isTitle ? isContentMenuOpen : undefined}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (isTitle) setIsContentMenuOpen((open) => !open);
-                else nodeData.onAddChild?.(id, addSide);
-              }}
-              className="flex items-center justify-center rounded-full border-2 border-white text-white shadow-[0_2px_3px_rgba(53,62,112,0.24)] transition-opacity hover:opacity-90"
-              style={{ width: 26, height: 26, backgroundColor: '#627AFF' }}
-            >
-              {/* SVG 십자로 배경원 정중앙 정렬 (텍스트 "+"의 베이스라인 쏠림 제거) */}
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <path
-                  d="M6 1.5V10.5M1.5 6H10.5"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+        {/*
+         * CONTEXT
+         * - Problem      : 프로젝트 추가 버튼 간격이 좁고 타이틀은 메뉴를 열기 위해 클릭이 필요하다.
+         * - Why          : 프로젝트는 24px 연결 여백 뒤에 26px 버튼을, 타이틀은 hover 즉시 메뉴를 둔다.
+         * - Alternatives : 메뉴를 별도 위치에 두면 포인터 이동 중 hover가 끊긴다.
+         * - Trade-offs   : 패딩으로 연결한 hover 영역이 메뉴까지 이어진다.
+         * - Edge Case    : 왼쪽 가지는 대칭 배치하며 선택·Escape·영역 이탈 시 메뉴가 닫힌다.
+         */}
+        {isMain && isNodeHovered && !isRenaming && (
+          <div className="nodrag absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-[6px]"
+            style={addSide === 'left' ? { right: '100%', paddingRight: 24, flexDirection: 'row-reverse' } : { left: '100%', paddingLeft: 24 }}>
+            <button type="button" aria-label="타이틀 노드 추가" onClick={(event) => { event.stopPropagation(); nodeData.onAddChild?.(id, addSide); }}
+              className="flex size-[26px] shrink-0 items-center justify-center rounded-full border-2 border-white bg-[#607AFF] text-white shadow-[0_2px_2px_rgba(0,0,0,0.24)]">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M6 1.5V10.5M1.5 6H10.5" stroke="currentColor" strokeWidth="2" /></svg>
             </button>
-            <button
-              type="button"
-              aria-expanded={isTitle ? isContentMenuOpen : undefined}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (isTitle) setIsContentMenuOpen((open) => !open);
-                else nodeData.onAddChild?.(id, addSide);
-              }}
-              className="whitespace-nowrap rounded-full border-2 border-white text-white select-none shadow-[0_2px_3px_rgba(53,62,112,0.24)]"
-              style={{
-                backgroundColor: '#627AFF',
-                fontSize: 10,
-                padding: '4px 10px',
-              }}
-            >
-              {isMain ? '새 타이틀 노드 추가' : '콘텐츠 노드 추가'}
-            </button>
-            {isTitle && isContentMenuOpen && (
-              <div className="absolute top-full z-20 mt-2" style={addSide === 'left' ? { right: 10 } : { left: 10 }}>
-                <ContentNodeMenu
-                  onClose={() => setIsContentMenuOpen(false)}
-                  onSelect={(templateId) => {
-                    setIsContentMenuOpen(false);
-                    nodeData.onAddChild?.(id, addSide, templateId);
-                  }}
-                />
-              </div>
-            )}
+            <button type="button" onClick={(event) => { event.stopPropagation(); nodeData.onAddChild?.(id, addSide); }}
+              className="h-[26px] whitespace-nowrap rounded-full border-2 border-white bg-[#607AFF] px-[18px] text-[10px] font-medium text-white shadow-[0_2px_2px_rgba(0,0,0,0.24)]">새 타이틀 노드 추가</button>
+          </div>
+        )}
+        {isTitle && isContentMenuOpen && !isRenaming && (
+          <div className="nodrag nopan absolute top-1/2 z-50 -mt-[38px]"
+            style={addSide === 'left' ? { right: '100%', paddingRight: 28 } : { left: '100%', paddingLeft: 28 }}>
+            <ContentNodeMenu onClose={() => setIsContentMenuOpen(false)} onSelect={(templateId) => {
+              setIsContentMenuOpen(false);
+              nodeData.onAddChild?.(id, addSide, templateId);
+            }} />
           </div>
         )}
         {/*

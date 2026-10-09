@@ -1,4 +1,5 @@
 'use client';
+import { CanvasContextMenu } from './CanvasContextMenu';
 import { getTemplateBody } from '@/features/editor/contentTemplates';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
 import {
@@ -332,7 +333,8 @@ function GraphCanvasInner({
     [],
   );
 
-  const { screenToFlowPosition, setCenter } = useReactFlow();
+  const { screenToFlowPosition, setCenter, fitView, zoomTo } = useReactFlow();
+  const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; position: { x: number; y: number } } | null>(null);
 
   // 첫 진입 시 화면 중심이 될 메인 노드(PROJECT) — InitialViewport가 사용한다.
   const mainNodeId = useMemo(
@@ -1891,17 +1893,13 @@ function GraphCanvasInner({
   );
 
   const onPaneContextMenu = useCallback(
-    async (event: React.MouseEvent | MouseEvent) => {
+    (event: React.MouseEvent | MouseEvent) => {
       event.preventDefault();
       if (isConnectingRef.current) return;
-
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-      await createProjectNodeAt(position);
-    },
-    [screenToFlowPosition, createProjectNodeAt],
+      setContextMenuNodeId(null);
+      setPaneMenu({ x: event.clientX, y: event.clientY,
+        position: screenToFlowPosition({ x: event.clientX, y: event.clientY }) });
+    }, [screenToFlowPosition],
   );
 
   /* =========================
@@ -2992,6 +2990,12 @@ function GraphCanvasInner({
         <FirstPaintSignal nodeCount={nodes.length} onFirstPaint={onFirstPaint} />
       )}
       <CursorOverlay cursors={cursors} />
+      {paneMenu && (
+        <CanvasContextMenu x={paneMenu.x} y={paneMenu.y} onClose={() => setPaneMenu(null)}
+          onCreate={() => { void createProjectNodeAt(paneMenu.position); }}
+          onFit={() => { void fitView({ padding: 0.2, duration: 250 }); }}
+          onReset={() => { void zoomTo(1, { duration: 250 }); }} />
+      )}
       {/*
        * CONTEXT
        * - Problem      : 빈 화면이 제공된 첫 진입 시안의 프로젝트 모형과 안내 비율을 따르지 않는다.
