@@ -174,13 +174,13 @@ function TryAideepButton({ isPage }: { isPage: boolean }) {
   if (isPage) {
     return (
       <a href={AIDEEP_URL} target="_blank" rel="noopener noreferrer" style={{ ...shape, textDecoration: 'none' }}>
-        AiDeep 사용해보기 <span aria-hidden>→</span>
+        On:Node 사용해보기 <span aria-hidden>→</span>
       </a>
     );
   }
   return (
     <span style={shape}>
-      AiDeep 사용해보기 <span aria-hidden>→</span>
+      On:Node 사용해보기 <span aria-hidden>→</span>
     </span>
   );
 }
@@ -205,7 +205,7 @@ export default function FestivalAnswerCard({ content, exportedAt, variant = 'ima
     if (body) setIsTruncated(body.scrollHeight > BODY_MAX_HEIGHT);
   }, [content, isPage]);
 
-  // AiDeep 워드마크가 커진 만큼 물결을 아래로 내려 글자와 겹치지 않게 한다.
+  // On:Node 워드마크가 커진 만큼 물결을 아래로 내려 글자와 겹치지 않게 한다.
   const waveTop = content ? 186 : 194;
 
   return (
@@ -232,7 +232,7 @@ export default function FestivalAnswerCard({ content, exportedAt, variant = 'ima
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <p style={{ margin: 0, fontSize: 12.5, letterSpacing: '0.02em', color: 'rgba(255,255,255,0.82)' }}>
-              AiDeep과 함께 기억하는
+              On:Node와 함께 기억하는
             </p>
             <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 700, textShadow: '0 1px 3px rgba(4,32,66,0.35)' }}>
               {formatCardDate(exportedAt)}
@@ -247,7 +247,7 @@ export default function FestivalAnswerCard({ content, exportedAt, variant = 'ima
           </p>
           <p style={{ margin: '2px 0 0', display: 'flex', alignItems: 'baseline', gap: 8, textShadow: '0 2px 8px rgba(4,32,66,0.35)' }}>
             <span style={{ fontSize: 20, fontWeight: 500, color: 'rgba(255,255,255,0.8)' }}>×</span>
-            <span style={{ fontSize: 36, fontWeight: 800, letterSpacing: '-0.02em', color: '#DFFBF1' }}>AiDeep</span>
+            <span style={{ fontSize: 36, fontWeight: 800, letterSpacing: '-0.02em', color: '#DFFBF1' }}>On:Node</span>
           </p>
         </div>
 
@@ -291,7 +291,7 @@ export default function FestivalAnswerCard({ content, exportedAt, variant = 'ima
               )}
             </div>
             {isTruncated && (
-              <p style={{ margin: '10px 0 0', fontSize: 12, color: MUTED }}>전체 내용은 AiDeep에서 확인하세요</p>
+              <p style={{ margin: '10px 0 0', fontSize: 12, color: MUTED }}>전체 내용은 On:Node에서 확인하세요</p>
             )}
           </div>
         )}
@@ -307,7 +307,7 @@ export default function FestivalAnswerCard({ content, exportedAt, variant = 'ima
             우리가 가장 많이 하는 대화,
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 30, fontWeight: 800, lineHeight: '40px', letterSpacing: '-0.02em', color: '#0B3E70' }}>
-            <Highlight>회의</Highlight>는 AiDeep이 정리합니다
+            <Highlight>회의</Highlight>는 On:Node가 정리합니다
           </p>
         </div>
 

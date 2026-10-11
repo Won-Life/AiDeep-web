@@ -63,7 +63,7 @@ export default function FestivalPopup({ isOpen, onClose }: FestivalPopupProps) {
         {/* 헤더 — 자기 높이만 차지 */}
         <div className="flex shrink-0 items-start justify-between gap-[3%] px-[5%] pt-[4%] sm:px-6 sm:pt-6">
           <div>
-            <p className="typo-cap3 text-main">AiDeep at Festival</p>
+            <p className="typo-cap3 text-main">On:Node at Festival</p>
             <h2
               id="festival-popup-title"
               className="mt-1 break-keep text-[18px] font-bold leading-[1.4] text-foreground min-[360px]:text-[20px] sm:text-[22px]"
@@ -86,7 +86,7 @@ export default function FestivalPopup({ isOpen, onClose }: FestivalPopupProps) {
           <p className="mt-[3%] shrink-0 break-keep text-[13px] leading-[1.6] text-muted min-[360px]:text-[14px] sm:text-[15px]">
             회의와 생각을 실시간으로 정리하고,
             <br />
-            기록을 그래프로 연결하는 AiDeep입니다.
+            기록을 그래프로 연결하는 On:Node입니다.
             <span className="mt-1 block text-foreground">
               오늘 플리마켓에서 직접 만나보세요.
             </span>
@@ -110,7 +110,7 @@ export default function FestivalPopup({ isOpen, onClose }: FestivalPopupProps) {
             >
               <div
                 className="absolute inset-[4px] overflow-hidden rounded-[8px]"
-                aria-label="플리마켓 배치도에서 AiDeep 18번 부스 위치"
+                aria-label="플리마켓 배치도에서 On:Node 18번 부스 위치"
               >
                 <Image
                   src={FLEA_MARKET_MAP_SRC}
@@ -126,7 +126,7 @@ export default function FestivalPopup({ isOpen, onClose }: FestivalPopupProps) {
                   <span className="mx-auto block h-2 w-2 -translate-y-1 rotate-45 bg-main" />
                 </div>
                 <div className="absolute bottom-[3%] left-[3%] rounded-[6px] bg-background px-[3%] py-[1%] text-[11px] font-bold text-foreground">
-                  AiDeep · 18번 부스
+                  On:Node · 18번 부스
                 </div>
               </div>
             </div>
@@ -141,7 +141,7 @@ export default function FestivalPopup({ isOpen, onClose }: FestivalPopupProps) {
             rel="noopener noreferrer"
             className="flex h-[44px] items-center justify-center whitespace-nowrap rounded-[8px] bg-main text-[12px] font-semibold text-white transition-opacity hover:opacity-90 min-[360px]:text-[13px] sm:text-[14px]"
           >
-            AiDeep 더 알아보기
+            On:Node 더 알아보기
           </a>
           <a
             href={INSTAGRAM_URL}
