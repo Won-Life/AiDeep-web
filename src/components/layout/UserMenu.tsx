@@ -2,6 +2,10 @@
 import { useState, useRef, useEffect } from "react";
 
 import { uploadFile } from "@/api/upload";
+import { useWorkspaceLayout } from "@/app/workspace/context";
+import { updateUsername } from "@/api/user";
+import { ApiError } from "@/api/types";
+import { isNicknameValid } from "@/features/settings/settingsRules";
 import { SHOW_TEMP_HIDDEN_UI } from "@/lib/uiFlags";
 import { TERMS_URL, PRIVACY_URL } from "@/lib/legalLinks";
 
@@ -67,6 +71,19 @@ function EditIcon({ size = 10 }: { size?: number }) {
   );
 }
 
+function isNameInvalid(value: string) {
+  return Boolean(value.trim()) && !isNicknameValid(value);
+}
+
+function NameError({ message }: { message: string }) {
+  if (!message) return null;
+  return (
+    <span role="alert" className="mt-1 w-full text-center text-red-500" style={{ fontSize: 10, lineHeight: "12px" }}>
+      {message}
+    </span>
+  );
+}
+
 export default function UserMenu({
   username: initialUsername,
   email,
@@ -74,10 +91,13 @@ export default function UserMenu({
   onSettings,
   onOpenArchive,
 }: UserMenuProps) {
+  const { workspaceId } = useWorkspaceLayout();
   const [isOpen, setIsOpen] = useState(false);
   const [username, setUsername] = useState(initialUsername);
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(initialUsername);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -109,25 +129,29 @@ export default function UserMenu({
 
   function handleNameEditStart() {
     setNameInput(username);
+    setNameError("");
     setIsEditingName(true);
   }
 
   async function handleNameSubmit() {
     const trimmed = nameInput.trim();
+    if (nameSaving) return;
     if (!trimmed || trimmed === username) {
       setIsEditingName(false);
       return;
     }
-    // TODO: PATCH /user/me 엔드포인트 백엔드 구현 후 아래 주석 해제
-    // try {
-    //   await updateUsername(trimmed);
-    // } catch {
-    //   setUsername(username); // 실패 시 원래 이름 복원
-    //   setIsEditingName(false);
-    //   return;
-    // }
-    setUsername(trimmed); // 낙관적 업데이트 (API 구현 전 임시)
-    setIsEditingName(false);
+    if (!isNicknameValid(trimmed)) return;
+    setNameSaving(true);
+    setNameError("");
+    try {
+      await updateUsername(trimmed);
+      setUsername(trimmed);
+    } catch (error) {
+      setNameError(error instanceof ApiError ? error.reason : "닉네임을 저장하지 못했어요");
+    } finally {
+      setNameSaving(false);
+      setIsEditingName(false);
+    }
   }
 
   function handleNameKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -141,16 +165,14 @@ export default function UserMenu({
     const file = e.target.files?.[0];
 
     if (!file) return;
+    if (!workspaceId) return; // 서버 /upload는 workspaceId(멤버십) 필수 — 없으면 업로드 불가
     try {
-      // TODO: 현재 서버의 POST /upload 엔드포인트가 미완성 상태
-      // - upload.controller.ts의 uploadSingle()이 console.log만 하고 아무것도 반환하지 않음
-      // - S3 업로드 로직도 미구현 상태
-      // 백엔드에서 S3 업로드 후 { key, url, originalName, mimeType, size } 형태로 응답하면
-      // 아래 result.url이 S3 URL이 되어 프로필 이미지가 정상적으로 표시됨
-      const result = await uploadFile(file);
-      setProfileImageUrl(result.url);
+      // 서버 POST /upload는 multipart file + workspaceId를 받아 S3 업로드 후
+      // { fileId, fileUrl, ... }를 반환한다. 아바타는 현재 워크스페이스 업로드 경로를 재사용.
+      const result = await uploadFile(file, workspaceId);
+      setProfileImageUrl(result.fileUrl);
     } catch {
-      // 업로드 실패 (서버 미완성으로 인해 현재 항상 실패)
+      // 업로드 실패 — 조용히 무시 (아바타는 선택 기능)
     }
     // input 초기화 (같은 파일 재선택 가능하게)
     e.target.value = "";
@@ -286,14 +308,16 @@ export default function UserMenu({
                     onChange={(e) => setNameInput(e.target.value)}
                     onBlur={handleNameSubmit}
                     onKeyDown={handleNameKeyDown}
-                    className="text-foreground bg-transparent border-b border-foreground outline-none text-center w-full"
+                    disabled={nameSaving}
+                    aria-invalid={isNameInvalid(nameInput)}
+                    className="text-foreground bg-transparent border-b border-foreground outline-none text-center w-full aria-invalid:border-red-500"
                     style={{
                       fontFamily: "Pretendard, sans-serif",
                       fontSize: 13,
                       fontWeight: 400,
                       lineHeight: "20px",
                     }}
-                    maxLength={20}
+                    maxLength={12}
                   />
                 ) : (
                   <>
@@ -319,6 +343,8 @@ export default function UserMenu({
                 )}
               </div>
 
+              <NameError message={nameError} />
+
               {/* 이메일 */}
               <span
                 className="text-muted w-full text-center truncate"
@@ -337,7 +363,7 @@ export default function UserMenu({
           {/* 버튼 영역 */}
           <div className="flex flex-col gap-2" style={{ padding: "0 8px 8px" }}>
             {/* 설정 */}
-            {SHOW_TEMP_HIDDEN_UI && (
+            {onSettings && (
             <button
               onClick={() => {
                 setIsOpen(false);

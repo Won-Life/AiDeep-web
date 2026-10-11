@@ -31,6 +31,7 @@ interface ChipHeaderProps {
   onLogout: () => void;
   workspaceId: string | null;
   onOpenArchive?: () => void;
+  onSettings?: () => void;
 }
 
 export default function ChipHeader({
@@ -42,6 +43,7 @@ export default function ChipHeader({
   onLogout,
   workspaceId,
   onOpenArchive,
+  onSettings,
 }: ChipHeaderProps) {
   const mainNodes: Node<NodeView>[] = useMemo(
     () => nodes.filter((node) => node.data.isMain),
@@ -211,13 +213,14 @@ export default function ChipHeader({
             email={user.email}
             onLogout={onLogout}
             onOpenArchive={onOpenArchive}
+            onSettings={onSettings}
           />
-          <Tooltip label="AiDeep에 대하여" align="end">
+          <Tooltip label="On:Node에 대하여" align="end">
             <a
               href={ONBOARDING_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="AiDeep에 대하여"
+              aria-label="On:Node에 대하여"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background transition-colors hover:bg-surface"
             >
               <svg

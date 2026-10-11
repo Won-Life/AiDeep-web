@@ -73,8 +73,8 @@
 **트레이드오프**: Lexical 내부 API 변동이 잦다. 마크다운 붙여넣기 등은 플러그인 생태계가 Tiptap보다 작아 `MarkdownPastePlugin`을 직접 구현했다.
 
 **에러 케이스**:
-- `yjs:join` ack `ok=false`: `status:disconnected` 이벤트. 에디터 재마운트로만 복구. 원인: 권한 없음 또는 소켓 미인증.
-- SyncStep1 핸드셰이크 실패: `isSynced=false` 유지 → 에디터 빈 상태. 재마운트로 재시도.
+- `yjs:join` ack `ok=false`: `status:disconnected` 및 `sync-error` 이벤트. 다시 시도 버튼으로 복구. 원인: 권한 없음 또는 소켓 미인증.
+- SyncStep1 핸드셰이크 실패: join 성공 시 클라이언트도 SyncStep1 요청. 10초 초과 시 실패 안내와 재시도 버튼, 소켓 재연결 시 자동 재참여.
 - 에디터 언마운트 타이밍과 Yjs update 도착 타이밍 충돌: `origin === this` 가드 + cleanup 순서(`_unregisterSocketListeners` 먼저)로 처리.
 - `CollaborationPlugin`의 `connect()` 중복 호출: `_connected` 플래그로 차단.
 - doc.on('update')에서 Y.XmlText delta 파싱으로 타이틀 추출: Lexical은 블록을 `Y.XmlElement`로 저장해 최상위 delta에 string insert 없음 → 항상 빈 문자열 반환. `TitleTrackerPlugin`(`editor.registerUpdateListener`)으로 대체.
@@ -107,9 +107,11 @@
 
 **에러 케이스**:
 - 새로고침 부팅: 메모리 access token이 비어 있어 첫 요청이 Authorization 헤더 없이 나가 401 → 기존 refresh queue가 재발급 → 메모리 적재 → 원요청 재시도. 별도 부팅 refresh 코드 불필요.
-- 동시 다발 401: `pendingQueue`에 누적 → 토큰 갱신 완료 후 일괄 재시도. `isRefreshing` 플래그로 refresh 중복 호출 방지.
+- 동시 다발 401: 같은 탭은 `refreshPromise`를 공유한다. 늦게 도착한 이전 토큰의 401은 이미 갱신된 메모리 토큰으로 한 번 재시도한다. Web Locks 지원 환경에서는 탭 간 갱신도 직렬화하고 잠금 안에서 최신 refresh token을 읽는다.
 - refresh 요청에 client.ts interceptor 재적용: `axios.post` (raw axios)를 사용해 interceptor 순환 방지.
-- refresh 실패: `clearTokens()` + `window.location.href = '/login'`. `_retry=true`인 요청은 다시 refresh 시도 없이 즉시 reject.
+- refresh 실패: 토큰 없음 또는 명시적 인증 거절(HTTP 401, HTTP 200의 AUTH-401 FAIL)일 때만 해당 저장소의 토큰을 삭제하고 `/login`으로 이동한다. 네트워크·timeout·429·5xx는 토큰을 보존한다. `_retry=true`인 요청은 다시 refresh 시도 없이 즉시 reject.
+- 갱신 도중 로그인·로그아웃: 세션 버전과 저장 토큰을 비교해 이전 응답이 새 세션을 덮어쓰거나 삭제하지 못하게 한다. 명시적 로그아웃은 API 실패 때도 로컬 토큰을 정리한다.
+- 지원 범위: Web Locks 미지원 환경은 탭 내부 중복 방지만 보장한다. sessionStorage 복제 탭, 다른 origin·기기, 서버가 회전 후 응답을 유실한 경우는 클라이언트 잠금으로 복구할 수 없다. 백엔드의 계정당 단일 refresh token 정책은 유지된다.
 - localStorage 접근 불가 (SSR): `typeof window === 'undefined'` 가드로 `null` 반환.
 - 구버전 잔존값: 모듈 로드 시 1회 `localStorage.removeItem('aideep_access_token')`으로 기존 사용자의 localStorage 잔존 access token 제거.
 

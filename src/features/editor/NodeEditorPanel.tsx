@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
+import { createPortal } from "react-dom";
 import { NotionEditor, ToolbarPlugin } from "./NotionEditor";
 import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 import { uploadFile } from "@/api/upload";
+import { showToast } from "@/components/ui/toastStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ImageAttachment = { id: string; type: "image"; src: string; caption: string };
 type FileAttachment = { id: string; type: "file"; name: string; size: number; url: string };
-type Attachment = ImageAttachment | FileAttachment;
+export type Attachment = ImageAttachment | FileAttachment;
 
 function formatSize(bytes: number): string {
   return bytes < 1024 * 1024
@@ -45,133 +47,99 @@ function AttachmentSection({
   attachments,
   onAddImage,
   onAddFile,
-  onCaptionChange,
   onRemove,
+  workspaceId,
 }: {
   attachments: Attachment[];
   onAddImage: (src: string) => void;
   onAddFile: (name: string, size: number, dataUrl: string) => void;
   onCaptionChange: (id: string, caption: string) => void;
   onRemove: (id: string) => void;
+  workspaceId: string;
 }) {
   const imageRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // C4: 업로드 중 파일 — 완료 전까지 "업로드 중…" 칩으로 즉시 표시(기존엔 완료 후에야 나타남)
+  const [uploading, setUploading] = useState<{ id: string; name: string }[]>([]);
 
   const handleImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("최대 5MB 파일까지 첨부할 수 있어요");
+      e.target.value = "";
+      return;
+    }
+    const id = generateId();
+    setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
-      const { url } = await uploadFile(file);
-      onAddImage(url);
-    } catch { /* silent */ }
+      const { fileUrl } = await uploadFile(file, workspaceId);
+      onAddImage(fileUrl);
+    } catch {
+      showToast("사진 업로드에 실패했어요");
+    }
+    setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
-  }, [onAddImage]);
+  }, [onAddImage, workspaceId]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("최대 5MB 파일까지 첨부할 수 있어요");
+      e.target.value = "";
+      return;
+    }
+    const id = generateId();
+    setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
-      const { url, originalName, size } = await uploadFile(file);
-      onAddFile(originalName, size, url);
-    } catch { /* silent */ }
+      const { fileUrl, originalName, size } = await uploadFile(file, workspaceId);
+      onAddFile(originalName, size, fileUrl);
+    } catch {
+      showToast("파일 업로드에 실패했어요");
+    }
+    setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
-  }, [onAddFile]);
+  }, [onAddFile, workspaceId]);
 
   return (
-    <div className="border-t border-gray-900">
+    <section className="editor-attachments" aria-label="첨부 파일">
       <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-      <input ref={fileRef} type="file" className="hidden" onChange={handleFileChange} />
-
-      {attachments.length > 0 && (
-        <div className="px-3 pt-2 space-y-2">
-          {attachments.map((att) =>
-            att.type === "image" ? (
-              <div key={att.id} className="relative group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={att.src}
-                  alt={att.caption}
-                  className="block w-full rounded-md"
-                />
-                <input
-                  value={att.caption}
-                  onChange={(e) => onCaptionChange(att.id, e.target.value)}
-                  placeholder="사진 설명"
-                  className="block w-full text-center bg-transparent border-none outline-none text-gray-500 placeholder:text-gray-500"
-                  style={{ fontSize: 12, padding: "3px 0" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => onRemove(att.id)}
-                  className="absolute top-1 right-1 hidden group-hover:flex items-center justify-center rounded-full text-white"
-                  style={{ width: 20, height: 20, background: "rgba(0,0,0,0.45)" }}
-                >
-                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M1 1L9 9M9 1L1 9" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
-              <div
-                key={att.id}
-                className="relative group flex items-center gap-2.5 cursor-pointer rounded-md bg-surface hover:bg-surface-hover transition-colors border border-border"
-                style={{ padding: "9px 12px" }}
-                onClick={() => {
-                  const a = document.createElement("a");
-                  a.href = att.url;
-                  a.download = att.name;
-                  a.click();
-                }}
-              >
-                <svg width="14" height="16" viewBox="0 0 15 18" fill="none">
-                  <path d="M9 1H2C1.46957 1 0.960859 1.21071 0.585786 1.58579C0.210714 1.96086 0 2.46957 0 3V15C0 15.5304 0.210714 16.0391 0.585786 16.4142C0.960859 16.7893 1.46957 17 2 17H13C13.5304 17 14.0391 16.7893 14.4142 16.4142C14.7893 16.0391 15 15.5304 15 15V7L9 1Z" fill="rgb(var(--ds-gray-900))" stroke="rgb(var(--ds-gray-700))" strokeWidth="1" strokeLinejoin="round" />
-                  <path d="M9 1V7H15" stroke="rgb(var(--ds-gray-700))" strokeWidth="1" strokeLinejoin="round" />
-                </svg>
-                <span className="flex-1 typo-cap2 text-foreground truncate">
-                  {att.name}
-                </span>
-                <span className="text-[12px] text-muted shrink-0">{formatSize(att.size)}</span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onRemove(att.id); }}
-                  className="hidden group-hover:flex items-center justify-center rounded-full ml-1 text-gray-300"
-                  style={{ width: 18, height: 18, background: "rgb(var(--ds-gray-800))", flexShrink: 0 }}
-                >
-                  <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M1 1L9 9M9 1L1 9" />
-                  </svg>
-                </button>
-              </div>
-            )
-          )}
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 px-3 py-2">
-        <button
-          type="button"
-          onClick={() => imageRef.current?.click()}
-          className="flex items-center gap-1.5 rounded-full cursor-pointer hover:bg-surface transition-colors px-2.5 py-1 typo-cap2 text-muted border border-border"
-        >
-          <svg width="12" height="12" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="0.7" y="0.7" width="11.6" height="11.6" rx="1.5" />
-            <circle cx="4" cy="4" r="1" fill="currentColor" stroke="none" />
-            <path d="M0.7 8.5l2.8-2.8 2 2 2.5-3.2 4.3 5" />
-          </svg>
-          사진
-        </button>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1.5 rounded-full cursor-pointer hover:bg-surface transition-colors px-2.5 py-1 typo-cap2 text-muted border border-border"
-        >
-          <svg width="10" height="12" viewBox="0 0 11 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9.5 5.5L4.5 10.5a2.5 2.5 0 01-3.535-3.536L5.5 2.43a1.5 1.5 0 012.121 2.121L3.086 9.086a.5.5 0 01-.707-.707L7 3.76" />
-          </svg>
-          파일
-        </button>
+      <input ref={fileRef} type="file" accept="image/*,.pdf,.txt,.md,.doc,.docx,audio/*,video/*" className="hidden" onChange={handleFileChange} />
+      <h3 className="flex items-center gap-3 text-[14px] font-semibold">
+        첨부 <span className="text-[12px] font-normal text-muted">{attachments.length}</span>
+      </h3>
+      <div className="mt-2 flex flex-wrap gap-2" aria-live="polite">
+        {attachments.map((att) => (
+          <div key={att.id} className="group relative max-w-full">
+            <a
+              href={att.type === "image" ? att.src : att.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              download={att.type === "file" ? att.name : undefined}
+              title={att.type === "file" ? `${att.name} · ${formatSize(att.size)}` : att.caption || "사진"}
+              className="editor-attachment-chip"
+            >
+              <svg width="13" height="14" viewBox="0 0 11 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
+                <path d="M9.5 5.5L4.5 10.5a2.5 2.5 0 01-3.535-3.536L5.5 2.43a1.5 1.5 0 012.121 2.121L3.086 9.086a.5.5 0 01-.707-.707L7 3.76" />
+              </svg>
+              <span className="truncate">{att.type === "file" ? att.name : att.caption || "사진"}</span>
+            </a>
+            <button
+              type="button"
+              aria-label={`${att.type === "file" ? att.name : "사진"} 첨부 제거`}
+              onClick={() => onRemove(att.id)}
+              className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-border bg-background text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            ><CloseIcon /></button>
+          </div>
+        ))}
+        {uploading.map((file) => (
+          <span key={file.id} className="editor-attachment-chip opacity-60">{file.name} · 업로드 중…</span>
+        ))}
       </div>
-    </div>
+      <button type="button" onClick={() => fileRef.current?.click()} className="editor-upload-button">파일 올리기</button>
+      <p className="mt-1 text-[9px] text-muted">이미지 · PDF · 문서 · 음성 · 영상 · 최대 5MB</p>
+    </section>
   );
 }
 
@@ -179,8 +147,17 @@ function AttachmentSection({
 
 interface NodeEditorPanelProps {
   nodeId: string;
+  attachments?: Attachment[];
+  onAttachmentsChange?: Dispatch<SetStateAction<Attachment[]>>;
   fullscreen?: boolean;
   inline?: boolean;
+  /** 우측 단일 도크 모드. 숫자가 지정되면 같은 고정 위치에 렌더링한다. */
+  dockIndex?: number;
+  /** 도크 헤더 제목 — 노드명(첫 줄) */
+  title?: string;
+  onTitleChange?: (title: string) => void;
+  /** 도크 헤더 경로 — "프로젝트 > 타이틀" */
+  breadcrumb?: string;
   updatedAt?: string;
   onExpandClick?: () => void;
   onClose?: () => void;
@@ -192,12 +169,22 @@ interface NodeEditorPanelProps {
   cursorColor?: string;
   onFirstLineChange?: (text: string) => void;
   onContentChange?: (content: { markdownBody: string; jsonBody: string }) => void;
+  /** 첨부 파일 S3 업로드 시 서버가 요구하는 워크스페이스 ID (필수) */
+  workspaceId?: string;
+  /** 진행 중인 회의가 붙은 노드 — 내용 확인만 가능하고 제목·본문 편집이 잠긴다 */
+  readOnly?: boolean;
 }
 
 export function NodeEditorPanel({
   nodeId,
+  attachments: nodeAttachments,
+  onAttachmentsChange,
   fullscreen = false,
   inline = false,
+  dockIndex,
+  title,
+  onTitleChange,
+  breadcrumb,
   updatedAt,
   onExpandClick,
   onClose,
@@ -209,8 +196,12 @@ export function NodeEditorPanel({
   cursorColor,
   onFirstLineChange,
   onContentChange,
+  workspaceId = "",
+  readOnly = false,
 }: NodeEditorPanelProps) {
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [localAttachments, setLocalAttachments] = useState<Attachment[]>([]);
+  const attachments = nodeAttachments ?? localAttachments;
+  const setAttachments = onAttachmentsChange ?? setLocalAttachments;
 
   /*
    * CONTEXT
@@ -256,19 +247,153 @@ export function NodeEditorPanel({
 
   const handleAddImage = useCallback((src: string) => {
     setAttachments((prev) => [...prev, { id: generateId(), type: "image", src, caption: "" }]);
-  }, []);
+  }, [setAttachments]);
 
   const handleAddFile = useCallback((name: string, size: number, url: string) => {
     setAttachments((prev) => [...prev, { id: generateId(), type: "file", name, size, url }]);
-  }, []);
+  }, [setAttachments]);
 
   const handleCaptionChange = useCallback((id: string, caption: string) => {
     setAttachments((prev) => prev.map((a) => a.id === id && a.type === "image" ? { ...a, caption } : a));
-  }, []);
+  }, [setAttachments]);
 
   const handleRemove = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
-  }, []);
+  }, [setAttachments]);
+
+  // ── 우측 도크 모드 (C3/C4 — 콘텐츠 노드 클릭 → 캔버스 우측 내용 패널) ──────────
+  /*
+   * CONTEXT
+   * - Problem      : 기존 캔버스 패널은 노드에 붙어(absolute top:100%) 뜨는 작은 창이라,
+   *                  Figma C3/C4의 "우측 사이드바처럼 도크되는 내용 패널"과 달랐다.
+   * - Why          : React Flow 뷰포트는 transform이 걸려 있어 그 안에서 position:fixed가
+   *                  화면이 아니라 변환된 pane 기준이 된다. 그래서 createPortal로 패널을
+   *                  document.body로 빼내 진짜 화면 우측에 고정한다. provider·협업 배선은
+   *                  TextUpdateNode가 소유한 그대로 prop으로 받아 재사용 — 에디터 로직 불변.
+   * - Alternatives : 패널 내용(NotionEditor+AttachmentSection)을 인라인 모드가 이미 가지므로
+   *                  재사용. 별도 컴포넌트 신설은 provider·attachments 상태 중복이라 기각.
+   * - Trade-offs   : 캔버스는 한 노드만 열고 패널은 오른쪽 같은 위치에서 전체 높이를 사용한다.
+   * - Edge Case    : SSR(document 없음) — 포털 전 가드. collabProvider null 시 로딩 표시.
+   */
+  if (typeof dockIndex === "number") {
+    if (typeof document === "undefined") return null;
+    return createPortal(
+      <div
+        className="node-editor-dock fixed inset-y-0 right-0 z-[100] flex flex-col bg-background"
+        role="complementary"
+        aria-label="노트 에디터"
+        data-node-id={nodeId}
+        // portal이지만 React 합성 이벤트는 React 트리(노드 컴포넌트)로 버블한다 — 막지 않으면
+        // 패널 클릭이 React Flow onNodeClick을 재발화해 방금 닫은 패널이 다시 열린다.
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          onFocus?.();
+        }}
+      >
+        {/*
+         * CONTEXT
+         * - Problem      : 에디터가 상단에서 떨어져 있고 경로·제목 순서와 첨부 영역이 시안과 다르다.
+         * - Why          : 전체 높이의 고정 패널에 제목→경로, 본문, 첨부 칩을 배치한다.
+         * - Alternatives : 이미지 내용을 기본 데이터로 넣으면 실제 노트와 예시가 섞인다.
+         * - Trade-offs   : 실제 본문 길이에 따라 첨부 영역은 아래로 밀리고 패널 내부에서 스크롤한다.
+         * - Edge Case    : 좁은 화면은 최대 화면 폭을 사용하고 긴 경로는 말줄임한다.
+         */}
+        <div className="editor-dock-header flex shrink-0 items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {/*
+             * CONTEXT
+             * - Problem      : 에디터 제목이 읽기 전용이고 본문 첫 줄이 수동 제목을 덮는다.
+             * - Why          : 캔버스의 기존 제목 저장 콜백을 입력에 연결하고 본문과 제목을 분리한다.
+             * - Alternatives : 도크에서 별도 API를 호출하면 저장·로컬 반영 로직이 중복된다.
+             * - Trade-offs   : 본문 첫 줄 변경은 노드 이름을 자동 변경하지 않는다.
+             * - Edge Case    : 편집 콜백 없는 패널은 읽기 전용이며 한글 조합 중 Enter는 유지한다.
+             */}
+            <input
+              aria-label="노드 제목"
+              placeholder="제목 없음"
+              value={title ?? ""}
+              readOnly={readOnly || !onTitleChange}
+              onChange={(event) => onTitleChange?.(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.currentTarget.blur();
+              }}
+              className="w-full min-w-0 rounded bg-transparent text-[15px] font-bold outline-none focus-visible:ring-1 focus-visible:ring-main-blue"
+            />
+            {breadcrumb && <p className="mt-1 truncate text-[12px] text-muted" title={breadcrumb}>{breadcrumb}</p>}
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {onExpandClick && (
+              <button
+                type="button"
+                onClick={onExpandClick}
+                title="전체화면으로 보기"
+                className="flex h-[22px] w-[22px] items-center justify-center rounded text-muted transition-colors hover:bg-surface"
+              >
+                <ExpandIcon />
+              </button>
+            )}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                title="닫기"
+                className="flex h-[22px] w-[22px] items-center justify-center rounded text-muted transition-colors hover:bg-surface"
+              >
+                <CloseIcon />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {readOnly && (
+          <p role="status" className="mx-4 mt-3 flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#3F58C9] text-[12px] font-semibold text-white">
+            <span aria-hidden="true">🔒</span>녹음 중에는 수정할 수 없어요
+          </p>
+        )}
+        {!collabProvider ? (
+          <div className="flex flex-1 items-center justify-center text-muted typo-body1">
+            워크스페이스를 불러오는 중...
+          </div>
+        ) : (
+          <div className="editor-dock-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <NotionEditor
+              nodeId={nodeId}
+              workspaceId={workspaceId}
+              collabProvider={collabProvider}
+              username={username}
+              cursorColor={cursorColor}
+              onContentChange={onContentChange}
+              noMediaDrop
+              autoGrow
+              minHeight={398}
+              readOnly={readOnly}
+            />
+            <AttachmentSection
+              attachments={attachments}
+              onAddImage={handleAddImage}
+              onAddFile={handleAddFile}
+              onCaptionChange={handleCaptionChange}
+              onRemove={handleRemove}
+              workspaceId={workspaceId}
+            />
+            {updatedAt && (
+              <div className="shrink-0 border-t border-gray-900 px-4 py-2 text-[12px] text-gray-500">
+                최종 수정일:{" "}
+                {new Date(updatedAt).toLocaleDateString("ko-KR", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  weekday: "short",
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>,
+      document.body,
+    );
+  }
 
   // ── 인라인 모드 (사이드바 리소스 패널) ─────────────────────────────────────
   if (inline) {
@@ -293,6 +418,7 @@ export function NodeEditorPanel({
 
         <NotionEditor
           nodeId={nodeId}
+          workspaceId={workspaceId}
           collabProvider={collabProvider}
           username={username}
           cursorColor={cursorColor}
@@ -301,6 +427,7 @@ export function NodeEditorPanel({
           noMediaDrop
           autoGrow
           minHeight={attachments.length > 0 ? 80 : 150}
+          readOnly={readOnly}
         />
 
         <AttachmentSection
@@ -309,6 +436,7 @@ export function NodeEditorPanel({
           onAddFile={handleAddFile}
           onCaptionChange={handleCaptionChange}
           onRemove={handleRemove}
+          workspaceId={workspaceId}
         />
 
         {updatedAt && (
@@ -334,12 +462,14 @@ export function NodeEditorPanel({
         <div className="w-[62.5%] min-w-[300px] mx-auto flex flex-col flex-1 min-h-0">
           <NotionEditor
             nodeId={nodeId}
+            workspaceId={workspaceId}
             collabProvider={collabProvider}
             username={username}
             cursorColor={cursorColor}
             onFirstLineChange={onFirstLineChange}
-            toolbarSlot={<ToolbarPlugin />}
+            toolbarSlot={<ToolbarPlugin workspaceId={workspaceId} />}
             extraBottomPadding
+            readOnly={readOnly}
           />
         </div>
       </div>
@@ -400,6 +530,7 @@ export function NodeEditorPanel({
       ) : (
         <NotionEditor
           nodeId={nodeId}
+          workspaceId={workspaceId}
           collabProvider={collabProvider}
           username={username}
           cursorColor={cursorColor}

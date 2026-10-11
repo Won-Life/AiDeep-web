@@ -25,12 +25,14 @@ import {
   SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND,
 } from '@lexical/react/LexicalTypeaheadMenuPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { getTemplateSections } from './contentTemplates';
 import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
   $getNodeByKey,
   $insertNodes,
+  $createTextNode,
   FORMAT_TEXT_COMMAND,
   SELECTION_CHANGE_COMMAND,
   KEY_DOWN_COMMAND,
@@ -42,6 +44,7 @@ import {
   DecoratorNode,
   createCommand,
   type LexicalEditor,
+  type LexicalNode,
   type NodeKey,
   type SerializedLexicalNode,
 } from 'lexical';
@@ -75,6 +78,8 @@ import { TRANSFORMERS, $convertToMarkdownString } from '@lexical/markdown';
 import { MarkdownPastePlugin } from './plugins/MarkdownPastePlugin';
 import { $setBlocksType } from '@lexical/selection';
 import { $getNearestNodeOfType, mergeRegister } from '@lexical/utils';
+import { uploadFile } from '@/api/upload';
+import { showToast } from '@/components/ui/toastStore';
 import { CollaborationPlugin } from '@lexical/react/LexicalCollaborationPlugin';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { LexicalCollaboration } from '@lexical/react/LexicalCollaborationContext';
@@ -108,6 +113,8 @@ export interface NotionEditorProps {
   minHeight?: number;
   extraBottomPadding?: boolean;
   compactTop?: boolean; // 캔버스 미니 패널 — 본문 상단 패딩 축소 (pt-3 → pt-1)
+  workspaceId?: string; // 본문 이미지/파일 S3 업로드 시 서버가 요구
+  readOnly?: boolean; // 진행 중인 회의가 붙은 노드 — 내용 확인만 가능(편집 잠금)
 }
 
 // ─── Media Commands ───────────────────────────────────────────────────────────
@@ -443,14 +450,57 @@ function insertTable(editor: LexicalEditor) {
   });
 }
 
+// ─── 콘텐츠 템플릿 (C3) ──────────────────────────────────────────────────────────
+// 섹션 제목을 h3 + 빈 문단으로 커서 위치에 삽입. G3 온보딩이 안내하는 "강의 필기/회의 메모
+// 템플릿으로 시작" 기능. 섹션 정의는 콘텐츠 노드 만들기 메뉴(Figma C1)와 같은 contentTemplates.
+const LECTURE_TEMPLATE = getTemplateSections('lecture');
+const MEETING_TEMPLATE = getTemplateSections('meeting');
+const CONCEPT_TEMPLATE = getTemplateSections('concept');
+const MATERIAL_TEMPLATE = getTemplateSections('material');
+
+function templateNodes(sections: string[]): LexicalNode[] {
+  const nodes: LexicalNode[] = [];
+  sections.forEach((title) => {
+    const heading = $createHeadingNode('h3');
+    heading.append($createTextNode(title));
+    nodes.push(heading, $createParagraphNode());
+  });
+  return nodes;
+}
+
+function insertTemplate(editor: LexicalEditor, sections: string[]) {
+  editor.update(() => {
+    $insertNodes(templateNodes(sections));
+  });
+}
+
 // ─── Media helpers ────────────────────────────────────────────────────────────
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.readAsDataURL(file);
-  });
+/*
+ * CONTEXT
+ * - Problem      : 본문 이미지/파일(툴바·슬래시·드롭)이 base64 data URL을 Yjs 문서에
+ *                  심어, 문서가 비대해지고 협업 동기화 부담이 컸다. S3 미사용.
+ * - Why          : 첨부(AttachmentSection)와 동일하게 서버 /upload(S3)를 거쳐 공개 URL만
+ *                  문서에 저장한다. 서버는 workspaceId(멤버십)를 요구하므로 함께 넘긴다.
+ * - Trade-offs   : base64는 즉시 표시됐지만 이제 업로드 왕복 지연이 있다(이미지가 조금 늦게
+ *                  뜸). 문서 경량화·영속 URL 이점이 더 크다. 실패 시 토스트로 알린다.
+ * - Edge Case    : workspaceId 없으면 업로드 불가 → 토스트 후 중단.
+ */
+async function uploadMedia(
+  file: File,
+  workspaceId: string | undefined,
+): Promise<string | null> {
+  if (!workspaceId) {
+    showToast('업로드할 수 없어요 (워크스페이스 정보 없음)');
+    return null;
+  }
+  try {
+    const { fileUrl } = await uploadFile(file, workspaceId);
+    return fileUrl;
+  } catch {
+    showToast('업로드에 실패했어요');
+    return null;
+  }
 }
 
 // ─── Media Plugin ─────────────────────────────────────────────────────────────
@@ -488,7 +538,7 @@ function MediaPlugin() {
 
 // ─── Drag Drop Plugin ─────────────────────────────────────────────────────────
 
-function DragDropPlugin() {
+function DragDropPlugin({ workspaceId }: { workspaceId?: string }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -506,11 +556,12 @@ function DragDropPlugin() {
       if (!file) return;
       de.preventDefault();
       de.stopPropagation();
-      const dataUrl = await readFileAsDataUrl(file);
+      const url = await uploadMedia(file, workspaceId);
+      if (!url) return;
       if (file.type.startsWith('image/')) {
-        editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src: dataUrl });
+        editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src: url });
       } else {
-        editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+        editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl: url });
       }
     };
 
@@ -520,7 +571,7 @@ function DragDropPlugin() {
       root?.addEventListener('dragover', handleDragOver);
       root?.addEventListener('drop', handleDrop);
     });
-  }, [editor]);
+  }, [editor, workspaceId]);
 
   return null;
 }
@@ -569,7 +620,7 @@ function EditorShortcutsPlugin() {
 
 // ─── Toolbar Plugin ───────────────────────────────────────────────────────────
 
-export function ToolbarPlugin() {
+export function ToolbarPlugin({ workspaceId }: { workspaceId?: string } = {}) {
   const [editor] = useLexicalComposerContext();
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
@@ -651,16 +702,16 @@ export function ToolbarPlugin() {
   const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const src = await readFileAsDataUrl(file);
-    editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
+    const src = await uploadMedia(file, workspaceId);
+    if (src) editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
     e.target.value = '';
   };
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+    const dataUrl = await uploadMedia(file, workspaceId);
+    if (dataUrl) editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
     e.target.value = '';
   };
 
@@ -899,12 +950,14 @@ class SlashMenuOption extends MenuOption {
 function SlashCommandPlugin({
   onMenuVisibleChange,
   menuActiveSyncRef,
+  workspaceId,
 }: {
   // 메뉴 모달 표시 여부(React 상태 채널) — 닫힘 시 TitleTracker가 제목을 재반영한다
   onMenuVisibleChange?: (visible: boolean) => void;
   // 트리거 매치 여부(동기 ref 채널) — '/' 입력과 같은 업데이트 사이클에 세팅되어,
   // onOpen setState가 커밋되기 전에 TitleTracker 리스너가 '/'를 제목으로 내보내는 깜빡임을 막는다
   menuActiveSyncRef?: RefObject<boolean>;
+  workspaceId?: string;
 }) {
   const [editor] = useLexicalComposerContext();
   const [queryString, setQueryString] = useState<string | null>(null);
@@ -950,6 +1003,18 @@ function SlashCommandPlugin({
           ),
       ),
       new SlashMenuOption('표', '⊞', 'action', () => insertTable(editor)),
+      new SlashMenuOption('강의 필기 템플릿', '📝', 'action', () =>
+        insertTemplate(editor, LECTURE_TEMPLATE),
+      ),
+      new SlashMenuOption('회의 메모 템플릿', '🗒️', 'action', () =>
+        insertTemplate(editor, MEETING_TEMPLATE),
+      ),
+      new SlashMenuOption('개념 정리 템플릿', '💡', 'action', () =>
+        insertTemplate(editor, CONCEPT_TEMPLATE),
+      ),
+      new SlashMenuOption('자료 정리 템플릿', '📚', 'action', () =>
+        insertTemplate(editor, MATERIAL_TEMPLATE),
+      ),
       new SlashMenuOption('이미지', '🖼', 'image', () => {}),
       new SlashMenuOption('파일', '📎', 'file', () => {}),
     ],
@@ -986,16 +1051,16 @@ function SlashCommandPlugin({
   const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const src = await readFileAsDataUrl(file);
-    editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
+    const src = await uploadMedia(file, workspaceId);
+    if (src) editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
     e.target.value = '';
   };
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+    const dataUrl = await uploadMedia(file, workspaceId);
+    if (dataUrl) editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
     e.target.value = '';
   };
 
@@ -1004,6 +1069,7 @@ function SlashCommandPlugin({
       <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageInput} />
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileInput} />
       <LexicalTypeaheadMenuPlugin<SlashMenuOption>
+        anchorClassName="editor-slash-menu-anchor"
         onQueryChange={setQueryString}
         onSelectOption={(option, textNodeContainingQuery, closeMenu) => {
           editor.update(() => {
@@ -1036,7 +1102,6 @@ function SlashCommandPlugin({
                     maxHeight: 280,
                     overflowY: 'auto',
                     boxShadow: '0 4px 16px rgba(0,0,0,0.09)',
-                    zIndex: 9999,
                   }}
                 >
                   {options.map((option, index) => (
@@ -1095,6 +1160,15 @@ function ContentExportPlugin({
     });
   }, [editor, onChange]);
 
+  return null;
+}
+
+// 회의가 시작·종료되면 열려 있는 에디터도 즉시 읽기 전용으로 바뀌거나 풀린다.
+function EditableSyncPlugin({ editable }: { editable: boolean }) {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => {
+    editor.setEditable(editable);
+  }, [editor, editable]);
   return null;
 }
 
@@ -1161,6 +1235,8 @@ export function NotionEditor({
   minHeight,
   extraBottomPadding = false,
   compactTop = false,
+  workspaceId,
+  readOnly = false,
 }: NotionEditorProps) {
   // 슬래시 메뉴 표시 여부 — 메뉴가 떠있는 동안 TitleTracker의 제목 반영을 멈춘다.
   // 상태(닫힘 시 재반영 트리거)와 동기 ref(첫 '/' 깜빡임 방지) 이중 채널.
@@ -1169,12 +1245,26 @@ export function NotionEditor({
   // provider의 'sync' 이벤트에서 동기화 여부를 직접 구독 — on()이 등록 즉시
   // 현재 상태를 replay하므로 늦게 마운트돼도 값이 맞는다 (prop 중계 불필요)
   // provider null이면 렌더 시 파생값으로 false 처리 — effect 본문 동기 setState 금지(lint error)
+  /*
+   * CONTEXT
+   * - Problem      : 동기화 실패가 빈 문서의 로딩 placeholder로 무기한 표시됐다.
+   * - Why          : provider의 실패 상태를 구독해 내용 유무와 독립적인 재시도 UI를 제공한다.
+   * - Alternatives : 시간 경과만으로 완료 처리하면 실제 원격 데이터 수신 여부를 알 수 없다.
+   * - Trade-offs   : 실패 시 안내 영역이 추가되지만 기존 에디터와 미전송 내용은 유지한다.
+   * - Edge Case    : 늦게 도착한 동기화 성공은 오류를 해제하며 구독 해제도 함께 수행한다.
+   */
   const [providerSynced, setProviderSynced] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   useEffect(() => {
     if (!collabProvider) return;
     const onSync = (synced: unknown) => setProviderSynced(synced as boolean);
+    const onSyncError = (failed: unknown) => setSyncError(failed as boolean);
     collabProvider.on('sync', onSync);
-    return () => collabProvider.off('sync', onSync);
+    collabProvider.on('sync-error', onSyncError);
+    return () => {
+      collabProvider.off('sync', onSync);
+      collabProvider.off('sync-error', onSyncError);
+    };
   }, [collabProvider]);
   const isSynced = collabProvider ? providerSynced : false;
 
@@ -1184,6 +1274,7 @@ export function NotionEditor({
     nodes: REGISTERED_NODES,
     onError: (error: Error) => console.error('[NotionEditor]', error),
     editorState: null,
+    editable: !readOnly,
   };
 
   const providerFactory = useCallback(
@@ -1200,7 +1291,20 @@ export function NotionEditor({
     <div className={autoGrow ? 'flex flex-col bg-background rounded-b-lg' : 'flex flex-col flex-1 min-h-0 bg-background rounded-b-lg'}>
       <LexicalCollaboration>
         <LexicalComposer initialConfig={initialConfig}>
+          <EditableSyncPlugin editable={!readOnly} />
           {toolbarSlot}
+          {collabProvider && syncError && (
+            <div role="alert" className="flex items-center justify-between gap-2 px-4 py-2 text-sm text-muted">
+              <span>노트를 동기화하지 못했습니다.</span>
+              <button
+                type="button"
+                className="nodrag shrink-0 rounded border border-border px-2 py-1 text-foreground"
+                onClick={() => collabProvider.retry()}
+              >
+                다시 시도
+              </button>
+            </div>
+          )}
 
           <div
             className={autoGrow ? 'relative' : 'relative flex-1 min-h-0 overflow-y-auto scrollbar-hide'}
@@ -1213,7 +1317,7 @@ export function NotionEditor({
                   spellCheck
                 />
               }
-              placeholder={
+              placeholder={collabProvider && syncError ? null : (
                 <div
                   className={`absolute ${compactTop ? 'top-1' : 'top-3'} left-4 pointer-events-none select-none`}
                   style={{ color: 'rgb(var(--muted))', fontSize: 14 }}
@@ -1224,7 +1328,7 @@ export function NotionEditor({
                     (마크다운 단축키 지원, &apos;/&apos;로 메뉴 열기)
                   </span>
                 </div>
-              }
+              )}
               ErrorBoundary={LexicalErrorBoundary}
             />
           </div>
@@ -1239,9 +1343,10 @@ export function NotionEditor({
           <SlashCommandPlugin
             onMenuVisibleChange={setSlashMenuVisible}
             menuActiveSyncRef={slashMenuActiveRef}
+            workspaceId={workspaceId}
           />
           <EditorShortcutsPlugin />
-          {!noMediaDrop && <DragDropPlugin />}
+          {!noMediaDrop && <DragDropPlugin workspaceId={workspaceId} />}
 
           {onFirstLineChange && (
             <TitleTrackerPlugin

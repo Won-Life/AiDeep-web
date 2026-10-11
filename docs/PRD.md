@@ -25,7 +25,7 @@
 ### 1. 인증
 - 이메일 + 비밀번호 회원가입. 이메일 인증 코드 발송 → 코드 입력으로 인증 완료
 - JWT 기반 로그인. access token은 JS 메모리에만 보관, refresh token(`aideep_refresh_token`)은 localStorage에 저장
-- 401 수신 시(새로고침 후 첫 요청 포함) refresh 시도. refresh 실패 시 토큰 파기 후 `/login`으로 리다이렉트
+- 401 수신 시(새로고침 후 첫 요청 포함) refresh 시도. 토큰 없음·갱신 인증 거절이면 토큰 파기 후 `/login`으로 이동하고, 네트워크·서버 장애이면 토큰을 보존해 재시도 제공
 - 로그아웃: `logout()` API 호출 시도 → 성공/실패 무관하게 항상 `/login`으로 이동 (stuck session 방지)
 
 ---
@@ -272,7 +272,7 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 - 노드별 독립적인 Yjs Doc + `SocketIoYjsProvider`
 - 소켓 미연결 시 200ms 재시도. 연결되면 즉시 provider 생성
 - 초기 동기화: SyncStep1 → SyncStep2 핸드셰이크. `isSynced=true` 전까지 에디터 로딩 상태
-- **에러 케이스**: `yjs:join` ack `ok=false` → "워크스페이스를 불러오는 중..." 표시 유지. 재마운트로 복구
+- **에러 케이스**: `yjs:join` 거절·동기화 10초 초과·소켓 단절 → 동기화 실패 안내와 다시 시도 버튼. 소켓 재연결 시 자동으로 다시 참여하고 동기화한다. 빈 문서도 SyncStep2 수신 후 작성 안내를 표시한다.
 
 #### 전체화면 에디터 (`/workspace/node/{nodeId}`)
 - 전체화면에서 에디터: `width: 62.5%`, `minWidth: 300px`, 가운데 정렬, 상단 툴바(`ToolbarPlugin`)

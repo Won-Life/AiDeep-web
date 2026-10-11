@@ -22,6 +22,19 @@ export async function createWorkspace(
   return result;
 }
 
+/** 워크스페이스 이름 변경 — 서버 PATCH /workspace/:id { title } (X8) */
+export async function renameWorkspace(
+  workspaceId: string,
+  title: string,
+): Promise<void> {
+  await client.patch(`/workspace/${workspaceId}`, { title });
+}
+
+/** 워크스페이스 삭제(soft) — 서버 DELETE /workspace/:id. OWNER만, 최소 1개는 유지(서버 검증) (X9) */
+export async function deleteWorkspace(workspaceId: string): Promise<void> {
+  await client.delete(`/workspace/${workspaceId}`);
+}
+
 export async function inviteToWorkspace(
   data: InviteWorkspaceRequest,
 ): Promise<InviteWorkspaceResponse> {

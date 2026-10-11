@@ -1,35 +1,59 @@
 import type { EdgeProps } from "@xyflow/react";
-import { BaseEdge } from "@xyflow/react";
+import { BaseEdge, Position, useInternalNode } from "@xyflow/react";
 
 export function BranchEdge(props: EdgeProps) {
-  const { id, sourceX, sourceY, targetX, targetY, data, markerEnd } = props;
+  const { id, sourceY, targetY, data, markerEnd } = props;
+  /*
+   * CONTEXT
+   * - Problem      : 28px 클릭 영역의 끝에서 선이 시작해 안쪽 14px 포트와 틈이 생긴다.
+   * - Why          : React Flow가 측정한 좌우 핸들의 중심까지 선을 연장하고 흰 포트가 선을 덮게 한다.
+   * - Alternatives : 클릭 영역 축소는 조작성을 낮추고 고정 보정값은 핸들 크기 변경에 취약하다.
+   * - Trade-offs   : 핸들 측정값을 구독하며 원 아래에 선이 반지름만큼 겹친다.
+   * - Edge Case    : 좌우 방향·source/target 크기를 각각 반영하고 측정 전에는 원래 좌표를 쓴다.
+   */
+  const sourceNode = useInternalNode(props.source);
+  const targetNode = useInternalNode(props.target);
+  const sourceHandle = sourceNode?.internals.handleBounds?.source?.find((handle) => handle.id === props.sourceHandleId);
+  const targetHandle = targetNode?.internals.handleBounds?.target?.find((handle) => handle.id === props.targetHandleId);
+  const sourceX = props.sourceX + (props.sourcePosition === Position.Left ? 1 : -1) * (sourceHandle?.width ?? 0) / 2;
+  const targetX = props.targetX + (props.targetPosition === Position.Left ? 1 : -1) * (targetHandle?.width ?? 0) / 2;
   const hubX: number = (data?.hubX as number) ?? (sourceX + targetX) / 2;
   const hubY: number = sourceY;
 
-  const trunkPath = `M ${sourceX},${sourceY} L ${hubX},${hubY}`;
-
-  const deltaX = targetX - hubX;
+  /*
+   * CONTEXT
+   * - Problem      : 기존 경로는 세로 줄기의 시작은 직각, 끝만 곡선으로 그린다.
+   * - Why          : 양쪽 접합을 같은 반경의 이차 곡선으로 연결해 시안의 부드러운 꺾임을 맞춘다.
+   * - Alternatives : 선 join만 round로 해서는 경로 자체의 직각을 곡선으로 만들 수 없다.
+   * - Trade-offs   : 짧은 연결에서는 반경을 공간에 맞춰 줄인다.
+   * - Edge Case    : 좌우·상하 반전과 수평 연결에서도 경로가 되돌아가지 않는다.
+   */
   const deltaY = targetY - hubY;
-  const absX = Math.abs(deltaX);
-  const absY = Math.abs(deltaY);
-  const radius = Math.min(12, absX / 2, absY / 2);
-  const signX = deltaX >= 0 ? 1 : -1;
-  const signY = deltaY >= 0 ? 1 : -1;
-
-  const verticalEndY = hubY + signY * Math.max(absY - radius, 0);
-  const cornerX = hubX + signX * radius;
-  const cornerY = targetY;
-
-  const branchPath =
-    radius > 0
-      ? `L ${hubX},${verticalEndY} Q ${hubX},${targetY} ${cornerX},${cornerY} L ${targetX},${targetY}`
-      : `L ${hubX},${targetY} L ${targetX},${targetY}`;
-
-  const mergedPath = `${trunkPath} ${branchPath.replace(/^M[^CQLA]*\s/, "")}`;
+  const incoming = Math.sign(hubX - sourceX);
+  const outgoing = Math.sign(targetX - hubX);
+  const vertical = Math.sign(deltaY);
+  const radius = Math.min(10, Math.abs(hubX - sourceX), Math.abs(targetX - hubX), Math.abs(deltaY) / 2);
+  const mergedPath = radius > 0
+    ? `M ${sourceX},${sourceY} L ${hubX - incoming * radius},${hubY} Q ${hubX},${hubY} ${hubX},${hubY + vertical * radius} L ${hubX},${targetY - vertical * radius} Q ${hubX},${targetY} ${hubX + outgoing * radius},${targetY} L ${targetX},${targetY}`
+    : `M ${sourceX},${sourceY} L ${hubX},${hubY} L ${hubX},${targetY} L ${targetX},${targetY}`;
 
   return (
     <>
-      <BaseEdge id={id} path={mergedPath} markerEnd={markerEnd} style={{ stroke: "rgb(var(--ds-gray-700))", strokeWidth: 1 }} />
+      {/*
+       * CONTEXT
+       * - Problem      : 평평한 엣지선에 참고 이미지의 아래쪽 그늘이 없다.
+       * - Why          : 실제 선에 작은 하단 drop-shadow를 적용해 경로를 그대로 따라간다.
+       * - Alternatives : 복제 path는 클릭 영역과 선 관리가 중복된다.
+       * - Trade-offs   : SVG 필터 렌더링 비용이 추가된다.
+       * - Edge Case    : 수평·수직 엣지와 곡선에 동일하게 적용하고 기존 스타일 재정의는 유지한다.
+       */}
+      {/* Figma 08 실측: 엣지선 #666666(진회색) 2px — 포트 링과 동일 색 */}
+      <BaseEdge
+        id={id}
+        path={mergedPath}
+        markerEnd={markerEnd}
+        style={{ stroke: "#666666", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", filter: "drop-shadow(0 2px 1.5px rgba(0, 0, 0, 0.22))", ...props.style }}
+      />
     </>
   );
 }

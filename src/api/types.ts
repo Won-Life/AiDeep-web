@@ -34,8 +34,9 @@ export interface LoginResponse {
 export interface SignupRequest {
   email: string;
   password: string;
-  name: string;
-  phone: string;
+  termsOfService: boolean;
+  privacyPolicy: boolean;
+  marketing: boolean;
 }
 
 export interface EmailSendRequest {
@@ -43,7 +44,7 @@ export interface EmailSendRequest {
 }
 
 export interface EmailSendResponse {
-  code: number;
+  ok: boolean;
 }
 
 export interface EmailVerifyRequest {
@@ -61,8 +62,10 @@ export interface IssueMasterRequest {
 
 export interface OAuthSignupCompleteRequest {
   ticket: string;
-  username: string;
-  agreedToTerms: boolean;
+  username?: string;
+  terms: boolean;
+  privacy: boolean;
+  marketing: boolean;
 }
 
 // ─── User ────────────────────────────────────────────────────────────
@@ -206,11 +209,12 @@ export interface SyncResponse {
 // ─── Upload ──────────────────────────────────────────────────────────
 
 export interface UploadResponse {
-  key: string;
-  url: string;
-  originalName: string;
+  fileId: string;
+  fileUrl: string;
   mimeType: string;
   size: number;
+  originalName: string;
+  createdAt: string;
 }
 
 // ─── WS (WebSocket Events) ───────────────────────────────────────────
@@ -295,7 +299,42 @@ export interface WsEdgeUpdateEvent {
   };
 }
 
+// ─── 회의 봇 실시간 이벤트 (Spring → aideep-ws → FE, WS 서버는 그대로 전달) ───
+
+export type MeetingBotEventType =
+  | 'MEETING_BOT_REQUESTED'
+  | 'MEETING_BOT_JOINED'
+  | 'MEETING_BOT_LEFT'
+  | 'MEETING_BOT_FAILED';
+
+export interface WsMeetingBotEvent {
+  type: MeetingBotEventType;
+  workspaceId: string;
+  /** 봇을 초대한 사용자 (이벤트 발신자가 아니다) */
+  userId: string;
+  meetingId: string;
+  nodeId: string;
+  botId: string;
+  /** 발행 시점의 서버 MeetingStatus 문자열 */
+  status: string;
+  occurredAt: string;
+  /** MEETING_BOT_FAILED 에만 있다 (Recall status.sub_code 원문) */
+  statusSubCode?: string;
+}
+
+/** GET /meeting?workspaceId= — 진행 중(종료 전) 회의 한 건 */
+export interface ActiveMeeting {
+  meetingId: string;
+  nodeId: string;
+  botId: string | null;
+  status: string;
+  statusSubCode: string | null;
+  startedAt: string | null;
+  createdAt: string;
+}
+
 export type WsEvent =
+  | WsMeetingBotEvent
   | WsNodeMoveEvent
   | WsNodeCreateEvent
   | WsNodeDeleteEvent

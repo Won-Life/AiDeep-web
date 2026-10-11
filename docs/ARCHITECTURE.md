@@ -26,12 +26,12 @@ src/
 │   └── README.md                # 이 폴더의 역할 + 데이터 페칭 전략
 ├── features/
 │   ├── graph/
-│   │   ├── api/                 # 그래프 전용 HTTP 유틸 (getNodes, createMdNode, moveNode 등)
+│   │   ├── api/                 # 그래프 전용 HTTP 유틸 + DTO→ReactFlow 매퍼 (mappers.ts의 convertToReactFlow)
 │   │   ├── components/          # GraphCanvas, CursorOverlay
 │   │   ├── constants/colors.ts  # 노드 파스텔 팔레트 9색 + 랜덤 색상 유틸
 │   │   ├── layout/rectCollide.ts # D3 AABB 충돌 감지 커스텀 force
-│   │   ├── types.ts             # NodeDto, EdgeDto
-│   │   └── utils/graphUtils.ts  # getDescendantIds 등 그래프 순회 유틸
+│   │   ├── logic/               # 순수 그래프 로직 — traversal(순회·depth·접기), colors(색 전파), connection(연결 규칙), placement(배치·핸들 방향)
+│   │   └── types.ts             # NodeDto, EdgeDto
 │   ├── editor/
 │   │   ├── editor.tsx           # Lexical 에디터 설정 (플러그인 조합)
 │   │   ├── NotionEditor.tsx     # 에디터 컴포넌트 + CollaborationPlugin + ToolbarPlugin
@@ -41,7 +41,7 @@ src/
 │   └── nodes/TextUpdateNode.tsx # 커스텀 노드 (메인/서브 형태 분기, 핸들 구성, 뷰어 뱃지)
 ├── components/
 │   ├── layout/
-│   │   ├── Sidebar.tsx          # 사이드바 (Workspaces + Resource 섹션, 인라인 에디터)
+│   │   ├── Sidebar.tsx          # 사이드바 (워크스페이스 헤더·스위처 + 노드 검색 ⌘K + 프로젝트 트리 + 프로필)
 │   │   ├── ChipHeader.tsx       # 상단 헤더 (PROJECT 노드 chip, 협업자, 유저 메뉴, 공유)
 │   │   ├── CollaboratorsList.tsx # presence 기반 접속자 아바타 목록
 │   │   ├── UserMenu.tsx         # 유저 이름/이메일 드롭다운 + 로그아웃
@@ -155,39 +155,25 @@ handleLogout()
   └── router.replace('/login')  — 항상 실행 (stuck session 방지)
 ```
 
-### 2. 사이드바 로컬 상태 구조
+### 2. 사이드바 구조 (Figma 08 X1~X7, #246)
 
-> **사이드바 Workspaces / Resource 데이터는 API 미연동.** `INITIAL_PROJECTS`와 `INITIAL_RESOURCES`는 `workspace/layout.tsx`에 하드코딩된 더미 데이터. 생성·수정이 로컬 React state(`useState`)에만 저장되고 새로고침 시 초기화된다.
+> 단일 워크스페이스 컨텍스트 구조. 데이터는 **WorkspaceLayoutContext의 nodes·edges에서 유도하는 읽기 전용 뷰**다 — 사이드바가 별도 REST 조회를 하지 않는다(그래프 단일 진실 소스 규칙).
 
-```typescript
-// workspace/layout.tsx 내 로컬 상태 (API 미연동)
-const [isSidebarOpen, setIsSidebarOpen] = useState(true)      // sessionStorage 초기화
-const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS)
-const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES)
-const [expanded, setExpanded] = useState<Set<string>>(...)    // 초기 확장 그룹 ID 집합
-
-// isSidebarOpen → sidebarWidth 계산 → setSidebarWidth (Context)
-const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : VISIBLE_BUTTON_WIDTH  // 260 or 40
-useEffect(() => setSidebarWidth(sidebarWidth), [sidebarWidth])
-```
-
-**사이드바 CRUD 로직 (로컬 전용)**:
-| 액션 | 함수 | 동작 |
-|------|------|------|
-| 프로젝트 추가 | `addProject()` | `{id: makeId(), name:'', isEditing:true}` push |
-| 프로젝트명 저장 | `saveProjectName(id, name)` | `isEditing: false`로 업데이트 |
-| 리소스 추가 | `addResource()` | `{id: makeId(), name:'', subItems:[], isEditing:true}` push |
-| 서브아이템 추가 | `addSubItem(resourceId)` | 해당 resource의 subItems에 추가 + expanded에 resourceId 추가 |
-| 서브아이템명 저장 | `saveSubItemName(resourceId, subItemId, name)` | 중첩 map으로 타겟 업데이트 |
-
-**ID 생성**: `makeId() = \`${Date.now()}_${Math.random().toString(36).slice(2, 6)}\``
+- **헤더**: 워크스페이스 아이콘(이름 첫 글자)+이름 → 클릭 시 스위처 드롭다운(X6: 목록 ✓ / + 새 워크스페이스 / 설정[비활성]). `«`로 접기.
+- **워크스페이스 전환**: `setNodes([]) → setEdges([]) → setWorkspaceId(대상) → setSynced(false)` — layout의 sync effect가 현재 workspaceId를 존중해 재fetch하고, `useWorkspaceWS`가 workspaceId dep으로 WS 룸을 재구독한다.
+- **새 워크스페이스 모달(X7)**: `POST /workspace` (`createWorkspace`) 후 위 전환 흐름 재사용.
+- **노드 검색(⌘K)**: 트리 in-place 필터 (프로젝트명 매칭 → 자식 전체 유지, 타이틀 매칭 → 해당 타이틀만). ⌘K 포커스·⌘\ 토글은 Sidebar 로컬 keydown — 전역 단축키 훅(#243) 도입 시 이관.
+- **프로젝트 트리**: `nodes.filter(isMain)` → 각 프로젝트의 직계 자식(edges.source 매칭) 2단, 캔버스 y좌표 순 정렬. 행 클릭 → `setFocusedNodeId` → GraphCanvas 기존 카메라 이동 effect 재사용. 섹션 `+`는 `createProjectNode` 후 생성 노드로 focus.
+- **회의 진행 중 배너(X5)**: `ActiveMeeting` 계약(titleNodeId·source·elapsedLabel) 기반 — 회의 기능이 상태를 제공하기 전까지 `meeting={null}` 스텁으로 숨김.
+- **접힘 레일(X4)**: 48px, 워크스페이스 아이콘·검색 아이콘·프로필, hover 시 펼치기 핸들.
+- 구 사이드바(Workspaces 더미 목록 + Resource 트리·인라인 에디터)는 `SHOW_TEMP_HIDDEN_UI=false`로 숨겨져 있던 것을 이 구조로 대체·삭제. GraphCanvas의 `application/resource-subitem` 드롭 수신부는 생산자(리소스 드래그)가 사라져 휴면 상태로 남아 있다.
 
 ### 3. sidebarWidth → ChipHeader 오프셋 흐름
 ```
 Sidebar 열림/닫힘 (handleToggleSidebar)
   → isSidebarOpen toggle
   → sessionStorage.setItem('sidebar_open', ...)
-  → sidebarWidth = isSidebarOpen ? 260 : 40
+  → sidebarWidth = isSidebarOpen ? 240 : 48  (SIDEBAR_WIDTH : RAIL_WIDTH)
   → setSidebarWidth(sidebarWidth)  (WorkspaceLayoutContext 업데이트)
   → ChipHeader: style.left = sidebarWidth + 'px'  (300ms transition)
   → DropDown: style 조정 (동일 sidebarWidth prop)
@@ -308,10 +294,11 @@ node_position_live 수신 (별도, 50ms throttle)
   │     └─ 미연결 → 200ms 간격 재시도 (cancelled 플래그로 cleanup)
   └── SocketIoYjsProvider 생성 (기존 소켓 주입)
         ├── connect() → yjs:join emit (ack 대기)
-        │     ├─ ack.ok=true → status:connected, awareness user 설정
-        │     └─ ack.ok=false → status:disconnected (에디터 로딩 상태 유지)
+        │     ├─ ack.ok=true → status:connected, awareness user 설정 + 클라이언트 SyncStep1 전송
+        │     └─ ack.ok=false → status:disconnected + sync-error (다시 시도 안내)
         ├── 서버 SyncStep1 수신 → SyncStep2 응답 + 클라이언트 SyncStep1 전송
         │     └─ 서버 SyncStep2 수신 → isSynced=true
+        ├── 동기화 10초 초과·소켓 단절 → sync-error; 재연결 시 재참여·동기화
         ├── 로컬 편집 → doc:update (origin !== this) → yjs:sync emit
         ├── 서버 yjs:sync 수신 → readSyncMessage → 응답 있으면 emit
         └── 언마운트 → yjs:leave → _unregisterSocketListeners → awareness.destroy → doc.destroy
@@ -337,18 +324,12 @@ node_position_live 수신 (별도, 50ms throttle)
   → clearInterval(15초 heartbeat)
 ```
 
-### 13. 사이드바 리소스 → 캔버스 드래그 흐름
-```
-[드래그 시작] handleSubItemDragStart(event, item)
-  ├── isSelected(item.id) → editorContentRef.current로 최신 에디터 내용 참조
-  │     아니면 content = null → markdownBody/jsonBody 빈 문자열
-  ├── dragPreview div 생성: pill 스타일 (padding:4px 12px, rounded, ds-gray-800 bg)
-  │     position:absolute, top/left:-9999px → body.appendChild
-  ├── dataTransfer.setData('application/resource-subitem', JSON.stringify({id, name, markdownBody, jsonBody}))
-  ├── setDragImage(dragPreview, 10, 10)
-  ├── effectAllowed = 'copy'
-  └── requestAnimationFrame → document.body.removeChild(dragPreview)
+### 13. 사이드바 리소스 → 캔버스 드래그 흐름 (휴면 — #246)
 
+> 드래그 **생산자(구 사이드바 Resource 트리)가 #246 사이드바 개편으로 삭제**됐다.
+> 아래 GraphCanvas 수신부는 휴면 코드로 남아 있다 — 다른 드래그 소스를 붙이거나 제거 결정 시 참고.
+
+```
 [드래그 오버] onDragOver (GraphCanvas)
   ├── dataTransfer.types에 'application/resource-subitem' 없으면 return
   ├── screenToFlowPosition 변환
@@ -396,12 +377,13 @@ node_position_live 수신 (별도, 50ms throttle)
 ### HTTP 에러
 | 상황 | 처리 |
 |------|------|
-| 401 (최초) | `pendingQueue` 대기 → 토큰 갱신 후 원 요청 재시도 |
-| 401 (refresh 실패) | `clearTokens()` → `window.location.href = '/login'` |
+| 401 (최초) | 공유 `refreshPromise` 대기 → 토큰 갱신 후 원 요청 재시도. 이전 토큰의 늦은 401은 최신 메모리 토큰 재사용 |
+| refresh 인증 거절 / 토큰 없음 | 해당 저장소의 토큰 삭제 → `window.location.href = '/login'` |
+| refresh 네트워크·timeout·429·5xx | 토큰 보존, 호출부에서 재시도 UI 제공 |
 | 401 (이미 retry) | 즉시 reject |
 | FAIL envelope | `ApiError(errorCode, reason, data)` throw |
 | 기타 4xx/5xx | `console.error` + 로컬 state 유지 (롤백 없음) |
-| 동시 401 다수 | `pendingQueue`에 누적 → 갱신 후 일괄 재시도. `isRefreshing` 플래그로 중복 방지 |
+| 동시 401 다수 | 탭 내부 `refreshPromise` 공유, Web Locks 지원 시 탭 간 직렬화 후 최신 저장 토큰으로 갱신 |
 | refresh 요청 자체에 interceptor 재적용 방지 | raw `axios.post` 사용 (interceptor 루프 차단) |
 
 ### WebSocket 에러
@@ -416,11 +398,11 @@ node_position_live 수신 (별도, 50ms throttle)
 | 상황 | 처리 |
 |------|------|
 | 소켓 미연결 시 에디터 클릭 | 200ms 재시도 루프 → 연결되면 즉시 생성 |
-| `yjs:join` ack 실패 | `status:disconnected`. 에디터에 로딩 텍스트 유지. 재마운트로 복구 |
+| `yjs:join` ack 실패 | `status:disconnected` + `sync-error`. 실패 안내와 다시 시도 버튼 |
 | 빠른 unmount (패널 전환) | `cancelled` 플래그 + cleanup 순서 보장 (zombie provider 방지) |
 | `doc:update` origin === this | 서버발 업데이트 재전송 방지 (무한 루프 차단) |
-| SyncStep1 핸드셰이크 실패 | `isSynced=false` 유지 → 에디터 빈 상태. 재마운트로 재시도 |
-| 소켓 재연결 후 Yjs | Provider 리스너 재등록 미구현. 에디터 재마운트로만 복구 |
+| SyncStep1 핸드셰이크 실패 | 10초 후 동기화 실패 안내. 버튼 또는 소켓 재연결로 재시도 |
+| 소켓 재연결 후 Yjs | `connect` 이벤트에서 yjs:join 및 SyncStep1 재요청. 기존 Doc 유지 |
 
 ### UX 관련 에러
 | 상황 | 처리 |

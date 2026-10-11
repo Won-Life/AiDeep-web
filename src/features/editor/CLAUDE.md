@@ -1,10 +1,11 @@
 # 에디터 도메인 규칙
 
-## NodeEditorPanel 3가지 모드
+## NodeEditorPanel 4가지 모드
 
 | 모드 | props | 특이사항 |
 |------|-------|---------|
-| 기본 (캔버스 패널) | 기본값 | `absolute top:100%`, `mouseDown stopPropagation` |
+| 우측 도크 (C3/C4) | `dockIndex` (number) | 캔버스 우측에 `fixed` 도크. React Flow 뷰포트 transform 안에서 fixed가 안 먹어 `createPortal`로 document.body에 렌더. 헤더에 경로(`프로젝트 > 타이틀`)+제목. **portal의 React 합성 이벤트는 React 트리로 버블하므로 컨테이너에 `onClick stopPropagation` 필수** — 없으면 패널 클릭이 `onNodeClick`을 재발화해 방금 닫은 패널이 다시 열린다. 본문·첨부는 인라인 모드와 동일. TextUpdateNode가 열린 에디터에 `dockIndex`(순번)를 넘겨 캔버스 에디터는 이 모드로 뜬다. |
+| 기본 (캔버스 패널) | 기본값(dockIndex 없음) | `absolute top:100%`, `mouseDown stopPropagation`. dockIndex 도입 후 캔버스에선 미사용(폴백으로 유지). |
 | 인라인 (사이드바) | `inline=true` | `noMediaDrop`, 최종 수정일(클라이언트 시각) 표시 |
 | 전체화면 | `fullscreen=true` | `w-[62.5%] min-w-[300px]`, ToolbarPlugin 포함 |
 

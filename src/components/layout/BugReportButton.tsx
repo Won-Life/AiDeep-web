@@ -6,6 +6,50 @@ import { Tooltip } from "@/components/ui/Tooltip";
 const BUG_REPORT_FORM_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLScQUirVvqlceWPVhZJGYo1JCSrr04RcqWe-gYNFdbeypmOMlw/viewform?embedded=true";
 
+/** 오류 신고/피드백 폼 모달 — 헤더 버튼과 도움말(?) 메뉴가 공유한다 */
+export function BugReportModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-[80vh] w-[640px] max-w-[95vw] flex-col gap-3 rounded-[16px] border border-gray-700 bg-background p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between">
+          <span className="text-[16px] font-bold text-foreground">
+            오류 신고하기
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="text-muted hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+        <iframe
+          src={BUG_REPORT_FORM_URL}
+          title="오류 신고하기 폼"
+          className="w-full flex-1 rounded-[8px] border border-border"
+        >
+          로딩 중…
+        </iframe>
+      </div>
+    </div>
+  );
+}
+
 export default function BugReportButton() {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -42,38 +86,7 @@ export default function BugReportButton() {
         </button>
       </Tooltip>
 
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-          onClick={() => setIsOpen(false)}
-        >
-          <div
-            className="flex h-[80vh] w-[640px] max-w-[95vw] flex-col gap-3 rounded-[16px] border border-gray-700 bg-background p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex shrink-0 items-center justify-between">
-              <span className="text-[16px] font-bold text-foreground">
-                오류 신고하기
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                aria-label="닫기"
-                className="text-muted hover:text-foreground"
-              >
-                ✕
-              </button>
-            </div>
-            <iframe
-              src={BUG_REPORT_FORM_URL}
-              title="오류 신고하기 폼"
-              className="w-full flex-1 rounded-[8px] border border-border"
-            >
-              로딩 중…
-            </iframe>
-          </div>
-        </div>
-      )}
+      <BugReportModal open={isOpen} onClose={() => setIsOpen(false)} />
     </>
   );
 }

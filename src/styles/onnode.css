@@ -1,0 +1,189 @@
+/* OnNode: new tokens are additive; legacy graph/editor tokens stay intact. */
+:root {
+  --onnode-settings-gradient: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 800' preserveAspectRatio='none'><g transform='matrix(-12.65 110.3 -105.21 -12.066 1000 -47.5)'><foreignObject x='-119.36' y='-119.36' width='238.72' height='238.72'><div xmlns='http://www.w3.org/1999/xhtml' style='background-image: conic-gradient(from 90deg, rgb(255, 246, 250) -13.687%, rgb(232, 237, 254) 10.982%, rgb(255, 254, 254) 23.313%, rgb(244, 246, 255) 32.325%, rgb(255, 254, 254) 70.371%, rgb(255, 246, 250) 86.313%, rgb(232, 237, 254) 110.98%); opacity:1; height: 100%; width: 100%;'></div></foreignObject></g></svg>");
+  --onnode-primary-100: #e9eeff; --onnode-primary-200: #c0ceff;
+  --onnode-primary-300: #92aaff; --onnode-primary-400: #748dfd;
+  --onnode-primary-500: #5679f4; --onnode-primary-600: #3f62e0; --onnode-primary-700: #3458bf;
+  --onnode-secondary-100: #fff8fb; --onnode-secondary-200: #ffebf3;
+  --onnode-secondary-300: #ffcfe3; --onnode-secondary-400: #feaece;
+  --onnode-secondary-500: #f297c1; --onnode-secondary-600: #e279ae; --onnode-secondary-700: #c45f91;
+  --onnode-neutral-white: #fff; --onnode-neutral-100: #fafafa;
+  --onnode-neutral-200: #f0f0f0; --onnode-neutral-300: #e6e6e6;
+  --onnode-neutral-400: #ccc; --onnode-neutral-500: #a6a6a6;
+  --onnode-neutral-600: #727272; --onnode-neutral-700: #4d4d4d;
+  --onnode-neutral-800: #383838; --onnode-neutral-900: #111;
+  --onnode-primary: var(--onnode-primary-400);
+  --onnode-selection: #4597f7; /* 노드 선택 테두리 — Figma 08 하늘색 (primary 계열과 별도 hue) */
+  --onnode-secondary: var(--onnode-secondary-500);
+  --onnode-surface: var(--onnode-neutral-white);
+  --onnode-surface-subtle: var(--onnode-neutral-100);
+  --onnode-text: var(--onnode-neutral-900);
+  --onnode-text-secondary: var(--onnode-neutral-600);
+  --onnode-text-tertiary: var(--onnode-neutral-500);
+  --onnode-border: var(--onnode-neutral-400);
+  --onnode-danger: #d14040; --onnode-danger-surface: #fceded;
+  --onnode-overlay: rgb(17 17 17 / 40%);
+  --onnode-input-shadow: 0 2px 2px rgb(0 0 0 / 5%);
+  --onnode-card-shadow: 0 3px 6px rgb(0 0 0 / 25%);
+  --onnode-auth-gradient: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 800' preserveAspectRatio='none'><g transform='matrix(36.05 53 -75.399 51.285 708 387.5)'><foreignObject x='-204.3' y='-204.3' width='408.6' height='408.6'><div xmlns='http://www.w3.org/1999/xhtml' style='background-image: conic-gradient(from 90deg, rgb(255, 246, 250) -6.7262%, rgb(232, 237, 254) 9.4477%, rgb(255, 254, 254) 35.44%, rgb(244, 246, 255) 45.879%, rgb(255, 254, 254) 70.371%, rgb(255, 246, 250) 93.274%, rgb(232, 237, 254) 109.45%); opacity:1; height: 100%; width: 100%;'></div></foreignObject></g></svg>");
+}
+
+.onnode-auth { color-scheme: light; font-family: var(--font-onnode), var(--font-noto-sans-kr), sans-serif; color: var(--onnode-text-secondary); font-size: 13px; letter-spacing: .02em; }
+
+.onnode-auth input:-webkit-autofill {
+  -webkit-text-fill-color: var(--onnode-text-secondary);
+  caret-color: var(--onnode-text-secondary);
+  box-shadow: 0 0 0 1000px var(--onnode-surface) inset, var(--onnode-input-shadow);
+}
+
+/* X1: 240px sidebar, dimensions measured in the supplied reference's design scale. */
+.sidebar-reference {
+  --ds-main-blue: 122 137 255;
+  --ds-main-blue-deep: 52 84 195;
+  --ds-main-blue-light: 146 160 255;
+  --ds-main-blue-pale: 233 237 255;
+  color: rgb(var(--ds-main-blue-deep));
+}
+.sidebar-header { padding: 16px 16px 0; }
+.sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; height: 14px; margin-bottom: 16px; }
+.sidebar-logo { display: block; width: 70px; height: 14px; background: rgb(var(--ds-main-blue)); mask: url('/onnode/auth/imgGroup268.svg') center / contain no-repeat; }
+.sidebar-collapse { color: rgb(var(--ds-main-blue)); display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; }
+.sidebar-workspace { height: 42px; gap: 8px; }
+.sidebar-workspace > span:first-child { border-radius: 10px; background: rgb(var(--ds-main-blue-deep)) !important; font-size: 12px !important; }
+.sidebar-caret { display: block; flex-shrink: 0; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid rgb(var(--ds-main-blue-deep)); margin-left: 3px; }
+.sidebar-search-wrap { margin: 12px 16px 0; padding-bottom: 14px; border-bottom: 2px solid rgb(var(--ds-main-blue-pale)); }
+.sidebar-search { height: 28px; gap: 14px; padding: 0 13px; border: 1px solid rgb(var(--ds-main-blue)); border-radius: 20px; }
+.sidebar-search:focus-within { outline: 1px solid rgb(var(--ds-main-blue)); }
+.sidebar-tree-heading { height: 36px; padding: 0 20px 0 25px; }
+.sidebar-project-row { position: relative; height: 28px; padding: 0 20px 0 27px; }
+.sidebar-title-row { position: relative; height: 26px; padding: 0 25px 0 36px; }
+.sidebar-selected { background: rgb(var(--ds-main-blue-pale)); }
+.sidebar-project-row.sidebar-selected::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: rgb(var(--ds-main-blue)); }
+.sidebar-project-row.sidebar-selected::after { content: ''; position: absolute; left: 4px; top: 6px; width: 5px; height: 16px; border-radius: 0 3px 3px 0; background: rgb(var(--ds-main-blue)); }
+.sidebar-add-title { width: 12px; height: 24px; color: rgb(var(--ds-main-blue-deep)); font-size: 11px; }
+.sidebar-profile-wrap { padding: 16px 12px 20px; }
+.sidebar-profile { height: 64px; padding: 0 16px; border-radius: 22px; background: rgb(var(--ds-main-blue-pale)); gap: 11px; }
+.sidebar-avatar { display: inline-flex; flex-shrink: 0; }
+.sidebar-profile:hover { background: #DFE5FF; }
+.sidebar-profile[aria-expanded="true"] { background: #B7C7FF; }
+.sidebar-profile[aria-expanded="true"] .sidebar-avatar circle { fill: #829BFF; }
+.sidebar-profile .sidebar-caret { align-self: flex-start; margin-top: 20px; }
+.sidebar-profile-menu { bottom: calc(100% - 4px); width: 216px; overflow: hidden; border: 1px solid rgb(var(--ds-main-blue)); border-radius: 22px; background: #fff; box-shadow: 0 2px 2px rgb(0 0 0 / 24%); }
+.sidebar-profile-menu-header { height: 40px; padding: 0 13px; border-bottom: 1px solid rgb(var(--ds-main-blue)); }
+.sidebar-profile-menu > button { height: 29px; padding: 0 18px; gap: 16px; color: rgb(var(--ds-main-blue)); font-size: 10px; }
+.sidebar-profile-menu > .sidebar-profile-settings { background: rgb(var(--ds-main-blue-pale)); color: rgb(var(--ds-main-blue-deep)); }
+.sidebar-profile-menu > button:hover, .sidebar-profile-menu > button:focus-visible { background: #DCE4FF; color: rgb(var(--ds-main-blue-deep)); }
+
+/* Dock editor: title, path, document and attachments follow the reference layout. */
+/*
+ * CONTEXT
+ * - Problem      : body에 포털로 열린 슬래시 메뉴가 z-index 100의 우측 패널 뒤에 가려진다.
+ * - Why          : Lexical이 absolute로 배치하는 실제 anchor에 z-index를 지정해 패널 위에 표시한다.
+ * - Alternatives : position이 없는 내부 메뉴에 z-index만 지정하면 표시 순서에 적용되지 않는다.
+ * - Trade-offs   : 모든 에디터 모드의 슬래시 메뉴가 같은 레이어를 사용한다.
+ * - Edge Case    : body 포털을 유지해 패널 스크롤 영역에 잘리지 않고 Lexical의 위치 보정도 유지한다.
+ */
+.editor-slash-menu-anchor { z-index: 110; }
+
+/*
+ * CONTEXT
+ * - Problem      : 내용 패널의 고정 340px 너비는 화면이 넓어질수록 참고 이미지보다 비율이 작아진다.
+ * - Why          : 이미지의 전체 1280px 중 패널 332px 비율을 viewport 너비에 적용한다.
+ * - Alternatives : 고정 px 확대는 다른 해상도에서 같은 비율을 유지하지 못한다.
+ * - Trade-offs   : 작은 화면에서는 입력 공간 확보를 위해 최소 320px을 우선한다.
+ * - Edge Case    : 320px보다 좁은 화면은 화면 너비로 제한하며 패널 높이와 내부 스크롤은 유지한다.
+ */
+.node-editor-dock { width: min(100vw, max(320px, 25.9375vw)); border-left: 1px solid var(--onnode-primary-200); color: var(--onnode-text); font-family: var(--font-onnode), var(--font-noto-sans-kr), sans-serif; }
+.editor-dock-header { min-height: 80px; margin: 0 8px; padding: 24px 18px 12px; border-bottom: 2px solid var(--onnode-primary-100); }
+.node-editor-dock .ne-root { padding: 28px 26px 32px; font-size: 12px; line-height: 1.5; color: var(--onnode-text); }
+.node-editor-dock .ne-h1, .node-editor-dock .ne-h2, .node-editor-dock .ne-h3 { margin: 24px 0 4px; font-size: 14px; font-weight: 700; line-height: 1.5; }
+.node-editor-dock .ne-root > :first-child { margin-top: 0; }
+.node-editor-dock .ne-li { font-size: 12px; line-height: 1.5; margin: 8px 0; }
+.node-editor-dock .ne-ul, .node-editor-dock .ne-ol { padding-left: 18px; }
+.node-editor-dock .ne-root + .pointer-events-none { top: 28px; left: 26px; right: 26px; font-size: 12px !important; }
+.editor-attachments { margin: 0 8px; padding: 26px 18px 24px; border-top: 2px solid var(--onnode-primary-100); }
+.editor-attachment-chip { display: inline-flex; max-width: 100%; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 12px; background: var(--onnode-neutral-200); color: var(--onnode-text-secondary); font-size: 11px; line-height: 1.4; }
+.editor-attachment-chip:hover { background: var(--onnode-neutral-300); }
+.editor-upload-button { display: block; margin-top: 18px; padding: 4px 16px; border: 1px solid var(--onnode-neutral-500); border-radius: 9px; background: var(--onnode-surface); font-size: 11px; font-weight: 600; line-height: 1.3; }
+.editor-upload-button:hover { background: var(--onnode-surface-subtle); }
+
+/* Hover 메뉴는 인접 노드보다 위에 표시해 템플릿 선택을 막지 않는다. */
+.react-flow__node:has([aria-label="콘텐츠 노드 만들기"]) { z-index: 1001 !important; }
+
+/*
+ * CONTEXT
+ * - Problem      : 타이틀 핸들이 본체의 흰 테두리와 겹친다.
+ * - Why          : 테두리 6px와 핸들 반지름 7px만큼 이동해 좌우 외곽 중앙에 접하게 한다.
+ * - Alternatives : 장식용 원만 옮기면 실제 연결선 접점과 드래그 영역이 어긋난다.
+ * - Trade-offs   : 핸들은 본체 바깥으로 돌출되며 노드 크기는 유지된다.
+ * - Edge Case    : 숨겨진 target도 같은 위치로 옮기고 좌우 가지에 대칭 적용한다.
+ */
+[data-title-node="true"] > .react-flow__handle-left { left: -13px; }
+[data-title-node="true"] > .react-flow__handle-right { right: -13px; }
+
+/* Draft 입력은 기존 콘텐츠 편집의 흰 글자보다 우선한다. */
+[data-draft-node="true"] > input {
+  color: #111111 !important;
+  caret-color: #111111 !important;
+  border-bottom-color: #111111 !important;
+}
+/*
+ * CONTEXT
+ * - Problem      : 프로젝트·타이틀 생성 직후 draft 규칙이 placeholder를 검정으로 덮어쓴다.
+ * - Why          : 프로젝트·타이틀을 덮어쓰기에서 제외해 컴포넌트의 placeholder 색상 규칙을 사용한다.
+ * - Alternatives : 실제 입력 글자색까지 회색으로 바꾸면 제목과 안내 문구의 구분이 사라진다.
+ * - Trade-offs   : 콘텐츠 draft의 기존 검정 placeholder와 실제 입력 글자·커서 색은 유지한다.
+ * - Edge Case    : 새 타이틀의 첫 입력과 빈 이름으로 다시 편집할 때 모두 같은 색상 규칙을 따른다.
+ */
+[data-draft-node="true"]:not([data-project-node="true"]):not([data-title-node="true"]) > input::placeholder {
+  color: #111111;
+  opacity: 1;
+}
+
+/* X6: 활성 워크스페이스의 파란 탭과 드롭다운 선택 표시. */
+.sidebar-workspace[aria-expanded="true"] { position: relative; isolation: isolate; }
+.sidebar-workspace[aria-expanded="true"]::before {
+  content: ''; position: absolute; inset: -6px -16px; z-index: -1;
+  background: #E9EDFF; border-left: 6px solid #7A89FF;
+}
+.sidebar-workspace-option[aria-checked="true"]::before {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: 5px; background: #7A89FF;
+}
+.sidebar-workspace-option[aria-checked="true"]::after {
+  content: ''; position: absolute; left: 4px; top: 14px; width: 5px; height: 17px;
+  border-radius: 0 3px 3px 0; background: #7A89FF;
+}
+
+/*
+ * CONTEXT
+ * - Problem      : 워크스페이스 생성·설정·삭제 카드와 배경 처리가 제공된 세 시안과 다르다.
+ * - Why          : 같은 484px 카드·파란 입력선·46px 버튼을 공유하고 body portal에서 전체 화면을 흐린다.
+ * - Alternatives : 사이드바 내부 overlay는 레이어 제약이 있고 모달마다 다른 규칙은 시각적 일관성을 잃는다.
+ * - Trade-offs   : 설정에서 삭제로 이동할 때 설정 카드를 숨겨 dim이 중복되지 않게 한다.
+ * - Edge Case    : 좁거나 낮은 화면은 여백 축소·스크롤로 대응하며 이름 일치와 요청 중 비활성화는 유지한다.
+ */
+.workspace-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: rgb(0 0 0 / 40%); backdrop-filter: blur(4px);
+}
+.workspace-dialog {
+  position: relative; display: flex; flex-direction: column; gap: 14px;
+  width: 484px; max-width: 100%; max-height: calc(100dvh - 32px); overflow-y: auto;
+  padding: 36px 54px; border-radius: 20px; background: rgb(var(--background));
+}
+.workspace-dialog-heading { text-align: center; padding-inline: 12px; }
+.workspace-dialog-heading h2 { overflow-wrap: anywhere; }
+.workspace-dialog-close { position: absolute; top: 36px; right: 28px; color: rgb(var(--muted)); }
+.workspace-dialog-subtitle { margin-top: -8px; font-size: 11px; line-height: 16px; text-align: center; color: rgb(var(--muted)); }
+.workspace-dialog-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 10px; background: #3454C3; color: white; font-size: 14px; font-weight: 600; }
+.workspace-dialog-input { height: 36px; padding: 0 16px; border: 1px solid #7A89FF; border-radius: 999px; background: rgb(var(--background)); color: rgb(var(--foreground)); font-size: 12px; outline: none; }
+.workspace-dialog-input:focus-visible { box-shadow: 0 0 0 1px #7A89FF; }
+.workspace-dialog-input::placeholder { color: #A6A6A6; }
+.workspace-dialog-button { flex: 1; height: 46px; border-radius: 20px; font-size: 12px; font-weight: 600; transition: opacity 150ms; }
+.workspace-dialog-button:hover:not(:disabled) { opacity: .85; }
+.workspace-dialog-cancel { border: 1px solid #7A89FF; color: rgb(var(--foreground)); background: rgb(var(--background)); }
+.workspace-dialog-primary { color: white; background: #617BFF; }
+.workspace-dialog-primary:disabled { opacity: .5; }
+.workspace-dialog-delete { color: white; background: #E63840; }
+.workspace-dialog-delete:disabled { background: #FFB8BC; }
+@media (max-width: 520px) { .workspace-dialog { padding: 32px 24px; } .workspace-dialog-close { top: 32px; right: 20px; } }

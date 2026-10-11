@@ -40,6 +40,9 @@ export class SocketIoYjsProvider extends Observable<string> {
   private socket: Socket | null = null;
   private _synced = false;
   private _connected = false;
+  private _syncError = false;
+  private _syncTimer: ReturnType<typeof setTimeout> | null = null;
+  private _attempt = 0;
 
   private readonly nodeId: string;
   private readonly userName: string;
@@ -89,47 +92,100 @@ export class SocketIoYjsProvider extends Observable<string> {
 
   // ─── CollaborationPlugin 인터페이스 ──────────────────────────────────────
 
-  /**
-   * CollaborationPlugin 마운트 시 호출됨.
-   * 소켓이 이미 연결된 상태이므로 yjs:join만 emit.
+  /*
+   * CONTEXT
+   * - Problem      : 서버의 첫 SyncStep1만 기다리면 응답 누락·재연결 시 로딩이 끝나지 않는다.
+   * - Why          : join 성공 시 직접 동기화를 요청하고, 10초 제한과 재시도로 복구한다.
+   * - Alternatives : 빈 문서를 즉시 완료 처리하면 아직 도착하지 않은 원격 내용을 놓친다.
+   * - Trade-offs   : 양쪽에서 Step1이 오면 응답이 중복되지만 Yjs 업데이트는 멱등적이다.
+   * - Edge Case    : 늦은 ack, unmount, 빈 문서, 소켓 재연결에서도 기존 Doc을 유지한다.
    */
   connect(): void {
     if (this._connected) return;
-    if (!this.socket?.connected) return;
-
     this._connected = true;
+    this._registerSocketListeners();
+    this.socket?.on("connect", this._join);
+    this.socket?.on("disconnect", this._handleDisconnect);
+    this._join();
+  }
+
+  retry(): void {
+    this.disconnect();
+    this.connect();
+  }
+
+  private _clearSyncTimer(): void {
+    if (this._syncTimer !== null) clearTimeout(this._syncTimer);
+    this._syncTimer = null;
+  }
+
+  private _setSyncError(failed: boolean): void {
+    this._syncError = failed;
+    this.emit("sync-error", [failed]);
+  }
+
+  private _join = (): void => {
+    if (!this._connected) return;
+    const attempt = ++this._attempt;
+    this._clearSyncTimer();
+    this._synced = false;
+    this.emit("sync", [false]);
+    this._setSyncError(false);
     this.emit("status", [{ status: "connecting" }]);
+    this._syncTimer = setTimeout(() => {
+      this._syncTimer = null;
+      this._setSyncError(true);
+    }, 10_000);
+    if (!this.socket?.connected) return;
 
     this.socket.emit(
       YJS_EVENT.JOIN,
       { nodeId: this.nodeId },
-      (res: { ok: boolean; readOnly?: boolean; error?: string }) => {
-        if (!res.ok) {
-          this._connected = false;
+      (res?: { ok: boolean; readOnly?: boolean; error?: string }) => {
+        if (!this._connected || attempt !== this._attempt) return;
+        if (!res?.ok) {
+          this._clearSyncTimer();
+          this._setSyncError(true);
           this.emit("status", [{ status: "disconnected" }]);
           return;
         }
-
         this.emit("status", [{ status: "connected" }]);
-
         this.awareness.setLocalStateField("user", {
           name: this.userName,
           color: this.userColor,
           colorLight: this.userColor + "40",
         });
+        // 빈 문서도 SyncStep2를 받아 내용 유무와 동기화 상태를 구분한다.
+        const encoder = encoding.createEncoder();
+        syncProtocol.writeSyncStep1(encoder, this.doc);
+        this.socket?.emit(YJS_EVENT.SYNC, {
+          nodeId: this.nodeId,
+          data: Array.from(encoding.toUint8Array(encoder)),
+        });
       }
     );
+  };
 
-    this._registerSocketListeners();
-  }
+  private _handleDisconnect = (): void => {
+    ++this._attempt;
+    this._clearSyncTimer();
+    this._synced = false;
+    this.emit("sync", [false]);
+    this._setSyncError(true);
+    this.emit("status", [{ status: "disconnected" }]);
+  };
 
   /** CollaborationPlugin 언마운트 시 호출됨. */
   disconnect(): void {
     if (!this._connected) return;
-
-    this.socket?.emit(YJS_EVENT.LEAVE, { nodeId: this.nodeId });
+    ++this._attempt;
+    this._clearSyncTimer();
+    if (this.socket?.connected) {
+      this.socket.emit(YJS_EVENT.LEAVE, { nodeId: this.nodeId });
+    }
     this._unregisterSocketListeners();
-
+    this.socket?.off("connect", this._join);
+    this.socket?.off("disconnect", this._handleDisconnect);
     this._connected = false;
     this._synced = false;
     this.emit("status", [{ status: "disconnected" }]);
@@ -140,6 +196,7 @@ export class SocketIoYjsProvider extends Observable<string> {
   on(name: string, fn: (...args: unknown[]) => void): void {
     super.on(name, fn);
     if (name === "sync") fn(this._synced);
+    else if (name === "sync-error") fn(this._syncError);
     else if (name === "status")
       fn({ status: this._connected ? "connected" : "disconnected" });
   }
@@ -158,7 +215,7 @@ export class SocketIoYjsProvider extends Observable<string> {
   // ─── 소켓 이벤트 처리 ────────────────────────────────────────────────────
 
   private _handleSync = (payload: { nodeId: string; data: number[] }) => {
-    if (payload.nodeId !== this.nodeId) return;
+    if (!this._connected || payload.nodeId !== this.nodeId) return;
 
     const buf = new Uint8Array(payload.data);
     const decoder = decoding.createDecoder(buf);
@@ -183,7 +240,9 @@ export class SocketIoYjsProvider extends Observable<string> {
         data: Array.from(encoding.toUint8Array(step1Encoder)),
       });
     } else if (msgType === 1) {
-      // SyncStep2 수신 = 초기 동기화 완료
+      // SyncStep2 수신 = 초기 동기화 완료 (빈 업데이트도 완료로 처리)
+      this._clearSyncTimer();
+      this._setSyncError(false);
       if (!this._synced) {
         this._synced = true;
         this.emit("sync", [true]);
@@ -192,7 +251,7 @@ export class SocketIoYjsProvider extends Observable<string> {
   };
 
   private _handleAwareness = (payload: { nodeId: string; data: number[] }) => {
-    if (payload.nodeId !== this.nodeId) return;
+    if (!this._connected || payload.nodeId !== this.nodeId) return;
 
     const decoder = decoding.createDecoder(new Uint8Array(payload.data));
     awarenessProtocol.applyAwarenessUpdate(

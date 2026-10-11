@@ -7,5 +7,5 @@ export async function getMe(): Promise<UserMeResponse> {
 }
 
 export async function updateUsername(username: string): Promise<void> {
-  await client.patch('/user/me', { username });
+  await client.patch<string>('/auth/username', { username });
 }

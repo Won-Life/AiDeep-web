@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { NodeEditorPanel } from "@/features/editor/NodeEditorPanel";
-import { getNode } from "@/features/graph/api/nodes";
+import { getNode, updateNodeContent } from "@/features/graph/api/nodes";
+import { showToast } from "@/components/ui/toastStore";
 import { useWorkspaceLayout } from "@/app/workspace/context";
 import { useYjsProvider } from "@/hooks/useYjsProvider";
 import { useWorkspaceAwareness } from "@/hooks/useWorkspaceAwareness";
 import { COLOR_PALETTE } from "@/features/graph/constants/colors";
+import { getEditorAccess } from "@/features/editor/editorAccess";
 
 function getUserCursorColor(userId: string): string {
   if (!userId) return COLOR_PALETTE[0].text;
@@ -23,10 +25,13 @@ export default function NodeFullscreenPage() {
   const params = useParams<{ nodeId: string }>();
   const searchParams = useSearchParams();
 
-  const { sidebarWidth, userMe, workspaceRole } = useWorkspaceLayout();
+  const { sidebarWidth, userMe, workspaceId: layoutWorkspaceId, workspaceRole, nodes, edges, synced, setNodes } = useWorkspaceLayout();
   const nodeId = params.nodeId;
-  const workspaceId = searchParams.get("workspaceId") ?? "";
+  // 레이아웃이 동기화 뒤 주소의 ?workspaceId를 지우므로 레이아웃이 확정한 값을 우선 쓴다.
+  const workspaceId = layoutWorkspaceId || (searchParams.get("workspaceId") ?? "");
 
+  // 그래프를 받은 뒤에만 판정한다. 콘텐츠 노드가 아니면 본문 에디터를 열지 않고 캔버스로 돌려보낸다.
+  const access = synced ? getEditorAccess(nodes, edges, nodeId) : null;
   const [title, setTitle] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +40,7 @@ export default function NodeFullscreenPage() {
   const cursorColor = getUserCursorColor(userMe?.userId ?? "");
 
   const { provider: collabProvider } = useYjsProvider({
-    nodeId: !loading && !error ? nodeId : null,
+    nodeId: !loading && !error && access === "allowed" ? nodeId : null,
     userName,
     userColor: cursorColor,
   });
@@ -56,12 +61,18 @@ export default function NodeFullscreenPage() {
   }, [nodeId, loading, error, setOpenEditorNodeId]);
 
   useEffect(() => {
-    if (!workspaceId || !nodeId) return;
+    if (access !== "denied") return;
+    showToast("콘텐츠 노드에서만 본문을 열 수 있어요");
+    router.replace("/workspace");
+  }, [access, router]);
+
+  useEffect(() => {
+    if (!workspaceId || !nodeId || access !== "allowed") return;
     getNode(workspaceId, nodeId)
       .then((node) => setTitle(node.title))
       .catch(() => setError("노드를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
-  }, [workspaceId, nodeId]);
+  }, [workspaceId, nodeId, access]);
 
   return (
     <div
@@ -93,9 +104,34 @@ export default function NodeFullscreenPage() {
             <path d="M9 2L4 7L9 12" />
           </svg>
         </button>
-        <span className="text-sm font-medium truncate text-foreground">
-          {title}
-        </span>
+        {/*
+         * CONTEXT
+         * - Problem      : 전체화면 에디터에서도 제목을 변경할 수 있어야 한다.
+         * - Why          : blur·Enter로 기존 제목 API에 저장하고 성공한 값을 캔버스 상태에 반영한다.
+         * - Alternatives : 본문 첫 줄 연동은 사용자가 정한 제목을 덮어쓴다.
+         * - Trade-offs   : 제목은 본문과 별도로 저장하며 실패 시 입력값을 남겨 재시도할 수 있다.
+         * - Edge Case    : 로딩·오류 상태에서는 비활성화하고 한글 조합 중 Enter는 무시한다.
+         */}
+        <input
+          aria-label="노드 제목"
+          placeholder="제목 없음"
+          value={title}
+          disabled={loading || !!error}
+          onChange={(event) => setTitle(event.currentTarget.value)}
+          onBlur={async (event) => {
+            const nextTitle = event.currentTarget.value;
+            try {
+              await updateNodeContent(workspaceId, nodeId, { title: nextTitle });
+              setNodes((nodes) => nodes.map((node) => node.id === nodeId
+                ? { ...node, data: { ...node.data, title: nextTitle } }
+                : node));
+            } catch { showToast('제목을 저장하지 못했어요. 다시 시도해 주세요'); }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.currentTarget.blur();
+          }}
+          className="min-w-0 flex-1 rounded bg-transparent text-sm font-medium text-foreground outline-none focus-visible:ring-1 focus-visible:ring-main-blue"
+        />
       </div>
 
       {/* 에디터 */}
@@ -114,10 +150,10 @@ export default function NodeFullscreenPage() {
           <NodeEditorPanel
             nodeId={nodeId}
             fullscreen
+            workspaceId={workspaceId}
             collabProvider={collabProvider}
             username={userName}
             cursorColor={cursorColor}
-            onFirstLineChange={(nextTitle) => setTitle(nextTitle)}
           />
         )}
       </div>

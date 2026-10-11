@@ -1,0 +1,38 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '/Users/choejimin/Documents/dev/aideep/AiDeep-web/.codex/hooks/bash-guard.sh'"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '/Users/choejimin/Documents/dev/aideep/AiDeep-web/.codex/hooks/session-context.sh'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '/Users/choejimin/Documents/dev/aideep/AiDeep-web/.codex/hooks/stop-verify.sh'",
+            "timeout": 300,
+            "statusMessage": "검증 실행 중 (tsc/lint/test)..."
+          }
+        ]
+      }
+    ]
+  }
+}
