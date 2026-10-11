@@ -12,8 +12,19 @@ function byPosition(a: Node, b: Node): number {
   return a.position.y - b.position.y;
 }
 
-export function getDefaultMeetingTarget(nodes: Node[], edges: Edge[]): MeetingTarget | null {
-  return getMeetingTargets(nodes, edges)[0] ?? null;
+/*
+ * CONTEXT
+ * - Problem      : 타이틀 노드의 "회의 녹음 시작" 버튼은 자기 노드 id만 알고, 모달은 이름·상위 프로젝트까지 보여줘야 한다.
+ * - Why          : 프로젝트에 연결된 타이틀이면 일반 후보 정보를 쓰고, 프로젝트가 없는 단독 노드는 그 노드 자체를 대상으로 쓴다.
+ * - Alternatives : 후보에 없으면 막기 → 버튼이 보이는 단독 노드에서 눌러도 아무 일도 안 일어난다.
+ * - Trade-offs   : 단독 노드는 projectTitle이 비어 있다(모달은 타이틀 이름만 보여줘 영향 없음).
+ * - Edge Case    : 이미 삭제된 노드 id는 null — 모달을 열지 않는다.
+ */
+export function getMeetingTargetForNode(nodes: Node[], edges: Edge[], nodeId: string): MeetingTarget | null {
+  const candidate = getMeetingTargets(nodes, edges).find((target) => target.id === nodeId);
+  if (candidate) return candidate;
+  const node = nodes.find((item) => item.id === nodeId);
+  return node ? { id: node.id, title: titleOf(node), projectTitle: "" } : null;
 }
 
 /*

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Edge, Node } from "@xyflow/react";
-import { getMeetingTargets } from "./meetingTargets";
+import { getMeetingTargetForNode, getMeetingTargets } from "./meetingTargets";
 
 const node = (id: string, title: string, y: number, isMain = false): Node => ({
   id,
@@ -38,5 +38,21 @@ describe("getMeetingTargets", () => {
 
   it("returns nothing when there is no project", () => {
     expect(getMeetingTargets([node("t", "타이틀", 0)], [])).toEqual([]);
+  });
+});
+
+describe("getMeetingTargetForNode", () => {
+  it("uses the candidate info for a title attached to a project", () => {
+    const nodes = [node("p", "프로젝트", 0, true), node("t", "1주차", 10)];
+    expect(getMeetingTargetForNode(nodes, [edge("p", "t")], "t")).toEqual({ id: "t", title: "1주차", projectTitle: "프로젝트" });
+  });
+
+  it("targets an unattached node itself so its button still works", () => {
+    const nodes = [node("alone", "단독", 0)];
+    expect(getMeetingTargetForNode(nodes, [], "alone")).toEqual({ id: "alone", title: "단독", projectTitle: "" });
+  });
+
+  it("returns null for a node that no longer exists", () => {
+    expect(getMeetingTargetForNode([node("t", "타이틀", 0)], [], "gone")).toBeNull();
   });
 });

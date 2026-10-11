@@ -13,8 +13,8 @@ import "./meeting-bot.css";
 /*
  * CONTEXT
  * - Problem      : 주력 기능인 회의 봇을 그래프에서 바로 발견하고 회의 링크 하나로 요청하는 화면이 필요하다.
- * - Why          : 그래프 위 버튼과 집중형 모달을 도메인 컴포넌트로 묶는다.
- * - Alternatives : 도구 메뉴 안에만 두면 주 진입점이 숨고, 별도 페이지는 그래프 맥락을 잃는다.
+ * - Why          : 타이틀 노드의 "회의 녹음 시작" 버튼이 target(그 노드)을 넘기면 집중형 모달이 열린다. 열림 여부는 target 유무로 정해진다.
+ * - Alternatives : 그래프 위 떠 있는 버튼 + 기본 대상 → 어느 타이틀에 붙을지 사용자가 고를 수 없었다.
  * - Trade-offs   : 서버는 입장 결과를 조회할 수 없어 요청 직후엔 "입장 중"까지만 보이고 이후 상태는 외부 status로 받는다.
  * - Edge Case    : 무효한 URL, Escape/배경 닫기, 같은 링크의 진행 중인 봇(MEETING-007), 추가할 타이틀 없음.
  */
@@ -254,15 +254,16 @@ function MeetingBotAddModal({ view, target, failureMessage, onClose, onRequest, 
   );
 }
 
-export default function MeetingBotWidget({ workspaceId, target, status = null, limitReached = false, requestMeetingBot, onViewGraph }: {
+export default function MeetingBotWidget({ workspaceId, target, status = null, limitReached = false, requestMeetingBot, onClose, onViewGraph }: {
   workspaceId: string;
+  /** 봇이 붙을 노드. 값이 있으면 모달이 열리고, 닫을 때 onClose로 비워야 한다. */
   target: MeetingTarget | null;
   status?: MeetingBotStatus | null;
   limitReached?: boolean;
   requestMeetingBot: (request: MeetingBotRequest) => Promise<unknown>;
+  onClose: () => void;
   onViewGraph?: () => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [requestPhase, setRequestPhase] = useState<"joining" | "failed" | null>(null);
   const [failureMessage, setFailureMessage] = useState("");
   const [editedKey, setEditedKey] = useState<string | null>(null);
@@ -271,7 +272,11 @@ export default function MeetingBotWidget({ workspaceId, target, status = null, l
   const requestView: MeetingBotView = requestPhase ?? "form";
   const view: MeetingBotView = editedKey === viewKey ? "form" : externalView !== "form" ? externalView : requestView;
 
-  const closeModal = useCallback(() => setIsOpen(false), []);
+  const closeModal = useCallback(() => {
+    setRequestPhase(null);
+    setEditedKey(null);
+    onClose();
+  }, [onClose]);
   const handleRequest = useCallback(async (meetingTarget: string, platform: MeetingBotPlatform, nodeId: string) => {
     setRequestPhase(null);
     setEditedKey(null);
@@ -289,22 +294,12 @@ export default function MeetingBotWidget({ workspaceId, target, status = null, l
 
   return (
     <div className="meeting-bot-ui">
-      <div className="pointer-events-none absolute bottom-20 right-5 z-30 flex flex-col items-end gap-3 sm:right-8">
-        {status ? <MeetingBotStatusBadge status={status} /> : null}
-        <button
-          type="button"
-          onClick={() => { setRequestPhase(null); setEditedKey(null); setIsOpen(true); }}
-          aria-label="회의 봇 추가"
-          className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-[var(--meeting-error)] bg-[var(--meeting-error-surface)] px-4 py-2 text-xs font-semibold text-[var(--meeting-ink)] shadow-md transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--meeting-error)]"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-            <circle cx="10" cy="10" r="10" fill="var(--meeting-error)" />
-            <path d="M6 8.5v3M8 7v6M10 5.5v9M12 7v6M14 8.5v3" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
-          회의 녹음 시작
-        </button>
-      </div>
-      {isOpen ? (
+      {status ? (
+        <div className="pointer-events-none absolute bottom-20 right-5 z-30 flex flex-col items-end gap-3 sm:right-8">
+          <MeetingBotStatusBadge status={status} />
+        </div>
+      ) : null}
+      {target ? (
         <MeetingBotAddModal
           view={view}
           target={target}
