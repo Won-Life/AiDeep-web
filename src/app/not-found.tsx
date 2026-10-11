@@ -12,7 +12,7 @@ import { RecoveryLinkButton } from '@/features/auth/RecoveryParts';
  */
 export default function NotFound() {
   return (
-    <AuthLayout recovery>
+    <AuthLayout recovery asleep>
       <h1 className="mt-[34px] text-center text-[28px] font-bold leading-8 text-[var(--onnode-text)]">404</h1>
       <p className="mt-[2px] text-center text-[16px] font-bold leading-6 text-[var(--onnode-text)]">페이지를 찾을 수 없어요</p>
       <p className="mt-[22px] text-center text-[13px] font-medium leading-[18px]">
