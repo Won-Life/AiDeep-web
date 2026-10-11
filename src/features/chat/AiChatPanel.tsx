@@ -1,15 +1,8 @@
 'use client';
 
-import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWorkspaceLayout } from '@/app/workspace/context';
-import AnswerPreviewModal from './AnswerPreviewModal';
 import ChatMessageBubble from './ChatMessageBubble';
-import {
-  ERROR_DISPLAY_MS,
-  SAVED_DISPLAY_MS,
-  useAnswerImageExport,
-} from './export/useAnswerImageExport';
-import { COPIED_DISPLAY_MS, useAnswerShareLink } from './export/useAnswerShareLink';
 import { PLAYLIST_PROMPT_CARET, PLAYLIST_PROMPT_TEMPLATE, SUGGESTED_QUESTIONS } from './types';
 import { useChat } from './useChat';
 
@@ -41,46 +34,9 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
-  const exportCardRef = useRef<HTMLDivElement>(null);
   const { workspaceId } = useWorkspaceLayout();
   const { messages, status, sendMessage, retry, reset } = useChat({ workspaceId });
   const isEmpty = messages.length === 0 && status !== 'sending';
-
-  // 우클릭한 AI 답변. null이면 미리보기가 닫힌 상태.
-  const [previewContent, setPreviewContent] = useState<string | null>(null);
-  const [exportedAt, setExportedAt] = useState<Date | null>(null);
-  const { state: exportState, exportNode, resetState: resetExport } = useAnswerImageExport();
-  const { state: shareState, copyLink, resetState: resetShare } = useAnswerShareLink();
-
-  const closeAnswerPreview = () => {
-    setPreviewContent(null);
-    setExportedAt(null);
-    resetExport();
-    resetShare();
-  };
-
-  const openAnswerPreview = (content: string) => (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (status === 'sending') return;
-    event.preventDefault();
-    // 카드에 찍히는 날짜는 우클릭 시점으로 고정한다 — 저장·복사 시각에 따라 달라지지 않도록.
-    setExportedAt(new Date());
-    setPreviewContent(content);
-  };
-
-  // 저장·복사 후에도 미리보기는 열어둔다. 둘 다 하고 싶은 경우가 많고, 결과 문구를
-  // 그 자리에서 보여줄 수 있다.
-  const runExport = async () => {
-    const node = exportCardRef.current;
-    if (!node || !exportedAt) return;
-    const succeeded = await exportNode(node, exportedAt);
-    window.setTimeout(resetExport, succeeded ? SAVED_DISPLAY_MS : ERROR_DISPLAY_MS);
-  };
-
-  const runShare = async () => {
-    if (previewContent === null || !exportedAt) return;
-    const succeeded = await copyLink(previewContent, exportedAt);
-    window.setTimeout(resetShare, succeeded ? COPIED_DISPLAY_MS : ERROR_DISPLAY_MS);
-  };
 
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
@@ -154,7 +110,6 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
                   key={message.id}
                   role={message.role}
                   content={message.content}
-                  onContextMenu={message.role === 'assistant' ? openAnswerPreview(message.content) : undefined}
                 />
               ))}
               {status === 'sending' && (
@@ -206,18 +161,6 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
         </div>
       </div>
 
-      {previewContent !== null && exportedAt && (
-        <AnswerPreviewModal
-          content={previewContent}
-          exportedAt={exportedAt}
-          exportState={exportState}
-          shareState={shareState}
-          cardRef={exportCardRef}
-          onExport={() => void runExport()}
-          onShare={() => void runShare()}
-          onClose={closeAnswerPreview}
-        />
-      )}
     </aside>
   );
 }

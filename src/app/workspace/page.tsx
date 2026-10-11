@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import GraphCanvas from "../../features/graph/components/GraphCanvas";
-import FestivalPopup from "@/features/festival/components/FestivalPopup";
 import MeetingBotWidget from "@/features/meeting-bot/MeetingBotWidget";
 import { getMeetingTargetForNode } from "@/features/meeting-bot/meetingTargets";
 import { inviteMeetingBot } from "@/api/meeting";
-import { useFestivalPopup } from "@/features/festival/useFestivalPopup";
 import WorkspaceLoading from "@/components/ui/WorkspaceLoading";
 import GraphLoadError from "@/components/ui/GraphLoadError";
 import WorkspaceUnavailable from "@/features/workspace/WorkspaceUnavailable";
@@ -42,7 +40,6 @@ export default function WorkspacePage() {
 
   const currentUserId = userMe?.userId ?? "";
   const currentUserName = userMe?.username ?? "Anonymous";
-  const festivalPopup = useFestivalPopup(userMe?.username, userMe?.userId);
 
   // 타이틀 노드의 "회의 녹음 시작"을 누른 노드 — 값이 있으면 회의 봇 추가 모달이 그 노드 대상으로 열린다
   const [meetingNodeId, setMeetingNodeId] = useState<string | null>(null);
@@ -89,10 +86,8 @@ export default function WorkspacePage() {
         setNodes={setNodes}
         setEdges={setEdges}
         onFirstPaint={() => setCanvasPainted(true)}
-        onNodeVisited={festivalPopup.handleNodeVisited}
         onStartMeeting={setMeetingNodeId}
       />
-      <FestivalPopup isOpen={festivalPopup.isOpen} onClose={festivalPopup.close} />
       <MeetingBotWidget
         workspaceId={workspaceId}
         target={meetingNodeId ? getMeetingTargetForNode(nodes, edges, meetingNodeId) : null}

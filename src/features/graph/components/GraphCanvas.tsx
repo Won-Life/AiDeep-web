@@ -226,7 +226,6 @@ interface GraphCanvasInnerProps {
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
-  onNodeVisited?: (nodeId: string) => void;
   onStartMeeting?: (nodeId: string) => void;
 }
 
@@ -305,7 +304,6 @@ function GraphCanvasInner({
   setNodes,
   setEdges,
   onFirstPaint,
-  onNodeVisited,
   onStartMeeting,
 }: GraphCanvasInnerProps) {
   const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
@@ -1809,10 +1807,9 @@ function GraphCanvasInner({
    * - Why          : 렌더링에 사용하는 isContentNode 판정으로 콘텐츠 노드에만 에디터를 연다.
    * - Alternatives : 더블 클릭 시 패널을 닫으면 첫 클릭에서 패널이 잠깐 열리므로 제외한다.
    * - Trade-offs   : main·타이틀의 본문 패널 접근은 막고 더블 클릭 제목 편집은 유지한다.
-   * - Edge Case    : 부모 없는 일반 노드도 타이틀로 취급하며 방문 기록은 모든 노드에 유지한다.
+   * - Edge Case    : 부모 없는 일반 노드도 타이틀로 취급한다.
    */
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    onNodeVisited?.(node.id);
     if (node.data.isMain || !node.data.isContentNode) return;
     /*
      * CONTEXT
@@ -1826,7 +1823,7 @@ function GraphCanvasInner({
       prev.length === 1 && prev[0] === node.id ? prev : [node.id],
     );
     setWorkingOnEditorNodeId(node.id);
-  }, [onNodeVisited]);
+  }, []);
 
   /* =========================
      Empty pane click → close context menu only
@@ -3231,7 +3228,6 @@ interface GraphCanvasProps {
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
-  onNodeVisited?: (nodeId: string) => void;
   onStartMeeting?: (nodeId: string) => void;
 }
 
@@ -3247,7 +3243,6 @@ export default function GraphCanvas({
   setNodes,
   setEdges,
   onFirstPaint,
-  onNodeVisited,
   onStartMeeting,
 }: GraphCanvasProps) {
   return (
@@ -3264,7 +3259,6 @@ export default function GraphCanvas({
         setNodes={setNodes}
         setEdges={setEdges}
         onFirstPaint={onFirstPaint}
-        onNodeVisited={onNodeVisited}
         onStartMeeting={onStartMeeting}
       />
     </ReactFlowProvider>
