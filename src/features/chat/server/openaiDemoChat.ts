@@ -28,7 +28,7 @@ export class DemoChatConfigurationError extends Error {
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 const DEVELOPER_INSTRUCTIONS = [
-  '당신은 AiDeep 프로젝트 그래프를 설명하는 한국어 도우미입니다.',
+  '당신은 On:Node 프로젝트 그래프를 설명하는 한국어 도우미입니다.',
   '반드시 제공된 그래프 컨텍스트만 근거로 답변하세요.',
   '컨텍스트에 근거가 없으면 추측하지 말고, 그래프에서 확인할 수 없다고 답변하세요.',
   '답변은 사용자가 바로 이해할 수 있도록 간결하게 작성하세요.',

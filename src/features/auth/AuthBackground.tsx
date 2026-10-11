@@ -9,10 +9,13 @@ import { loginMotion, errorMotion } from './authMotion';
 export default function AuthBackground({
   recovery,
   error = false,
+  asleep = false,
   assets = {},
 }: {
   recovery: boolean;
   error?: boolean;
+  /** 404처럼 오류 안내 화면: 캐릭터가 언덕 위에서 눈을 감고 있는 시안 배치. recovery와 함께 쓴다. */
+  asleep?: boolean;
   assets?: Partial<Record<'top' | 'landscape' | 'hill' | 'line' | 'blue' | 'pink' | 'organize' | 'record' | 'summarize', string>>;
 }) {
   const controls = useAnimationControls();
@@ -89,7 +92,29 @@ export default function AuthBackground({
           unoptimized
         />
       </div>
-      {recovery ? (
+      {recovery && asleep ? (
+        // Figma 404: 언덕(landscape) 원점 기준 오프셋으로 두 캐릭터를 올려 놓는다.
+        <div className="absolute left-[-0.47%] top-[49%]">
+          <Image
+            src="/onnode/auth/recovery-blue-asleep.svg"
+            width={182}
+            height={172}
+            alt=""
+            className="absolute max-w-none"
+            style={{ left: 240.4, top: 137 }}
+            unoptimized
+          />
+          <Image
+            src="/onnode/auth/recovery-pink-asleep.svg"
+            width={142}
+            height={134}
+            alt=""
+            className="absolute max-w-none"
+            style={{ left: 330.1, top: 207.3 }}
+            unoptimized
+          />
+        </div>
+      ) : recovery ? (
         <>
           <div className="absolute left-[calc(50%-370px)] top-[calc(50%+10px)] flex h-[204px] w-[202px] items-center justify-center">
             <div className="shrink-0 -rotate-[51.83deg]">

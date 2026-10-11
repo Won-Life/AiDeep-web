@@ -82,6 +82,7 @@ export type NodeView = {
   onStartRename?: (nodeId: string) => void; // 인라인 이름 편집 시작
   onFinishRename?: (nodeId: string) => void; // 인라인 이름 편집 종료
   onAddChild?: (nodeId: string, side?: 'left' | 'right', templateId?: ContentTemplateId) => void; // G4·C1 hover "+" 자식 노드 추가
+  onStartMeeting?: (nodeId: string) => void; // 타이틀 노드 "회의 녹음 시작" — 회의 봇 추가 모달을 이 노드 대상으로 연다
   collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
   onDeleteNode?: (nodeId: string) => void; // 노드 삭제 (확인 모달 경유)
@@ -798,7 +799,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
          * - Why          : 하단 중앙에 음파 아이콘과 ‘회의 녹음 시작’ 라벨을 배치한다.
          * - Alternatives : margin으로 간격을 만들면 포인터가 버튼으로 이동할 때 hover가 끊긴다.
          * - Trade-offs   : 패딩 래퍼가 노드와 버튼 사이의 hover 영역을 유지한다.
-         * - Edge Case    : 이름 편집 중에는 숨기며 기존 준비 중 안내 동작을 유지한다.
+         * - Edge Case    : 이름 편집 중에는 숨긴다. 클릭하면 이 노드의 id를 회의 봇 모달에 넘기고, 연결 전에는 준비 중 안내를 띄운다.
          */}
         {isTitle && isNodeHovered && !isRenaming && (
           <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3">
@@ -807,7 +808,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               aria-label="회의 녹음 시작"
               onClick={(event) => {
                 event.stopPropagation();
-                showToast('회의 녹음 기능은 준비 중이에요');
+                if (nodeData.onStartMeeting) nodeData.onStartMeeting(id);
+                else showToast('회의 녹음 기능은 준비 중이에요');
               }}
               className="flex items-center gap-2 whitespace-nowrap rounded-full border border-[#F23240] bg-[#FFF0EF] px-4 py-1.5 text-[12px] font-semibold leading-[18px] text-[#111111] transition-colors hover:bg-[#FFE3E2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F23240]"
             >

@@ -66,7 +66,7 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
 
   return (
     <aside
-      aria-label="AiDeep Chat"
+      aria-label="On:Node Chat"
       className="fixed right-0 top-0 z-40 h-screen transition-transform duration-200 ease-out"
       style={{
         width: AI_CHAT_PANEL_WIDTH,
@@ -75,7 +75,7 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
     >
       <button
         type="button"
-        aria-label={isOpen ? 'AiDeep Chat 닫기' : 'AiDeep Chat 열기'}
+        aria-label={isOpen ? 'On:Node Chat 닫기' : 'On:Node Chat 열기'}
         onClick={onToggle}
         className="absolute -left-5 top-1/2 z-10 flex h-20 w-10 -translate-y-1/2 items-center justify-center rounded-l-2xl rounded-r-none bg-surface text-muted shadow-md transition-colors hover:bg-surface-hover hover:text-foreground"
       >
@@ -85,10 +85,10 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
       <div className="flex h-full min-w-0 flex-col overflow-hidden border-l border-border bg-background px-5 pb-4 pt-5 shadow-[-8px_0_20px_rgba(0,0,0,0.06)] dark:shadow-[-8px_0_20px_rgba(0,0,0,0.2)]" style={{ borderRadius: '16px 0 0 16px' }}>
         <header className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="typo-h1">AiDeep Chat</h2>
+            <h2 className="typo-h1">On:Node Chat</h2>
             <p className="mt-1 typo-cap2 text-muted">프로젝트에 대해 무엇이든 물어보세요.</p>
           </div>
-          <button type="button" onClick={onToggle} className="-mt-1 flex size-8 items-center justify-center rounded-md text-xl text-muted transition-colors hover:bg-surface hover:text-foreground" aria-label="AiDeep Chat 닫기">×</button>
+          <button type="button" onClick={onToggle} className="-mt-1 flex size-8 items-center justify-center rounded-md text-xl text-muted transition-colors hover:bg-surface hover:text-foreground" aria-label="On:Node Chat 닫기">×</button>
         </header>
 
         <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -113,7 +113,7 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
                 />
               ))}
               {status === 'sending' && (
-                <div className="flex justify-start"><div className="rounded-2xl rounded-bl-md border border-border bg-surface px-3 py-2 text-[13px] text-muted">AiDeep이 답변을 정리하고 있어요...</div></div>
+                <div className="flex justify-start"><div className="rounded-2xl rounded-bl-md border border-border bg-surface px-3 py-2 text-[13px] text-muted">On:Node가 답변을 정리하고 있어요...</div></div>
               )}
               {status === 'error' && (
                 <div className="rounded-xl border border-border bg-surface px-3 py-3">
