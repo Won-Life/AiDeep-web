@@ -227,6 +227,7 @@ interface GraphCanvasInnerProps {
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
   onNodeVisited?: (nodeId: string) => void;
+  onStartMeeting?: (nodeId: string) => void;
 }
 
 // 첫 페인트 신호 — 로딩 오버레이 해제 시점을 "데이터 도착"이 아니라 "그래프가 실제로
@@ -305,6 +306,7 @@ function GraphCanvasInner({
   setEdges,
   onFirstPaint,
   onNodeVisited,
+  onStartMeeting,
 }: GraphCanvasInnerProps) {
   const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
   const [workingOnEditorNodeId, setWorkingOnEditorNodeId] = useState<string | null>(
@@ -942,6 +944,7 @@ function GraphCanvasInner({
         onStartRename: handleStartRename,
         onFinishRename: handleFinishRename,
         onAddChild: handleAddChild, // G4·C1 hover "+" 자식 노드 추가
+        onStartMeeting, // 타이틀 노드 "회의 녹음 시작" — 이 노드를 봇이 붙을 대상으로 넘긴다
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
@@ -3229,6 +3232,7 @@ interface GraphCanvasProps {
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
   onNodeVisited?: (nodeId: string) => void;
+  onStartMeeting?: (nodeId: string) => void;
 }
 
 export default function GraphCanvas({
@@ -3244,6 +3248,7 @@ export default function GraphCanvas({
   setEdges,
   onFirstPaint,
   onNodeVisited,
+  onStartMeeting,
 }: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -3260,6 +3265,7 @@ export default function GraphCanvas({
         setEdges={setEdges}
         onFirstPaint={onFirstPaint}
         onNodeVisited={onNodeVisited}
+        onStartMeeting={onStartMeeting}
       />
     </ReactFlowProvider>
   );

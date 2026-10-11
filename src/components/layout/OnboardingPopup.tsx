@@ -52,7 +52,7 @@ export default function OnboardingPopup() {
           <>
             <div className="flex items-start justify-between">
               <h2 className="text-[20px] font-bold text-foreground">
-                AiDeep이 처음이신가요?
+                On:Node가 처음이신가요?
               </h2>
               <button
                 type="button"
@@ -68,7 +68,7 @@ export default function OnboardingPopup() {
               <strong className="font-bold text-foreground">
                 그래프 만들기, 노드 안에서 바로 편집하기, 자유롭게 옮기며 정리하기
               </strong>
-              까지 — AiDeep 사용법을 1분 만에 보여드릴게요.
+              까지 — On:Node 사용법을 1분 만에 보여드릴게요.
             </p>
 
             <div className="flex gap-[12px]">
@@ -94,7 +94,7 @@ export default function OnboardingPopup() {
           <>
             <div className="flex items-start justify-between">
               <h2 className="text-[20px] font-bold text-foreground">
-                AiDeep for Google Meet 출시!
+                On:Node for Google Meet 출시!
               </h2>
               <button
                 type="button"
