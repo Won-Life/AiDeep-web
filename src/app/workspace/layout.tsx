@@ -12,7 +12,6 @@ import AiChatPanel, {
 import ArchiveModal from '@/components/layout/ArchiveModal';
 import SessionLoadError from '@/features/auth/SessionLoadError';
 import { getMe } from '@/api/user';
-import { ensureNickname } from '@/features/auth/defaultNickname';
 import { getWorkspaces } from '@/api/workspace';
 import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/api/mappers';
@@ -100,7 +99,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
       if (loading) return;
       loading = true;
       try {
-        const user = await ensureNickname(await getMe());
+        const user = await getMe();
         if (active) {
           setUserMe(user);
           setSessionLoadFailed(false);

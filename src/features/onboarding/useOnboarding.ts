@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { getMe } from '@/api/user';
 import { saveOnboarding, type MeetingPlatform, type UsagePurpose } from '@/api/onboarding';
 import type { UserMeResponse } from '@/api/types';
-import { generateDefaultNickname, hasNickname } from '@/features/auth/defaultNickname';
 import { buildOnboardingRequest, isNicknameValid, toggleMeetingPlatform } from './onboardingRules';
 import { clearOnboardingPending, readOnboardingCompletion } from './onboardingEntry';
 
@@ -40,7 +39,7 @@ export function useOnboarding() {
         return;
       }
       setUser(me);
-      setNickname(hasNickname(me) ? me.username : generateDefaultNickname());
+      setNickname(me.username ?? '');
       setLoading(false);
     }).catch(() => {
       if (active) { setLoadError('정보를 불러오지 못했어요. 다시 시도해주세요.'); setLoading(false); }
