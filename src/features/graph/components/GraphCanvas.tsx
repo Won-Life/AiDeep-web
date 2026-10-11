@@ -1,5 +1,6 @@
 'use client';
 import { showToast } from '@/components/ui/toastStore';
+import type { MeetingInfo } from '@/features/meeting-bot/meetingState';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { getTemplateBody } from '@/features/editor/contentTemplates';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
@@ -228,8 +229,10 @@ interface GraphCanvasInnerProps {
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
   onStartMeeting?: (nodeId: string) => void;
-  /** 진행 중인 회의가 붙어 수정이 잠긴 노드 id */
+  /** 진행 중인 회의가 붙은 타이틀과 그 하위 노드 id — 읽기 전용 */
   meetingLockedNodeIds?: Set<string>;
+  /** 진행 중인 회의가 직접 붙은 노드 → 회의 (녹음 칩 · 강조 테두리) */
+  meetingByNodeId?: Record<string, MeetingInfo>;
 }
 
 // 첫 페인트 신호 — 로딩 오버레이 해제 시점을 "데이터 도착"이 아니라 "그래프가 실제로
@@ -309,6 +312,7 @@ function GraphCanvasInner({
   onFirstPaint,
   onStartMeeting,
   meetingLockedNodeIds,
+  meetingByNodeId,
 }: GraphCanvasInnerProps) {
   const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
   const [workingOnEditorNodeId, setWorkingOnEditorNodeId] = useState<string | null>(
@@ -956,6 +960,7 @@ function GraphCanvasInner({
 
     return {
       ...node,
+      draggable: meetingLockedNodeIds?.has(node.id) ? false : node.draggable, // 회의 중인 노드는 이동도 잠근다
       zIndex: isContextMenuOpen ? 1000 : isEditorOpen ? 100 : undefined,
       hidden: collapseState.hiddenIds.has(node.id),
       data: {
@@ -974,7 +979,8 @@ function GraphCanvasInner({
         onStartRename: handleStartRename,
         onFinishRename: handleFinishRename,
         onAddChild: handleAddChild, // G4·C1 hover "+" 자식 노드 추가
-        isMeetingLocked: meetingLockedNodeIds?.has(node.id) ?? false, // 진행 중인 회의가 붙어 수정이 잠긴 노드
+        isMeetingLocked: meetingLockedNodeIds?.has(node.id) ?? false, // 진행 중인 회의 아래의 읽기 전용 노드
+        meeting: meetingByNodeId?.[node.id], // 회의가 직접 붙은 노드 — 녹음 칩 · 강조 테두리
         onStartMeeting, // 타이틀 노드 "회의 녹음 시작" — 이 노드를 봇이 붙을 대상으로 넘긴다
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
@@ -3263,6 +3269,7 @@ interface GraphCanvasProps {
   onFirstPaint?: () => void;
   onStartMeeting?: (nodeId: string) => void;
   meetingLockedNodeIds?: Set<string>;
+  meetingByNodeId?: Record<string, MeetingInfo>;
 }
 
 export default function GraphCanvas({
@@ -3279,6 +3286,7 @@ export default function GraphCanvas({
   onFirstPaint,
   onStartMeeting,
   meetingLockedNodeIds,
+  meetingByNodeId,
 }: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -3296,6 +3304,7 @@ export default function GraphCanvas({
         onFirstPaint={onFirstPaint}
         onStartMeeting={onStartMeeting}
         meetingLockedNodeIds={meetingLockedNodeIds}
+        meetingByNodeId={meetingByNodeId}
       />
     </ReactFlowProvider>
   );

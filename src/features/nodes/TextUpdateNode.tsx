@@ -1,6 +1,8 @@
 'use client';
 
 import { ContentNodeMenu } from '@/features/graph/components/ContentNodeMenu';
+import { MeetingNodeChip } from '@/features/meeting-bot/MeetingTopBadge';
+import type { MeetingInfo } from '@/features/meeting-bot/meetingState';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
 import { useState, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -82,7 +84,8 @@ export type NodeView = {
   onStartRename?: (nodeId: string) => void; // 인라인 이름 편집 시작
   onFinishRename?: (nodeId: string) => void; // 인라인 이름 편집 종료
   onAddChild?: (nodeId: string, side?: 'left' | 'right', templateId?: ContentTemplateId) => void; // G4·C1 hover "+" 자식 노드 추가
-  isMeetingLocked?: boolean; // 진행 중인 회의가 붙은 노드 — 이름 변경·삭제·하위 추가가 잠긴다
+  isMeetingLocked?: boolean; // 진행 중인 회의 아래의 노드 — 이동·이름 변경·삭제·하위 추가·내용 수정이 잠긴다
+  meeting?: MeetingInfo; // 이 노드에 진행 중인 회의가 직접 붙어 있다 — 녹음 칩과 강조 테두리
   onStartMeeting?: (nodeId: string) => void; // 타이틀 노드 "회의 녹음 시작" — 회의 봇 추가 모달을 이 노드 대상으로 연다
   collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
@@ -364,9 +367,11 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           backgroundColor:
             (nodeData.isDraft ? draftFill : fig?.deep) ??
             `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
-          boxShadow: selected || isContentMenuOpen
-            ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.28)`
-            : '0 3px 4px rgba(53, 62, 112, 0.28)',
+          boxShadow: nodeData.meeting
+            ? '0 0 0 8px rgba(242, 50, 64, 0.35), 0 3px 4px rgba(53, 62, 112, 0.28)'
+            : selected || isContentMenuOpen
+              ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.28)`
+              : '0 3px 4px rgba(53, 62, 112, 0.28)',
           border: isHovered
             ? '6px solid #93C5FD'
             : selected
@@ -459,6 +464,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           dockIndex={nodeData.dockIndex}
           title={label}
           onTitleChange={(title) => nodeData.onChange?.(id, title)}
+          readOnly={isMeetingLocked}
           breadcrumb={nodeData.editorBreadcrumb}
           panelZIndex={nodeData.panelZIndex}
           onExpandClick={() =>
@@ -803,15 +809,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
          * - Trade-offs   : 패딩 래퍼가 노드와 버튼 사이의 hover 영역을 유지한다.
          * - Edge Case    : 이름 편집 중에는 숨긴다. 클릭하면 이 노드의 id를 회의 봇 모달에 넘기고, 연결 전에는 준비 중 안내를 띄운다.
          */}
-        {isMeetingLocked && (
+        {nodeData.meeting && (
           <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3">
-            <span
-              role="status"
-              className="flex items-center gap-2 whitespace-nowrap rounded-full border border-[#F23240] bg-[#FFF0EF] px-4 py-1.5 text-[12px] font-semibold leading-[18px] text-[#111111]"
-            >
-              <span className="size-2 rounded-full bg-[#E63840]" aria-hidden="true" />
-              회의 진행 중 · 수정할 수 없어요
-            </span>
+            <MeetingNodeChip meeting={nodeData.meeting} />
           </div>
         )}
         {isTitle && isNodeHovered && !isRenaming && !isMeetingLocked && (

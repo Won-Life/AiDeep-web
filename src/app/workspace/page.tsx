@@ -5,6 +5,7 @@ import GraphCanvas from "../../features/graph/components/GraphCanvas";
 import MeetingBotWidget from "@/features/meeting-bot/MeetingBotWidget";
 import { getMeetingTargetForNode } from "@/features/meeting-bot/meetingTargets";
 import { useMeetingView } from "@/features/meeting-bot/useMeetingView";
+import MeetingTopBadge, { MeetingReadOnlyNote } from "@/features/meeting-bot/MeetingTopBadge";
 import { inviteMeetingBot } from "@/api/meeting";
 import WorkspaceLoading from "@/components/ui/WorkspaceLoading";
 import GraphLoadError from "@/components/ui/GraphLoadError";
@@ -46,7 +47,7 @@ export default function WorkspacePage() {
   // 타이틀 노드의 "회의 녹음 시작"을 누른 노드 — 값이 있으면 회의 봇 추가 모달이 그 노드 대상으로 열린다
   const [meetingNodeId, setMeetingNodeId] = useState<string | null>(null);
   // 진행 중인 회의가 붙은 노드는 수정이 잠기고, 화면 우하단에는 가장 최근 회의 상태가 보인다
-  const meetingView = useMeetingView(meetings, meetingNodeId);
+  const meetingView = useMeetingView(meetings, meetingNodeId, edges);
   const [canvasPainted, setCanvasPainted] = useState(false);
   const [overlayGone, setOverlayGone] = useState(false);
 
@@ -92,13 +93,15 @@ export default function WorkspacePage() {
         onFirstPaint={() => setCanvasPainted(true)}
         onStartMeeting={setMeetingNodeId}
         meetingLockedNodeIds={meetingView.lockedNodeIds}
+        meetingByNodeId={meetingView.activeByNodeId}
       />
+      <MeetingTopBadge meeting={meetingView.badgeMeeting} />
+      {meetingView.lockedNodeIds.size > 0 && <MeetingReadOnlyNote />}
       <MeetingBotWidget
         workspaceId={workspaceId}
         target={meetingNodeId ? getMeetingTargetForNode(nodes, edges, meetingNodeId) : null}
         status={meetingView.targetStatus}
         failureReason={meetingView.failureReason}
-        badgeStatus={meetingView.badgeStatus}
         requestMeetingBot={inviteMeetingBot}
         onClose={() => setMeetingNodeId(null)}
       />

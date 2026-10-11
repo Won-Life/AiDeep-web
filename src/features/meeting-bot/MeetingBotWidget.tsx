@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { ApiError } from "@/api/types";
-import MeetingBotStatusBadge, { type MeetingBotStatus } from "./MeetingBotStatusBadge";
+import type { MeetingBotStatus } from "./MeetingBotStatusBadge";
 import MeetingBotTargetField from "./MeetingBotTargetField";
 import { MeetingBotLimitPanel, MeetingBotStatusActions, getMeetingBotView, type MeetingBotView } from "./MeetingBotStatusView";
 import { createMeetingBotRequest, normalizeMeetingTarget, type MeetingBotPlatform, type MeetingBotRequest } from "./meetingBotRequest";
@@ -254,14 +254,12 @@ function MeetingBotAddModal({ view, target, failureMessage, onClose, onRequest, 
   );
 }
 
-export default function MeetingBotWidget({ workspaceId, target, status = null, badgeStatus = null, failureReason, limitReached = false, requestMeetingBot, onClose, onViewGraph }: {
+export default function MeetingBotWidget({ workspaceId, target, status = null, failureReason, limitReached = false, requestMeetingBot, onClose, onViewGraph }: {
   workspaceId: string;
   /** 봇이 붙을 노드. 값이 있으면 모달이 열리고, 닫을 때 onClose로 비워야 한다. */
   target: MeetingTarget | null;
   /** 모달이 열린 노드(target)의 회의 상태 — 모달 화면을 정한다 */
   status?: MeetingBotStatus | null;
-  /** 화면 우하단 배지에 보일 워크스페이스의 가장 최근 회의 상태 */
-  badgeStatus?: MeetingBotStatus | null;
   /** 서버가 준 실패 사유(statusSubCode). 있으면 모달의 실패 안내에 그대로 보인다 */
   failureReason?: string;
   limitReached?: boolean;
@@ -300,11 +298,6 @@ export default function MeetingBotWidget({ workspaceId, target, status = null, b
 
   return (
     <div className="meeting-bot-ui">
-      {badgeStatus ? (
-        <div className="pointer-events-none absolute bottom-56 right-5 z-30 flex flex-col items-end gap-3 sm:right-8">
-          <MeetingBotStatusBadge status={badgeStatus} />
-        </div>
-      ) : null}
       {target ? (
         <MeetingBotAddModal
           view={view}
