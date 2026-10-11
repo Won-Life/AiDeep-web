@@ -1,4 +1,5 @@
 'use client';
+import { showToast } from '@/components/ui/toastStore';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { getTemplateBody } from '@/features/editor/contentTemplates';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
@@ -227,6 +228,8 @@ interface GraphCanvasInnerProps {
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
   onStartMeeting?: (nodeId: string) => void;
+  /** 진행 중인 회의가 붙어 수정이 잠긴 노드 id */
+  meetingLockedNodeIds?: Set<string>;
 }
 
 // 첫 페인트 신호 — 로딩 오버레이 해제 시점을 "데이터 도착"이 아니라 "그래프가 실제로
@@ -305,6 +308,7 @@ function GraphCanvasInner({
   setEdges,
   onFirstPaint,
   onStartMeeting,
+  meetingLockedNodeIds,
 }: GraphCanvasInnerProps) {
   const [myOpenEditorNodeIds, setMyOpenEditorNodeIds] = useState<string[]>([]);
   const [workingOnEditorNodeId, setWorkingOnEditorNodeId] = useState<string | null>(
@@ -623,8 +627,26 @@ function GraphCanvasInner({
     setWorkingOnEditorNodeId(null);
   }, []);
 
+  /*
+   * CONTEXT
+   * - Problem      : 회의 봇이 붙어 진행 중인 노드를 이름 변경·삭제·유형 변경·하위 추가로 건드리면 회의 기록과 어긋난다.
+   * - Why          : 서버가 진행 중으로 보는 회의(REQUESTED~RECORDING)의 노드는 수정 동작을 시작 지점에서 막고 이유를 알린다.
+   * - Alternatives : 서버가 잠금 값을 내려줄 때까지 방치 → 회의 중 노드를 지우는 사고를 막을 수 없다.
+   * - Trade-offs   : 위치 이동과 접기·펼치기는 허용한다(회의 기록 내용을 바꾸지 않는다).
+   * - Edge Case    : 회의가 끝나거나 실패하면 이벤트·조회로 잠금이 풀린다. 서버 상 CALL_ENDED~DONE 사이는 진행 중이 아니라 풀린다.
+   */
+  const isMeetingLocked = useCallback(
+    (nodeId: string, notify = true) => {
+      if (!meetingLockedNodeIds?.has(nodeId)) return false;
+      if (notify) showToast('회의가 진행 중인 노드는 수정할 수 없어요');
+      return true;
+    },
+    [meetingLockedNodeIds],
+  );
+
   const handleTitleChange = useCallback(
     (nodeId: string, value: string) => {
+      if (isMeetingLocked(nodeId, false)) return;
       handleNodeViewChange(nodeId, { title: value });
 
       const existing = titleDebounceRef.current.get(nodeId);
@@ -640,14 +662,18 @@ function GraphCanvasInner({
         }, 500),
       );
     },
-    [workspaceId, handleNodeViewChange],
+    [workspaceId, handleNodeViewChange, isMeetingLocked],
   );
 
   // 인라인 이름 편집 시작(컨텍스트 메뉴 "이름 바꾸기") — 메뉴는 닫고 해당 노드를 편집 모드로.
   const handleStartRename = useCallback((nodeId: string) => {
+    if (isMeetingLocked(nodeId)) {
+      setContextMenuNodeId(null);
+      return;
+    }
     setRenamingNodeId(nodeId);
     setContextMenuNodeId(null);
-  }, []);
+  }, [isMeetingLocked]);
   const handleFinishRename = useCallback(() => {
     setRenamingNodeId(null);
   }, []);
@@ -657,6 +683,7 @@ function GraphCanvasInner({
   // 재사용한다. 겹침 bail 없이 source 높이에 놓고 D3 rectCollide가 분리하도록 맡긴다.
   const handleAddChild = useCallback(
     async (parentId: string, requestedSide?: 'left' | 'right', templateId?: ContentTemplateId) => {
+      if (isMeetingLocked(parentId)) return;
       const sourceNode = nodes.find((n) => n.id === parentId);
       if (!sourceNode) return;
 
@@ -778,10 +805,14 @@ function GraphCanvasInner({
         console.error('[addChild] node creation failed', err);
       }
     },
-    [nodes, edges, workspaceId],
+    [nodes, edges, workspaceId, isMeetingLocked],
   );
 
   const handleToggleNodeType = (nodeId: string) => {
+    if (isMeetingLocked(nodeId)) {
+      setContextMenuNodeId(null);
+      return;
+    }
     const target = nodes.find((n) => n.id === nodeId);
     if (!target) return;
     const toProject = !target.data?.isMain;
@@ -852,6 +883,7 @@ function GraphCanvasInner({
   // 키보드 Backspace 삭제(onBeforeDelete)와 동일 플로우: 확인 모달 → 서브트리 삭제 + WS 동기화
   const handleDeleteNode = (nodeId: string) => {
     setContextMenuNodeId(null);
+    if (isMeetingLocked(nodeId)) return;
     requestArchiveForNodes([nodeId]);
   };
 
@@ -942,6 +974,7 @@ function GraphCanvasInner({
         onStartRename: handleStartRename,
         onFinishRename: handleFinishRename,
         onAddChild: handleAddChild, // G4·C1 hover "+" 자식 노드 추가
+        isMeetingLocked: meetingLockedNodeIds?.has(node.id) ?? false, // 진행 중인 회의가 붙어 수정이 잠긴 노드
         onStartMeeting, // 타이틀 노드 "회의 녹음 시작" — 이 노드를 봇이 붙을 대상으로 넘긴다
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
@@ -3229,6 +3262,7 @@ interface GraphCanvasProps {
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   onFirstPaint?: () => void;
   onStartMeeting?: (nodeId: string) => void;
+  meetingLockedNodeIds?: Set<string>;
 }
 
 export default function GraphCanvas({
@@ -3244,6 +3278,7 @@ export default function GraphCanvas({
   setEdges,
   onFirstPaint,
   onStartMeeting,
+  meetingLockedNodeIds,
 }: GraphCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -3260,6 +3295,7 @@ export default function GraphCanvas({
         setEdges={setEdges}
         onFirstPaint={onFirstPaint}
         onStartMeeting={onStartMeeting}
+        meetingLockedNodeIds={meetingLockedNodeIds}
       />
     </ReactFlowProvider>
   );

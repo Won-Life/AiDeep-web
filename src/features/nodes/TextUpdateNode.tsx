@@ -82,6 +82,7 @@ export type NodeView = {
   onStartRename?: (nodeId: string) => void; // 인라인 이름 편집 시작
   onFinishRename?: (nodeId: string) => void; // 인라인 이름 편집 종료
   onAddChild?: (nodeId: string, side?: 'left' | 'right', templateId?: ContentTemplateId) => void; // G4·C1 hover "+" 자식 노드 추가
+  isMeetingLocked?: boolean; // 진행 중인 회의가 붙은 노드 — 이름 변경·삭제·하위 추가가 잠긴다
   onStartMeeting?: (nodeId: string) => void; // 타이틀 노드 "회의 녹음 시작" — 회의 봇 추가 모달을 이 노드 대상으로 연다
   collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
@@ -122,6 +123,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const [isNodeHovered, setIsNodeHovered] = useState(false);
   const [hoverSide, setHoverSide] = useState<'left' | 'right'>('right');
   const [isContentMenuOpen, setIsContentMenuOpen] = useState(false);
+  const isMeetingLocked = nodeData.isMeetingLocked ?? false;
   // 콘텐츠 배너 SVG를 노드 실제 px 크기에 맞춰 그리기 위한 측정
   const contentBoxRef = useRef<HTMLDivElement>(null);
   const [contentSize, setContentSize] = useState({ w: 0, h: 0 });
@@ -526,7 +528,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                 : '17px 14px 17px 38px'
               : '12px 12px',
         }}
-        onMouseEnter={() => { setIsNodeHovered(true); if (isTitle) setIsContentMenuOpen(true); }}
+        onMouseEnter={() => { setIsNodeHovered(true); if (isTitle && !isMeetingLocked) setIsContentMenuOpen(true); }}
         onMouseMove={(event) => {
           if (!isMain) return;
           const rect = event.currentTarget.getBoundingClientRect();
@@ -548,7 +550,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           - Trade-offs   : 절반 강조는 프로젝트에만 적용하며 기존 타이틀 생성은 유지한다.
           - Edge Case    : 버튼으로 이동해도 마지막 hover 방향을 유지한다.
         */}
-        {showMainHover && (
+        {showMainHover && !isMeetingLocked && (
           <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[14px] rounded-tl-[1px]" style={{
             overflow: 'hidden', zIndex: -1,
           }}>
@@ -784,7 +786,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               className="h-[26px] whitespace-nowrap rounded-full border-2 border-white bg-[#607AFF] px-[18px] text-[10px] font-medium text-white shadow-[0_2px_2px_rgba(0,0,0,0.24)]">새 타이틀 노드 추가</button>
           </div>
         )}
-        {isTitle && isContentMenuOpen && !isRenaming && (
+        {isTitle && isContentMenuOpen && !isRenaming && !isMeetingLocked && (
           <div className="nodrag nopan absolute top-1/2 z-50 -mt-[38px]"
             style={addSide === 'left' ? { right: '100%', paddingRight: 28 } : { left: '100%', paddingLeft: 28 }}>
             <ContentNodeMenu onClose={() => setIsContentMenuOpen(false)} onSelect={(templateId) => {
@@ -801,7 +803,18 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
          * - Trade-offs   : 패딩 래퍼가 노드와 버튼 사이의 hover 영역을 유지한다.
          * - Edge Case    : 이름 편집 중에는 숨긴다. 클릭하면 이 노드의 id를 회의 봇 모달에 넘기고, 연결 전에는 준비 중 안내를 띄운다.
          */}
-        {isTitle && isNodeHovered && !isRenaming && (
+        {isMeetingLocked && (
+          <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3">
+            <span
+              role="status"
+              className="flex items-center gap-2 whitespace-nowrap rounded-full border border-[#F23240] bg-[#FFF0EF] px-4 py-1.5 text-[12px] font-semibold leading-[18px] text-[#111111]"
+            >
+              <span className="size-2 rounded-full bg-[#E63840]" aria-hidden="true" />
+              회의 진행 중 · 수정할 수 없어요
+            </span>
+          </div>
+        )}
+        {isTitle && isNodeHovered && !isRenaming && !isMeetingLocked && (
           <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3">
             <button
               type="button"

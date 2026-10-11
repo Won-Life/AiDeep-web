@@ -11,6 +11,7 @@ import type {
   WsEdgeCreateEvent,
   WsEdgeDeletedEvent,
   WsEdgeUpdateEvent,
+  WsMeetingBotEvent,
 } from '@/api/types';
 import type { Node, Edge } from '@xyflow/react';
 import type { Dispatch, SetStateAction, RefObject } from 'react';
@@ -20,6 +21,10 @@ import {
   applyDepthOnEdgeCreate,
   applyDepthOnEdgeDelete,
 } from '@/features/graph/logic/traversal';
+
+function isMeetingBotEvent(event: WsEvent): event is WsMeetingBotEvent {
+  return event.type.startsWith('MEETING_BOT_');
+}
 
 const TRANSITION_DURATION = 300;
 const MOVE_TRANSITION = `transform ${TRANSITION_DURATION}ms ease`;
@@ -34,6 +39,10 @@ interface UseWorkspaceWSOptions {
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   edgesRef: RefObject<Edge[]>;
   isDraggingRef?: RefObject<boolean>;
+  /** 회의 봇 상태 이벤트(요청·입장·퇴장·실패) */
+  onMeetingEvent?: (event: WsMeetingBotEvent) => void;
+  /** 소켓이 (재)연결될 때마다 — 놓친 상태를 서버 조회로 되맞춘다 */
+  onConnect?: () => void;
 }
 
 /**
@@ -50,21 +59,32 @@ export function useWorkspaceWS({
   setEdges,
   edgesRef,
   isDraggingRef,
+  onMeetingEvent,
+  onConnect,
 }: UseWorkspaceWSOptions): void {
   // Use refs so the latest setters are always available
   // without re-subscribing on every render.
   const setNodesRef = useRef(setNodes);
   const setEdgesRef = useRef(setEdges);
+  const onMeetingEventRef = useRef(onMeetingEvent);
+  const onConnectRef = useRef(onConnect);
 
   useEffect(() => {
     setNodesRef.current = setNodes;
     setEdgesRef.current = setEdges;
-  }, [setNodes, setEdges]);
+    onMeetingEventRef.current = onMeetingEvent;
+    onConnectRef.current = onConnect;
+  }, [setNodes, setEdges, onMeetingEvent, onConnect]);
 
   useEffect(() => {
     if (!workspaceId || !userName) return;
 
     const handleEvent = (event: WsEvent) => {
+      // 회의 이벤트의 userId는 "봇을 초대한 사람"이라 본인 것도 그대로 반영한다.
+      if (isMeetingBotEvent(event)) {
+        onMeetingEventRef.current?.(event);
+        return;
+      }
       switch (event.type) {
         case 'NODE_MOVE':
           handleNodeMove(event);
@@ -333,6 +353,7 @@ export function useWorkspaceWS({
       profile,
       handleEvent,
       handleError,
+      () => onConnectRef.current?.(),
     );
 
     // 실시간 위치 이벤트 (transition 없이 즉시 적용)

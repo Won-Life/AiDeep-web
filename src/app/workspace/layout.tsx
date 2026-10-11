@@ -17,6 +17,8 @@ import { getWorkspaces } from '@/api/workspace';
 import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/api/mappers';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
+import { getActiveMeetings } from '@/api/meeting';
+import { applyMeetingEvent, mergeActiveMeetings } from '@/features/meeting-bot/meetingState';
 import { onPresenceState } from '@/api/ws';
 import { getCursorColor } from '@/utils/cursorColor';
 import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
@@ -43,6 +45,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     setSynced,
     syncError,
     setSyncError,
+    setMeetings,
   } = useWorkspaceLayout();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -231,7 +234,21 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     setNodes,
     setEdges,
     edgesRef,
+    onMeetingEvent: (event) => setMeetings((prev) => applyMeetingEvent(prev, event)),
+    // 최초 접속·재접속마다 진행 중 회의를 다시 받는다. 실시간 이벤트는 구독자가 없는 동안 버려진다.
+    // 조회가 실패해도(권한·네트워크) 이벤트 기반 상태는 유지되므로 조용히 넘어간다.
+    onConnect: () => {
+      if (!workspaceId) return;
+      getActiveMeetings(workspaceId)
+        .then((active) => setMeetings((prev) => mergeActiveMeetings(prev, active)))
+        .catch(() => {});
+    },
   });
+
+  // 워크스페이스를 바꾸면 이전 워크스페이스의 회의 상태를 비운다
+  useEffect(() => {
+    setMeetings({});
+  }, [workspaceId, setMeetings]);
 
   // presence_state 이벤트 → collaborators 업데이트
   useEffect(() => {
