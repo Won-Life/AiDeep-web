@@ -26,6 +26,7 @@ export default function AuthLayout({
   recovery = false,
   reset = false,
   error = false,
+  asleep = false,
   signup = false,
   cardClassName,
   background,
@@ -35,6 +36,7 @@ export default function AuthLayout({
   recovery?: boolean;
   reset?: boolean;
   error?: boolean;
+  asleep?: boolean;
   signup?: boolean;
   cardClassName?: string;
   background?: ReactNode;
@@ -64,7 +66,7 @@ export default function AuthLayout({
       {background ?? (signup ? (
         <SignupBackground container={scrollContainer} content={scrollContent} />
       ) : (
-        <AuthBackground recovery={recovery} error={error} />
+        <AuthBackground recovery={recovery} error={error} asleep={asleep} />
       ))}
       <section
         aria-label="계정"
