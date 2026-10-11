@@ -27,18 +27,19 @@ const DESCRIPTION =
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://aideep.ai.kr"),
-  title: "AiDeep",
+  title: { default: "On:Node", template: "%s | On:Node" },
   description: DESCRIPTION,
   openGraph: {
-    title: "AiDeep",
+    siteName: "On:Node",
+    title: "On:Node",
     description: DESCRIPTION,
-    images: ["/logo.png"],
+    images: ["/onnode-brand.png"],
   },
   twitter: {
     card: "summary",
-    title: "AiDeep",
+    title: "On:Node",
     description: DESCRIPTION,
-    images: ["/logo.png"],
+    images: ["/onnode-brand.png"],
   },
 };
 
@@ -48,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${notoSansKr.variable} antialiased`}
       >
