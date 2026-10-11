@@ -52,7 +52,8 @@ export default function WorkspaceLoading() {
               <circle cx="786" cy="252" r="8" /><circle cx="995" cy="252" r="8" />
             </g>
           </g>
-          <mask id={maskId} x="0" y="0" width="1208" height="800" maskUnits="userSpaceOnUse" style={{ maskType: 'alpha' }}>
+          {/* 그래프 도형이 viewBox 밖까지 뻗는다(좌 x=-100, 우 x=1272) — 마스크가 viewBox에 머물면 그 구간엔 물결이 닿지 않는다. */}
+          <mask id={maskId} x="-120" y="0" width="1420" height="800" maskUnits="userSpaceOnUse" style={{ maskType: 'alpha' }}>
             <use href={`#${graphId}`} color="white" />
           </mask>
           <linearGradient id={waveId} x1="0" y1="0" x2="100%" y2="0">
