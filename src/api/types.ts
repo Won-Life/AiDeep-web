@@ -299,7 +299,42 @@ export interface WsEdgeUpdateEvent {
   };
 }
 
+// ─── 회의 봇 실시간 이벤트 (Spring → aideep-ws → FE, WS 서버는 그대로 전달) ───
+
+export type MeetingBotEventType =
+  | 'MEETING_BOT_REQUESTED'
+  | 'MEETING_BOT_JOINED'
+  | 'MEETING_BOT_LEFT'
+  | 'MEETING_BOT_FAILED';
+
+export interface WsMeetingBotEvent {
+  type: MeetingBotEventType;
+  workspaceId: string;
+  /** 봇을 초대한 사용자 (이벤트 발신자가 아니다) */
+  userId: string;
+  meetingId: string;
+  nodeId: string;
+  botId: string;
+  /** 발행 시점의 서버 MeetingStatus 문자열 */
+  status: string;
+  occurredAt: string;
+  /** MEETING_BOT_FAILED 에만 있다 (Recall status.sub_code 원문) */
+  statusSubCode?: string;
+}
+
+/** GET /meeting?workspaceId= — 진행 중(종료 전) 회의 한 건 */
+export interface ActiveMeeting {
+  meetingId: string;
+  nodeId: string;
+  botId: string | null;
+  status: string;
+  statusSubCode: string | null;
+  startedAt: string | null;
+  createdAt: string;
+}
+
 export type WsEvent =
+  | WsMeetingBotEvent
   | WsNodeMoveEvent
   | WsNodeCreateEvent
   | WsNodeDeleteEvent

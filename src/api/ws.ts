@@ -18,6 +18,8 @@ export function subscribeToWorkspace(
   profile: string | null,
   onEvent: WsEventHandler,
   onError?: WsErrorHandler,
+  /** 연결될 때마다(최초·재접속) 호출 — 끊긴 동안 놓친 상태를 서버 조회로 되맞추는 데 쓴다. */
+  onConnect?: () => void,
 ): () => void {
   // 기존 소켓이 남아 있으면 정리 (좀비 소켓 방지)
   if (socket) {
@@ -45,6 +47,7 @@ export function subscribeToWorkspace(
         }
       },
     );
+    onConnect?.();
   });
 
   socket.on('workspace_event', (event: WsEvent) => {

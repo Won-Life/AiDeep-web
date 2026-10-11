@@ -171,6 +171,8 @@ interface NodeEditorPanelProps {
   onContentChange?: (content: { markdownBody: string; jsonBody: string }) => void;
   /** 첨부 파일 S3 업로드 시 서버가 요구하는 워크스페이스 ID (필수) */
   workspaceId?: string;
+  /** 진행 중인 회의가 붙은 노드 — 내용 확인만 가능하고 제목·본문 편집이 잠긴다 */
+  readOnly?: boolean;
 }
 
 export function NodeEditorPanel({
@@ -195,6 +197,7 @@ export function NodeEditorPanel({
   onFirstLineChange,
   onContentChange,
   workspaceId = "",
+  readOnly = false,
 }: NodeEditorPanelProps) {
   const [localAttachments, setLocalAttachments] = useState<Attachment[]>([]);
   const attachments = nodeAttachments ?? localAttachments;
@@ -310,7 +313,7 @@ export function NodeEditorPanel({
               aria-label="노드 제목"
               placeholder="제목 없음"
               value={title ?? ""}
-              readOnly={!onTitleChange}
+              readOnly={readOnly || !onTitleChange}
               onChange={(event) => onTitleChange?.(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.currentTarget.blur();
@@ -343,6 +346,11 @@ export function NodeEditorPanel({
           </div>
         </div>
 
+        {readOnly && (
+          <p role="status" className="mx-4 mt-3 flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#3F58C9] text-[12px] font-semibold text-white">
+            <span aria-hidden="true">🔒</span>녹음 중에는 수정할 수 없어요
+          </p>
+        )}
         {!collabProvider ? (
           <div className="flex flex-1 items-center justify-center text-muted typo-body1">
             워크스페이스를 불러오는 중...
@@ -359,6 +367,7 @@ export function NodeEditorPanel({
               noMediaDrop
               autoGrow
               minHeight={398}
+              readOnly={readOnly}
             />
             <AttachmentSection
               attachments={attachments}
@@ -418,6 +427,7 @@ export function NodeEditorPanel({
           noMediaDrop
           autoGrow
           minHeight={attachments.length > 0 ? 80 : 150}
+          readOnly={readOnly}
         />
 
         <AttachmentSection
@@ -459,6 +469,7 @@ export function NodeEditorPanel({
             onFirstLineChange={onFirstLineChange}
             toolbarSlot={<ToolbarPlugin workspaceId={workspaceId} />}
             extraBottomPadding
+            readOnly={readOnly}
           />
         </div>
       </div>

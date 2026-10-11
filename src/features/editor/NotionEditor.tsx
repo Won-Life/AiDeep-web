@@ -114,6 +114,7 @@ export interface NotionEditorProps {
   extraBottomPadding?: boolean;
   compactTop?: boolean; // 캔버스 미니 패널 — 본문 상단 패딩 축소 (pt-3 → pt-1)
   workspaceId?: string; // 본문 이미지/파일 S3 업로드 시 서버가 요구
+  readOnly?: boolean; // 진행 중인 회의가 붙은 노드 — 내용 확인만 가능(편집 잠금)
 }
 
 // ─── Media Commands ───────────────────────────────────────────────────────────
@@ -1162,6 +1163,15 @@ function ContentExportPlugin({
   return null;
 }
 
+// 회의가 시작·종료되면 열려 있는 에디터도 즉시 읽기 전용으로 바뀌거나 풀린다.
+function EditableSyncPlugin({ editable }: { editable: boolean }) {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => {
+    editor.setEditable(editable);
+  }, [editor, editable]);
+  return null;
+}
+
 function TitleTrackerPlugin({
   onChange,
   suppressed = false,
@@ -1226,6 +1236,7 @@ export function NotionEditor({
   extraBottomPadding = false,
   compactTop = false,
   workspaceId,
+  readOnly = false,
 }: NotionEditorProps) {
   // 슬래시 메뉴 표시 여부 — 메뉴가 떠있는 동안 TitleTracker의 제목 반영을 멈춘다.
   // 상태(닫힘 시 재반영 트리거)와 동기 ref(첫 '/' 깜빡임 방지) 이중 채널.
@@ -1263,6 +1274,7 @@ export function NotionEditor({
     nodes: REGISTERED_NODES,
     onError: (error: Error) => console.error('[NotionEditor]', error),
     editorState: null,
+    editable: !readOnly,
   };
 
   const providerFactory = useCallback(
@@ -1279,6 +1291,7 @@ export function NotionEditor({
     <div className={autoGrow ? 'flex flex-col bg-background rounded-b-lg' : 'flex flex-col flex-1 min-h-0 bg-background rounded-b-lg'}>
       <LexicalCollaboration>
         <LexicalComposer initialConfig={initialConfig}>
+          <EditableSyncPlugin editable={!readOnly} />
           {toolbarSlot}
           {collabProvider && syncError && (
             <div role="alert" className="flex items-center justify-between gap-2 px-4 py-2 text-sm text-muted">

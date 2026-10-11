@@ -18,6 +18,7 @@ import type {
   WorkspaceRole,
 } from "@/api/types";
 import type { PresenceMember } from "@/api/ws";
+import type { MeetingMap } from "@/features/meeting-bot/meetingState";
 
 interface WorkspaceLayoutContextValue {
   // 유저
@@ -50,6 +51,9 @@ interface WorkspaceLayoutContextValue {
   /** 최초 그래프 로드 실패(네트워크 등) — L2 에러 화면 트리거 */
   syncError: boolean;
   setSyncError: Dispatch<SetStateAction<boolean>>;
+  /** 회의 노드(nodeId)별 최근 회의 상태 — 실시간 이벤트 + 서버 조회로 유지 */
+  meetings: MeetingMap;
+  setMeetings: Dispatch<SetStateAction<MeetingMap>>;
 }
 
 const WorkspaceLayoutContext = createContext<WorkspaceLayoutContextValue>(
@@ -68,6 +72,7 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [synced, setSynced] = useState(false);
   const [syncError, setSyncError] = useState(false);
+  const [meetings, setMeetings] = useState<MeetingMap>({});
 
   const edgesRef = useRef<Edge[]>(edges);
 
@@ -90,6 +95,7 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
         edgesRef,
         synced, setSynced,
         syncError, setSyncError,
+        meetings, setMeetings,
       }}
     >
       {children}
