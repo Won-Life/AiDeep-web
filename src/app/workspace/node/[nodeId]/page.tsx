@@ -9,6 +9,7 @@ import { useWorkspaceLayout } from "@/app/workspace/context";
 import { useYjsProvider } from "@/hooks/useYjsProvider";
 import { useWorkspaceAwareness } from "@/hooks/useWorkspaceAwareness";
 import { COLOR_PALETTE } from "@/features/graph/constants/colors";
+import { getEditorAccess } from "@/features/editor/editorAccess";
 
 function getUserCursorColor(userId: string): string {
   if (!userId) return COLOR_PALETTE[0].text;
@@ -24,10 +25,13 @@ export default function NodeFullscreenPage() {
   const params = useParams<{ nodeId: string }>();
   const searchParams = useSearchParams();
 
-  const { sidebarWidth, userMe, workspaceRole, setNodes } = useWorkspaceLayout();
+  const { sidebarWidth, userMe, workspaceId: layoutWorkspaceId, workspaceRole, nodes, edges, synced, setNodes } = useWorkspaceLayout();
   const nodeId = params.nodeId;
-  const workspaceId = searchParams.get("workspaceId") ?? "";
+  // 레이아웃이 동기화 뒤 주소의 ?workspaceId를 지우므로 레이아웃이 확정한 값을 우선 쓴다.
+  const workspaceId = layoutWorkspaceId || (searchParams.get("workspaceId") ?? "");
 
+  // 그래프를 받은 뒤에만 판정한다. 콘텐츠 노드가 아니면 본문 에디터를 열지 않고 캔버스로 돌려보낸다.
+  const access = synced ? getEditorAccess(nodes, edges, nodeId) : null;
   const [title, setTitle] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +40,7 @@ export default function NodeFullscreenPage() {
   const cursorColor = getUserCursorColor(userMe?.userId ?? "");
 
   const { provider: collabProvider } = useYjsProvider({
-    nodeId: !loading && !error ? nodeId : null,
+    nodeId: !loading && !error && access === "allowed" ? nodeId : null,
     userName,
     userColor: cursorColor,
   });
@@ -57,12 +61,18 @@ export default function NodeFullscreenPage() {
   }, [nodeId, loading, error, setOpenEditorNodeId]);
 
   useEffect(() => {
-    if (!workspaceId || !nodeId) return;
+    if (access !== "denied") return;
+    showToast("콘텐츠 노드에서만 본문을 열 수 있어요");
+    router.replace("/workspace");
+  }, [access, router]);
+
+  useEffect(() => {
+    if (!workspaceId || !nodeId || access !== "allowed") return;
     getNode(workspaceId, nodeId)
       .then((node) => setTitle(node.title))
       .catch(() => setError("노드를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
-  }, [workspaceId, nodeId]);
+  }, [workspaceId, nodeId, access]);
 
   return (
     <div
