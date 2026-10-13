@@ -26,7 +26,7 @@ const DESCRIPTION =
   "기록을 그래프로 구조화하며 회의를 실시간으로 정리해줍니다.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://aideep.ai.kr"),
+  metadataBase: new URL("https://onnode.app"),
   title: { default: "On:Node", template: "%s | On:Node" },
   description: DESCRIPTION,
   openGraph: {
