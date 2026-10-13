@@ -4,7 +4,7 @@ import { ContentNodeMenu } from '@/features/graph/components/ContentNodeMenu';
 import { MeetingNodeChip } from '@/features/meeting-bot/MeetingTopBadge';
 import type { MeetingInfo } from '@/features/meeting-bot/meetingState';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
-import { useState, useRef, useLayoutEffect } from 'react';
+import { useState, useRef, useLayoutEffect, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { Position, type NodeProps } from '@xyflow/react';
 import { GraphHandle as Handle } from './GraphHandle';
@@ -98,6 +98,7 @@ export type NodeView = {
 
 export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   const router = useRouter();
+  const folderClipId = useId();
   const nodeData = data as NodeView;
   const isMain = nodeData.isMain ?? false;
   // 프로젝트 → 타이틀 → 콘텐츠. 타이틀=프로젝트 직계(pill), 콘텐츠=그 이하(연한 사각형) (Figma 08 G1).
@@ -318,9 +319,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
   /*
    * CONTEXT
    * - Problem      : selection was drawn on the card alone, leaving the folder tab outside the selected silhouette.
-   * - Why          : use one pale-blue outer ring for the card and extend the same layered folder shape over its upper-left tab.
+   * - Why          : 프로젝트는 탭을 포함한 고정 폴더 경로 안쪽에 선택 링을 그린다.
    * - Alternatives : a rectangular outline clips the folder profile; a tinted card changes its white surface.
-   * - Trade-offs   : the selection ring adds visual space around the main node without changing its content dimensions.
+   * - Trade-offs   : 프로젝트 선택 링은 내부에 표시해 hover와 선택 모두 외곽 크기를 유지한다.
    * - Edge Case    : title nodes keep their pill shape and receive a matching ring around their small upper-left cap.
    */
   const selectionRing = '#B7C7FF';
@@ -334,9 +335,18 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
    */
   const mainHighlighted = !isRenaming && (selected || isNodeHovered || isHovered);
   const mainHoverFill = '#EAEDFF';
+  /*
+   * CONTEXT
+   * - Problem      : hover의 외부 8px 링과 가변 탭 좌표 때문에 프로젝트가 세로로 커져 보인다.
+   * - Why          : 고정된 폴더 경로 안으로 강조선을 잘라 그려 기본·hover·선택의 외곽을 일치시킨다.
+   * - Alternatives : 본체 높이를 줄여 보정하면 텍스트와 연결 핸들 위치까지 움직인다.
+   * - Trade-offs   : 강조선이 카드 안쪽 공간을 사용하지만 노드 측정값과 연결 위치는 유지된다.
+   * - Edge Case    : 편집 중에는 링을 숨기고 협업자 강조에도 같은 경로를 사용하며 clip ID는 노드별로 고유하다.
+   */
   const mainFolderRing = mainHighlighted
     ? selectionRing
-    : (!isRenaming && viewerBorderColor ? viewerBorderColor : '#ffffff');
+    : (!isRenaming ? viewerBorderColor : null);
+  const folderOutlinePath = 'M 0 26 V 18 Q 0 0 18 0 H 56 Q 74 0 74 12 H 186 Q 200 12 200 26 V 140 Q 200 154 186 154 H 14 Q 0 154 0 140 Z';
 
   const containerStyle = isMain
     ? {
@@ -345,14 +355,8 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         // 소속 그래프를 드러낸다 → 기존 '색 테두리'를 폴더 탭(mainOwnBorderColor)으로 대체,
         // 기본 테두리 없음. hover/selected/viewer만 테두리로 표시.
         backgroundColor: MAIN_NODE_COLOR.bg,
-        boxShadow: mainHighlighted
-          ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.24)`
-          : '0 3px 4px rgba(53, 62, 112, 0.24)',
-        border: mainHighlighted
-          ? 'none'
-          : !isRenaming && viewerBorderColor
-            ? `2px solid ${viewerBorderColor}`
-            : 'none',
+        boxShadow: '0 3px 4px rgba(53, 62, 112, 0.24)',
+        border: 'none',
       }
     : isContent
       ? {
@@ -457,10 +461,10 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
         <NodeEditorPanel
           key={id}
           nodeId={id}
+          workspaceId={nodeData.workspaceId}
           attachments={attachments}
           onAttachmentsChange={setAttachments}
           handleSide={sideRelativeToParent}
-          workspaceId={nodeData.workspaceId}
           dockIndex={nodeData.dockIndex}
           title={label}
           onTitleChange={(title) => nodeData.onChange?.(id, title)}
@@ -602,42 +606,59 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           - Edge Case    : 선택·협업 강조는 탭에도 반영하고 긴 제목은 기존 두 줄 제한을 유지한다.
         */}
         {isMain && (
-          <div
-            aria-hidden
-            className="absolute pointer-events-none"
-            style={{
-              top: mainHighlighted ? -22 : -12,
-              left: mainHighlighted ? -8 : 0,
-              width: mainHighlighted ? 90 : 74,
-              height: mainHighlighted ? 22 : 28,
-              /*
-               * CONTEXT
-               * - Problem      : the white folder-tab shell creates a detached clip-like cap on hover.
-               * - Why          : using the node ring color for the shell makes the tab join the card outline.
-               * - Alternatives : removing the shell loses the folder shape; keeping white preserves the visible gap.
-               * - Trade-offs   : the tab shell follows hover, selection, and collaborator outline colors.
-               * - Edge Case    : unhighlighted main nodes use a soft blue shell matching the card outline.
-               */
-              backgroundColor: mainFolderRing,
-              borderRadius: mainHighlighted ? '26px 26px 0 0' : '18px 18px 0 0',
-              zIndex: 2,
-            }}
-          >
-            {mainHighlighted && <div style={{
-              position: 'absolute', top: 8, left: 8, width: 74, height: 14,
-              borderRadius: '20px 20px 0 0',
-              backgroundColor: showMainHover && hoverSide === 'left' ? mainHoverFill : MAIN_NODE_COLOR.bg,
-            }} />}
-            <div style={{
-              position: 'absolute',
-              top: mainHighlighted ? 13 : 5,
-              left: mainHighlighted ? 15 : 7,
-              width: 59,
-              height: 15,
-              borderRadius: mainHighlighted ? '12px 12px 0 0' : '10px 10px 0 0',
-              backgroundColor: fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR,
-            }} />
-          </div>
+          <>
+            <div
+              aria-hidden
+              className="absolute pointer-events-none"
+              style={{
+                top: -12,
+                left: 0,
+                width: 74,
+                height: 28,
+                backgroundColor: showMainHover && hoverSide === 'left' ? mainHoverFill : MAIN_NODE_COLOR.bg,
+                borderRadius: '18px 18px 0 0',
+                zIndex: 2,
+              }}
+            >
+              <div style={{
+                position: 'absolute', top: 5, left: 7, width: 59, height: 15,
+                borderRadius: '10px 10px 0 0',
+                backgroundColor: mainFolderRing ? 'transparent' : fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR,
+              }} />
+            </div>
+            {mainFolderRing && (
+              <svg
+                aria-hidden
+                className="absolute pointer-events-none"
+                width="200" height="154" viewBox="0 0 200 154"
+                style={{ top: -12, left: 0, zIndex: 3 }}
+              >
+                <defs>
+                  <clipPath id={folderClipId}><path d={folderOutlinePath} /></clipPath>
+                </defs>
+                {/*
+                 * CONTEXT
+                 * - Problem      : CSS 탭의 둥근 모서리와 SVG 강조선의 곡률이 달라 접점에 흰 틈이 남는다.
+                 * - Why          : 강조 시 탭 색을 동일한 SVG 외곽으로 자르고 테두리 아래까지 채워 경계를 공유한다.
+                 * - Alternatives : 탭 반경을 눈대중으로 보정하면 확대 배율에 따라 틈이 다시 드러난다.
+                 * - Trade-offs   : 강조 상태의 탭 채움은 SVG가 담당하고 기본 상태의 탭은 유지한다.
+                 * - Edge Case    : hover·선택·협업 강조 모두 같은 채움을 사용하며 노드 크기는 바꾸지 않는다.
+                 */}
+                <rect
+                  width="74" height="20"
+                  fill={fig?.deep ?? mainOwnBorderColor ?? EDGE_COLOR}
+                  clipPath={`url(#${folderClipId})`}
+                />
+                <path
+                  d={folderOutlinePath}
+                  fill="none"
+                  stroke={mainFolderRing}
+                  strokeWidth={mainHighlighted ? 16 : 4}
+                  clipPath={`url(#${folderClipId})`}
+                />
+              </svg>
+            )}
+          </>
         )}
         {/*
          * CONTEXT
