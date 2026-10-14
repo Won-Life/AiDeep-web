@@ -19,6 +19,7 @@ export function toFlowNode(dto: NodeDto): Node {
       isMain: dto.node_type === "PROJECT",
       nodeType: dto.node_type,
       depth: dto.depth ?? 0,
+      createdAt: dto.created_at, // 회의 중 만들어진 노드 수를 셀 때 쓴다(countMeetingCreatedNodes)
     },
   };
 }

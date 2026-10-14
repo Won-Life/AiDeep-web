@@ -17,7 +17,7 @@ import { getNodes } from '@/features/graph/api/getNodes';
 import { convertToReactFlow } from '@/features/graph/api/mappers';
 import { useWorkspaceWS } from '@/hooks/useWorkspaceWS';
 import { getActiveMeetings } from '@/api/meeting';
-import { applyMeetingEvent, mergeActiveMeetings } from '@/features/meeting-bot/meetingState';
+import { applyMeetingEvent, countMeetingCreatedNodes, mergeActiveMeetings } from '@/features/meeting-bot/meetingState';
 import { onPresenceState } from '@/api/ws';
 import { getCursorColor } from '@/utils/cursorColor';
 import { WorkspaceLayoutProvider, useWorkspaceLayout } from './context';
@@ -44,6 +44,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     setSynced,
     syncError,
     setSyncError,
+    meetings,
     setMeetings,
   } = useWorkspaceLayout();
 
@@ -236,7 +237,15 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     setNodes,
     setEdges,
     edgesRef,
-    onMeetingEvent: (event) => setMeetings((prev) => applyMeetingEvent(prev, event)),
+    onMeetingEvent: (event) => {
+      // 회의가 끝나면 그 회의 동안 타이틀 아래 생긴 노드 수를 알린다(Figma S1, countMeetingCreatedNodes)
+      const ended = applyMeetingEvent(meetings, event)[event.nodeId];
+      if (event.type === 'MEETING_BOT_LEFT' && ended.status === 'DONE' && meetings[event.nodeId]?.status !== 'DONE') {
+        const count = countMeetingCreatedNodes(ended, nodes, edgesRef.current);
+        if (count > 0) showToast(`회의 노드 ${count}개가 만들어졌어요`, 'announce');
+      }
+      setMeetings((prev) => applyMeetingEvent(prev, event));
+    },
     // 최초 접속·재접속마다 진행 중 회의를 다시 받는다. 실시간 이벤트는 구독자가 없는 동안 버려진다.
     // 조회가 실패해도(권한·네트워크) 이벤트 기반 상태는 유지되므로 조용히 넘어간다.
     onConnect: () => {
