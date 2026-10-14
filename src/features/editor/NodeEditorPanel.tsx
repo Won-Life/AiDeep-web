@@ -163,7 +163,7 @@ function AttachmentSection({
         ))}
       </div>
       <button type="button" onClick={() => fileRef.current?.click()} className="editor-upload-button">파일 올리기</button>
-      <p className="mt-1 text-[9px] text-muted">이미지 · PDF · 문서 · 음성 · 영상 · 최대 5MB</p>
+      <p className="mt-1 text-[9px] text-muted">이미지 · PDF · MD · DOC · HWP · 최대 5MB</p>
     </section>
   );
 }
