@@ -19,6 +19,21 @@ function formatSize(bytes: number): string {
     : `${(bytes / 1024 / 1024).toFixed(1)}mb`;
 }
 
+/*
+ * CONTEXT
+ * - Problem      : 서버(ALLOWED_MIME_TYPES)가 거부하는 HEIC 등을 고르면 일반 "업로드 실패"만 떠서 이유를 알 수 없다.
+ * - Why          : 서버 허용 목록과 같은 확장자로 업로드 전에 걸러 허용 종류를 토스트로 안내한다.
+ * - Alternatives : MIME 비교는 .md·.hwp에서 브라우저가 빈 type을 주는 경우가 많아 확장자 기준을 택했다.
+ * - Trade-offs   : 서버 허용 목록이 바뀌면 여기도 같이 고쳐야 한다(Aideep_backend upload.constant.ts).
+ * - Edge Case    : 확장자 대소문자(.HEIC·.JPG)는 소문자로 정규화한다.
+ */
+const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"];
+const FILE_EXTENSIONS = [...IMAGE_EXTENSIONS, "pdf", "md", "doc", "docx", "hwp"];
+
+function hasAllowedExtension(file: File, extensions: string[]): boolean {
+  return extensions.includes(file.name.split(".").pop()?.toLowerCase() ?? "");
+}
+
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
@@ -65,6 +80,11 @@ function AttachmentSection({
   const handleImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!hasAllowedExtension(file, IMAGE_EXTENSIONS)) {
+      showToast("JPG, PNG, WEBP 이미지만 첨부할 수 있어요");
+      e.target.value = "";
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       showToast("최대 5MB 파일까지 첨부할 수 있어요");
       e.target.value = "";
@@ -85,6 +105,11 @@ function AttachmentSection({
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!hasAllowedExtension(file, FILE_EXTENSIONS)) {
+      showToast("이미지(JPG·PNG·WEBP), PDF, MD, DOC·DOCX, HWP 파일만 첨부할 수 있어요");
+      e.target.value = "";
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       showToast("최대 5MB 파일까지 첨부할 수 있어요");
       e.target.value = "";
@@ -104,8 +129,8 @@ function AttachmentSection({
 
   return (
     <section className="editor-attachments" aria-label="첨부 파일">
-      <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-      <input ref={fileRef} type="file" accept="image/*,.pdf,.txt,.md,.doc,.docx,audio/*,video/*" className="hidden" onChange={handleFileChange} />
+      <input ref={imageRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden" onChange={handleImageChange} />
+      <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.md,.doc,.docx,.hwp" className="hidden" onChange={handleFileChange} />
       <h3 className="flex items-center gap-3 text-[14px] font-semibold">
         첨부 <span className="text-[12px] font-normal text-muted">{attachments.length}</span>
       </h3>
