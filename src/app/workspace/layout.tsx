@@ -60,7 +60,10 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
   const [sessionLoadFailed, setSessionLoadFailed] = useState(false);
   const [sessionAttempt, setSessionAttempt] = useState(0);
 
-  const sidebarWidth = isSidebarOpen ? SIDEBAR_WIDTH : RAIL_WIDTH;
+  // 워크스페이스 로딩(그래프 동기화 전) 중에는 사이드바를 접어둔다.
+  // 동기화 완료 또는 에러 화면 전환 시 저장된 열림 상태로 펼친다.
+  const effectiveSidebarOpen = isSidebarOpen && (synced || syncError);
+  const sidebarWidth = effectiveSidebarOpen ? SIDEBAR_WIDTH : RAIL_WIDTH;
 
   useEffect(() => {
     setSidebarWidth(sidebarWidth);
@@ -282,7 +285,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
        * - Edge Case    : archive remains gated by SHOW_TEMP_HIDDEN_UI and can still be opened through the sidebar callback when enabled.
        */}
       <Sidebar
-        isOpen={isSidebarOpen}
+        isOpen={effectiveSidebarOpen}
         onToggle={handleToggleSidebar}
         onOpenArchive={() => setIsArchiveOpen(true)}
       />
