@@ -74,9 +74,9 @@ export function applyMeetingEvent(map: MeetingMap, event: WsMeetingBotEvent): Me
       status: event.status,
       statusSubCode: event.statusSubCode ?? null,
       occurredAt: event.occurredAt,
-      recordingStartedAt: event.status === "RECORDING"
-        ? event.occurredAt
-        : (sameMeeting ? current.recordingStartedAt : null),
+      // 같은 회의에 RECORDING이 다시 와도 처음 시작 시각을 유지한다(총 녹음 시간·생성 노드 집계 기준)
+      recordingStartedAt: (sameMeeting ? current.recordingStartedAt : null)
+        ?? (event.status === "RECORDING" ? event.occurredAt : null),
     },
   };
 }

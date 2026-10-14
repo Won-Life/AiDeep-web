@@ -127,6 +127,13 @@ describe("getTotalRecordingSeconds", () => {
     expect(getTotalRecordingSeconds(leftOnly.n1)).toBeNull();
   });
 
+  it("keeps the first recording start when RECORDING arrives again for the same meeting", () => {
+    const joined = applyMeetingEvent({}, event({ type: "MEETING_BOT_JOINED", status: "RECORDING", occurredAt: "2026-10-11T10:00:00Z" }));
+    const again = applyMeetingEvent(joined, event({ type: "MEETING_BOT_JOINED", status: "RECORDING", occurredAt: "2026-10-11T10:01:00Z" }));
+    const left = applyMeetingEvent(again, event({ type: "MEETING_BOT_LEFT", status: "DONE", occurredAt: "2026-10-11T10:03:00Z" }));
+    expect(getTotalRecordingSeconds(left.n1)).toBe(180);
+  });
+
   it("does not carry a recording start over to a new meeting on the same node", () => {
     const joined = applyMeetingEvent({}, event({ type: "MEETING_BOT_JOINED", status: "RECORDING", occurredAt: "2026-10-11T10:00:00Z" }));
     const next = applyMeetingEvent(joined, event({ meetingId: "m2", type: "MEETING_BOT_LEFT", status: "DONE", occurredAt: "2026-10-11T11:00:00Z" }));
