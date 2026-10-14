@@ -3,10 +3,13 @@
 import { ContentNodeMenu } from '@/features/graph/components/ContentNodeMenu';
 import { MeetingNodeChip } from '@/features/meeting-bot/MeetingTopBadge';
 import type { MeetingInfo } from '@/features/meeting-bot/meetingState';
+import type { MeetingPlaceholder } from '@/features/meeting-bot/meetingGraphDecor';
+import { MeetingLockHint, MeetingNodePlaceholder } from '@/features/meeting-bot/MeetingDecorations';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
 import { useState, useRef, useLayoutEffect, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { Position, type NodeProps } from '@xyflow/react';
+import { contentBannerPath } from './contentBannerPath';
 import { GraphHandle as Handle } from './GraphHandle';
 import { NodeEditorPanel, type Attachment } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
@@ -33,25 +36,6 @@ function getUserCursorColor(userId: string): string {
     hash = userId.charCodeAt(i) + ((hash << 5) - hash);
   }
   return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length].text;
-}
-
-/*
- * CONTEXT
- * - Problem      : 콘텐츠 배너 끝이 직선 두 개로 만나 참고 이미지보다 날카롭다.
- * - Why          : 높이에 비례한 사선 끝을 quadratic 곡선으로 연결해 둥근 끝을 만든다.
- * - Alternatives : strokeLinejoin만으로는 내부 배경의 뾰족한 끝을 둥글게 만들 수 없다.
- * - Trade-offs   : 사선 깊이가 높이에 따라 늘어나므로 텍스트 쪽 여백도 확보한다.
- * - Edge Case    : 좌우 방향을 대칭으로 그리고 작은 노드에서는 반경을 제한한다.
- */
-function contentBannerPath(w: number, h: number, pointRight: boolean): string {
-  const p = Math.min(28, h / 2, w / 3);
-  const r = Math.max(2, Math.min(10, h / 2 - 1));
-  const tip = Math.min(6, p / 2, h / 4);
-  const mid = h / 2;
-  const inset = tip * p / mid;
-  return pointRight
-    ? `M ${r},0 H ${w - p} L ${w - inset},${mid - tip} Q ${w},${mid} ${w - inset},${mid + tip} L ${w - p},${h} H ${r} Q 0,${h} 0,${h - r} V ${r} Q 0,0 ${r},0 Z`
-    : `M ${w - r},0 H ${p} L ${inset},${mid - tip} Q 0,${mid} ${inset},${mid + tip} L ${p},${h} H ${w - r} Q ${w},${h} ${w},${h - r} V ${r} Q ${w},0 ${w - r},0 Z`;
 }
 
 export interface NodeViewer {
@@ -87,6 +71,9 @@ export type NodeView = {
   isMeetingLocked?: boolean; // 진행 중인 회의 아래의 노드 — 이동·이름 변경·삭제·하위 추가·내용 수정이 잠긴다
   meeting?: MeetingInfo; // 이 노드에 진행 중인 회의가 직접 붙어 있다 — 녹음 칩과 강조 테두리
   onStartMeeting?: (nodeId: string) => void; // 타이틀 노드 "회의 녹음 시작" — 회의 봇 추가 모달을 이 노드 대상으로 연다
+  isAnyMeetingActive?: boolean; // 워크스페이스에 진행 중인 회의가 있다 — 다른 타이틀의 녹음 시작 칩을 회색으로
+  meetingPlaceholder?: MeetingPlaceholder; // 녹음 중인 타이틀 아래 "노드 생성 중…" 자리
+  showMeetingLockHint?: boolean; // 녹음 중 잠긴 하위 노드 위 "클릭하면 내용을 볼 수 있어요" 말풍선
   collapseButtons?: CollapseButtonView[]; // 접기 버튼 표시 정보 (방향별)
   onToggleNodeType?: (nodeId: string) => void; // 프로젝트 ↔ 일반 노드 타입 토글
   onDeleteNode?: (nodeId: string) => void; // 노드 삭제 (확인 모달 경유)
@@ -96,7 +83,7 @@ export type NodeView = {
   onToggleCollapse?: (nodeId: string, side: CollapseSide) => void;
 };
 
-export function TextUpdaterNode({ data, id, selected }: NodeProps) {
+export function TextUpdaterNode({ data, id, selected, width, height }: NodeProps) {
   const router = useRouter();
   const folderClipId = useId();
   const nodeData = data as NodeView;
@@ -296,7 +283,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
    * - Why          : draft 배경을 최우선 적용하고 타이틀·콘텐츠가 같은 연한 톤을 공유한다.
    * - Alternatives : 저장 색상 변경은 입력 종료 후 원래 그래프 색을 복원하기 어렵다.
    * - Trade-offs   : 임시 표현은 생성한 사용자의 이름 입력 중에만 표시된다.
-   * - Edge Case    : 팔레트 밖 색상에도 흰색을 혼합하고 placeholder와 caret도 검정으로 맞춘다.
+   * - Edge Case    : 팔레트 밖 색상에도 흰색을 혼합하고 caret은 검정, placeholder는 연한 회색으로 둔다.
    */
   const draftFill = `color-mix(in srgb, ${baseContentFill} 70%, white)`;
   const contentFill = nodeData.isDraft
@@ -325,6 +312,19 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
    * - Edge Case    : title nodes keep their pill shape and receive a matching ring around their small upper-left cap.
    */
   const selectionRing = '#B7C7FF';
+  /*
+   * CONTEXT
+   * - Problem      : 회의 타이틀의 분홍 링이 별도 boxShadow라 상단 탭을 감싸지 못해 hover·선택 링과 모양이 달랐다.
+   * - Why          : hover·선택이 쓰는 링(본체 boxShadow + 탭 SVG stroke)을 그대로 쓰고 색만 회의용으로 바꾼다.
+   * - Alternatives : 반투명 rgba를 유지 → 본체 링과 탭 링이 겹치는 곳이 더 진하게 보여 이음새가 생긴다.
+   * - Trade-offs   : 배경 위 반투명 분홍(#F23240 35%)을 불투명 값으로 굳혀 배경이 바뀌어도 색이 고정된다.
+   * - Edge Case    : 회의 중에는 선택·hover보다 회의 링이 우선한다.
+   */
+  const titleRing = nodeData.meeting
+    ? '#F3AFB9'
+    : selected || isContentMenuOpen
+      ? selectionRing
+      : null;
   /*
    * CONTEXT
    * - Problem      : hover 테두리와 탭 배경이 본체의 선택 실루엣·절반 강조와 분리된다.
@@ -371,11 +371,9 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
           backgroundColor:
             (nodeData.isDraft ? draftFill : fig?.deep) ??
             `color-mix(in srgb, ${nodeData.color || 'rgb(var(--ds-sub-gray))'} 45%, ${nodeData.textColor || 'rgb(var(--ds-text-gray))'} 55%)`,
-          boxShadow: nodeData.meeting
-            ? '0 0 0 8px rgba(242, 50, 64, 0.35), 0 3px 4px rgba(53, 62, 112, 0.28)'
-            : selected || isContentMenuOpen
-              ? `0 0 0 8px ${selectionRing}, 0 3px 4px rgba(53, 62, 112, 0.28)`
-              : '0 3px 4px rgba(53, 62, 112, 0.28)',
+          boxShadow: titleRing
+            ? `0 0 0 8px ${titleRing}, 0 3px 4px rgba(53, 62, 112, 0.28)`
+            : '0 3px 4px rgba(53, 62, 112, 0.28)',
           border: isHovered
             ? '6px solid #93C5FD'
             : selected
@@ -689,12 +687,12 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
               overflow: 'hidden',
             }}
           >
-            {(selected || isContentMenuOpen) && (
+            {titleRing && (
               <svg x="-8" y="-8" width="68" height="18" viewBox="-8 -8 68 18" overflow="hidden">
                 <path
                   d="M 0 12 V 10 C 4 10 3 0 14 0 H 38 C 49 0 48 10 52 10 V 12"
                   fill="none"
-                  stroke={selectionRing}
+                  stroke={titleRing}
                   strokeWidth={16}
                   strokeLinejoin="round"
                 />
@@ -828,14 +826,20 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
          * - Why          : 하단 중앙에 음파 아이콘과 ‘회의 녹음 시작’ 라벨을 배치한다.
          * - Alternatives : margin으로 간격을 만들면 포인터가 버튼으로 이동할 때 hover가 끊긴다.
          * - Trade-offs   : 패딩 래퍼가 노드와 버튼 사이의 hover 영역을 유지한다.
-         * - Edge Case    : 이름 편집 중에는 숨긴다. 클릭하면 이 노드의 id를 회의 봇 모달에 넘기고, 연결 전에는 준비 중 안내를 띄운다.
+         * - Edge Case    : 이름 편집 중·회의가 붙었거나 잠긴 타이틀에서는 숨긴다. 시안(S1·M3)대로 hover 없이 항상 보이고,
+         *                  다른 회의가 진행 중이면 회색으로 낮춘다(시작은 막지 않는다 — 서버가 동시 회의를 막지 않음).
          */}
         {nodeData.meeting && (
-          <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3">
+          // 회의 링(8px) 바깥으로 띄워 시안(M3)처럼 링과 칩 사이에 간격을 둔다
+          <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-[20px]">
             <MeetingNodeChip meeting={nodeData.meeting} />
           </div>
         )}
-        {isTitle && isNodeHovered && !isRenaming && !isMeetingLocked && (
+        {nodeData.meetingPlaceholder && !!width && !!height && (
+          <MeetingNodePlaceholder placeholder={nodeData.meetingPlaceholder} titleWidth={width} titleHeight={height} />
+        )}
+        {nodeData.showMeetingLockHint && <MeetingLockHint />}
+        {isTitle && !nodeData.meeting && !isRenaming && !isMeetingLocked && (
           <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3">
             <button
               type="button"
@@ -845,9 +849,11 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
                 if (nodeData.onStartMeeting) nodeData.onStartMeeting(id);
                 else showToast('회의 녹음 기능은 준비 중이에요');
               }}
-              className="flex items-center gap-2 whitespace-nowrap rounded-full border border-[#F23240] bg-[#FFF0EF] px-4 py-1.5 text-[12px] font-semibold leading-[18px] text-[#111111] transition-colors hover:bg-[#FFE3E2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F23240]"
+              className={nodeData.isAnyMeetingActive
+                ? "flex items-center gap-2 whitespace-nowrap rounded-full bg-gray-500 px-4 py-1.5 text-[12px] font-semibold leading-[18px] text-white transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500"
+                : "flex items-center gap-2 whitespace-nowrap rounded-full border border-[#F23240] bg-[#FFF0EF] px-4 py-1.5 text-[12px] font-semibold leading-[18px] text-[#111111] transition-colors hover:bg-[#FFE3E2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F23240]"}
             >
-              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#E63840]" aria-hidden="true">
+              <span className={`flex h-[18px] w-[18px] items-center justify-center rounded-full ${nodeData.isAnyMeetingActive ? "bg-white/30" : "bg-[#E63840]"}`} aria-hidden="true">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
                   <path d="M3 6v4M5.5 4v8M8 2v12M10.5 5v6M13 6.5v3" />
                 </svg>

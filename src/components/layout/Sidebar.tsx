@@ -1323,13 +1323,26 @@ export default function Sidebar({
     [setFocusedNodeId],
   );
 
+  /*
+   * CONTEXT
+   * - Problem      : 폭만 애니메이션되고 내용은 펼침/레일이 즉시 교체돼, 좁은 폭에 펼침 내용이 끼워지며 툭 바뀌어 보였다.
+   * - Why          : 두 레이어를 모두 고정 폭으로 띄워 두고 폭 전환 동안 교차 페이드한다. 펼칠 때는 폭이 먼저 늘고
+   *                  내용이 뒤따라 나타나며, 접을 때는 내용이 먼저 사라진다. 내용은 줄바꿈되지 않고 그대로 드러난다.
+   * - Alternatives : aside에 overflow-hidden으로 잘라 내기 → 폭 밖으로 펼쳐지는 워크스페이스 메뉴(303px)까지 잘린다.
+   * - Trade-offs   : 두 레이어가 항상 마운트된다. 숨은 쪽은 inert로 포커스·클릭·스크린리더에서 빠진다.
+   * - Edge Case    : ⌘K로 펼친 직후 검색 포커스는 inert가 풀린 뒤(같은 커밋 이후 effect)에 걸리므로 그대로 동작한다.
+   */
+  const layerClass = (visible: boolean) =>
+    `absolute inset-y-0 left-0 flex flex-col transition-opacity ${
+      visible ? 'opacity-100 duration-200 delay-100' : 'pointer-events-none opacity-0 duration-100'
+    }`;
+
   return (
     <aside
-      className={`sidebar-reference ${sidebarFont.className} fixed top-0 left-0 z-50 flex h-full flex-col bg-background transition-[width] duration-200 ease-out`}
+      className={`sidebar-reference ${sidebarFont.className} fixed top-0 left-0 z-50 flex h-full flex-col bg-background transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]`}
       style={{ width: isOpen ? SIDEBAR_WIDTH : RAIL_WIDTH }}
     >
-      {isOpen ? (
-        <>
+      <div className={layerClass(isOpen)} style={{ width: SIDEBAR_WIDTH }} inert={!isOpen}>
           {/* 헤더 (X1·X6): On:Node 로고 행 + 워크스페이스 스위처 행 */}
           <div className="sidebar-header shrink-0">
             {/* 접기는 우측 경계 hover 필(CollapseEdgeStrip)·⌘\ 로 — 상시 버튼 없음 */}
@@ -1398,8 +1411,8 @@ export default function Sidebar({
           <ProfileRow onOpenArchive={onOpenArchive} />
 
           <CollapseEdgeStrip onCollapse={onToggle} />
-        </>
-      ) : (
+      </div>
+      <div className={layerClass(!isOpen)} style={{ width: RAIL_WIDTH }} inert={isOpen}>
         <CollapsedRail
           onExpand={onToggle}
           onOpenArchive={onOpenArchive}
@@ -1408,7 +1421,7 @@ export default function Sidebar({
             onToggle();
           }}
         />
-      )}
+      </div>
 
       <NewWorkspaceModal
         open={newWsOpen}

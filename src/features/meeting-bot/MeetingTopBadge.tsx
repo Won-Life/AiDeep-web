@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { MeetingInfo } from "./meetingState";
-import { isMeetingActive, toBotStatus } from "./meetingState";
-import { useElapsedLabel } from "./meetingTime";
+import { getTotalRecordingSeconds, isMeetingActive, toBotStatus } from "./meetingState";
+import { formatElapsed, useElapsedLabel } from "./meetingTime";
 
 const AUTO_HIDE_MS = 10_000;
 
@@ -50,6 +50,7 @@ export default function MeetingTopBadge({ meeting }: { meeting: MeetingInfo | nu
 
   if (!meeting || (!active && hiddenKey === key)) return null;
   const copy = copyFor(meeting);
+  const totalSeconds = getTotalRecordingSeconds(meeting);
 
   return (
     <div className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2">
@@ -60,6 +61,7 @@ export default function MeetingTopBadge({ meeting }: { meeting: MeetingInfo | nu
         <Wave color={copy.color} />
         <span className="whitespace-nowrap text-[13px] font-bold">{copy.title}</span>
         {recording ? <span className="whitespace-nowrap text-[11px] text-[#6B7280]">{elapsed}</span> : null}
+        {totalSeconds !== null ? <span className="whitespace-nowrap text-[11px] text-[#6B7280]">총 {formatElapsed(totalSeconds)}</span> : null}
         {copy.detail ? <span className="whitespace-nowrap text-[11px] text-[#6B7280]">{copy.detail}</span> : null}
       </div>
     </div>
@@ -84,7 +86,11 @@ export function MeetingNodeChip({ meeting }: { meeting: MeetingInfo }) {
       role="status"
       className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[#D43B3B] px-3 py-1 text-[11px] font-semibold text-white shadow-sm"
     >
-      <span aria-hidden="true" className="size-2 rounded-full bg-white" />
+      <span aria-hidden="true" className="flex size-4 items-center justify-center rounded-full bg-white">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#D43B3B" strokeWidth="2" strokeLinecap="round">
+          <path d="M3 6v4M5.5 4v8M8 2v12M10.5 5v6M13 6.5v3" />
+        </svg>
+      </span>
       {recording ? `녹음 중 ${elapsed}` : "봇 입장 중"}
     </span>
   );
