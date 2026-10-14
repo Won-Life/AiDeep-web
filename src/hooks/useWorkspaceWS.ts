@@ -193,6 +193,7 @@ export function useWorkspaceWS({
           depth: 0,
           color: e.node.data?.color ?? DEFAULT_NODE_COLOR.bg,
           textColor: e.node.data?.textColor ?? DEFAULT_NODE_COLOR.text,
+          createdAt: e.node.createdAt, // 회의 중 만들어진 노드 수를 셀 때 쓴다(countMeetingCreatedNodes)
         },
       };
 

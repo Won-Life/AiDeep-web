@@ -1,6 +1,26 @@
 import type { EdgeProps } from "@xyflow/react";
 import { BaseEdge, Position, useInternalNode } from "@xyflow/react";
 
+/** 수평 → 세로 줄기(hubX) → 수평으로 꺾이는 엣지 경로. 꺾임은 둥글게 처리한다. */
+export function branchPath(sourceX: number, sourceY: number, hubX: number, targetX: number, targetY: number) {
+  /*
+   * CONTEXT
+   * - Problem      : 기존 경로는 세로 줄기의 시작은 직각, 끝만 곡선으로 그린다.
+   * - Why          : 양쪽 접합을 같은 반경의 이차 곡선으로 연결해 시안의 부드러운 꺾임을 맞춘다.
+   * - Alternatives : 선 join만 round로 해서는 경로 자체의 직각을 곡선으로 만들 수 없다.
+   * - Trade-offs   : 짧은 연결에서는 반경을 공간에 맞춰 줄인다.
+   * - Edge Case    : 좌우·상하 반전과 수평 연결에서도 경로가 되돌아가지 않는다.
+   */
+  const deltaY = targetY - sourceY;
+  const incoming = Math.sign(hubX - sourceX);
+  const outgoing = Math.sign(targetX - hubX);
+  const vertical = Math.sign(deltaY);
+  const radius = Math.min(10, Math.abs(hubX - sourceX), Math.abs(targetX - hubX), Math.abs(deltaY) / 2);
+  return radius > 0
+    ? `M ${sourceX},${sourceY} L ${hubX - incoming * radius},${sourceY} Q ${hubX},${sourceY} ${hubX},${sourceY + vertical * radius} L ${hubX},${targetY - vertical * radius} Q ${hubX},${targetY} ${hubX + outgoing * radius},${targetY} L ${targetX},${targetY}`
+    : `M ${sourceX},${sourceY} L ${hubX},${sourceY} L ${hubX},${targetY} L ${targetX},${targetY}`;
+}
+
 export function BranchEdge(props: EdgeProps) {
   const { id, sourceY, targetY, data, markerEnd } = props;
   /*
@@ -18,24 +38,7 @@ export function BranchEdge(props: EdgeProps) {
   const sourceX = props.sourceX + (props.sourcePosition === Position.Left ? 1 : -1) * (sourceHandle?.width ?? 0) / 2;
   const targetX = props.targetX + (props.targetPosition === Position.Left ? 1 : -1) * (targetHandle?.width ?? 0) / 2;
   const hubX: number = (data?.hubX as number) ?? (sourceX + targetX) / 2;
-  const hubY: number = sourceY;
-
-  /*
-   * CONTEXT
-   * - Problem      : 기존 경로는 세로 줄기의 시작은 직각, 끝만 곡선으로 그린다.
-   * - Why          : 양쪽 접합을 같은 반경의 이차 곡선으로 연결해 시안의 부드러운 꺾임을 맞춘다.
-   * - Alternatives : 선 join만 round로 해서는 경로 자체의 직각을 곡선으로 만들 수 없다.
-   * - Trade-offs   : 짧은 연결에서는 반경을 공간에 맞춰 줄인다.
-   * - Edge Case    : 좌우·상하 반전과 수평 연결에서도 경로가 되돌아가지 않는다.
-   */
-  const deltaY = targetY - hubY;
-  const incoming = Math.sign(hubX - sourceX);
-  const outgoing = Math.sign(targetX - hubX);
-  const vertical = Math.sign(deltaY);
-  const radius = Math.min(10, Math.abs(hubX - sourceX), Math.abs(targetX - hubX), Math.abs(deltaY) / 2);
-  const mergedPath = radius > 0
-    ? `M ${sourceX},${sourceY} L ${hubX - incoming * radius},${hubY} Q ${hubX},${hubY} ${hubX},${hubY + vertical * radius} L ${hubX},${targetY - vertical * radius} Q ${hubX},${targetY} ${hubX + outgoing * radius},${targetY} L ${targetX},${targetY}`
-    : `M ${sourceX},${sourceY} L ${hubX},${hubY} L ${hubX},${targetY} L ${targetX},${targetY}`;
+  const mergedPath = branchPath(sourceX, sourceY, hubX, targetX, targetY);
 
   return (
     <>

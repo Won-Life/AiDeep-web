@@ -1,6 +1,7 @@
 'use client';
 import { showToast } from '@/components/ui/toastStore';
 import type { MeetingInfo } from '@/features/meeting-bot/meetingState';
+import { getMeetingGraphDecor } from '@/features/meeting-bot/meetingGraphDecor';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { getTemplateBody } from '@/features/editor/contentTemplates';
 import type { ContentTemplateId } from '@/features/editor/contentTemplates';
@@ -931,6 +932,8 @@ function GraphCanvasInner({
   });
   if (connectingHandle?.nodeId) markDraftSide(connectingHandle.nodeId, connectingHandle.handleId);
 
+  const meetingDecor = getMeetingGraphDecor(nodes, edges, meetingByNodeId, collapseState.hiddenIds);
+  const isAnyMeetingActive = Object.keys(meetingByNodeId ?? {}).length > 0;
   const nodesWithCallbacks = nodes.map((node) => {
     // 부모가 없는 서브 노드는 양쪽에 핸들 표시 — root 판별은 depth === 0 (issue #99)
     const hasParent = !isRootNode(node);
@@ -982,6 +985,9 @@ function GraphCanvasInner({
         isMeetingLocked: meetingLockedNodeIds?.has(node.id) ?? false, // 진행 중인 회의 아래의 읽기 전용 노드
         meeting: meetingByNodeId?.[node.id], // 회의가 직접 붙은 노드 — 녹음 칩 · 강조 테두리
         onStartMeeting, // 타이틀 노드 "회의 녹음 시작" — 이 노드를 봇이 붙을 대상으로 넘긴다
+        isAnyMeetingActive, // 다른 회의가 진행 중이면 녹음 시작 칩을 회색으로
+        meetingPlaceholder: meetingDecor.placeholderByNodeId.get(node.id), // 녹음 중 "노드 생성 중…" 자리
+        showMeetingLockHint: meetingDecor.hintNodeIds.has(node.id), // 녹음 중 잠긴 하위 노드 말풍선
         panelZIndex: node.id === workingOnEditorNodeId ? 30 : 20, // 포커스된 패널이 위
         isHovered: hoveredNodeId === node.id, // 드래그 중 hover된 노드 표시
         workspaceId, // 전체화면 이동 시 사용
