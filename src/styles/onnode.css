@@ -129,16 +129,12 @@
 }
 /*
  * CONTEXT
- * - Problem      : 프로젝트·타이틀 생성 직후 draft 규칙이 placeholder를 검정으로 덮어쓴다.
- * - Why          : 프로젝트·타이틀을 덮어쓰기에서 제외해 컴포넌트의 placeholder 색상 규칙을 사용한다.
- * - Alternatives : 실제 입력 글자색까지 회색으로 바꾸면 제목과 안내 문구의 구분이 사라진다.
- * - Trade-offs   : 콘텐츠 draft의 기존 검정 placeholder와 실제 입력 글자·커서 색은 유지한다.
- * - Edge Case    : 새 타이틀의 첫 입력과 빈 이름으로 다시 편집할 때 모두 같은 색상 규칙을 따른다.
+ * - Problem      : 위 draft 규칙과 별도로 콘텐츠 draft placeholder를 검정으로 덮어써 입력 글자와 구분되지 않았다.
+ * - Why          : placeholder 덮어쓰기를 두지 않아 컴포넌트의 placeholder 색상 규칙(gray-500 / #E5E7EB)을 그대로 쓴다.
+ * - Alternatives : 여기서 회색을 다시 지정하면 컴포넌트와 색 규칙이 두 곳으로 갈라진다.
+ * - Trade-offs   : 실제 입력 글자·커서·밑줄의 검정 강조는 유지된다.
+ * - Edge Case    : 프로젝트·타이틀·콘텐츠 draft 모두 같은 placeholder 규칙을 따른다.
  */
-[data-draft-node="true"]:not([data-project-node="true"]):not([data-title-node="true"]) > input::placeholder {
-  color: #111111;
-  opacity: 1;
-}
 
 /* X6: 활성 워크스페이스의 파란 탭과 드롭다운 선택 표시. */
 .sidebar-workspace[aria-expanded="true"] { position: relative; isolation: isolate; }

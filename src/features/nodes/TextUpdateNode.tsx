@@ -296,7 +296,7 @@ export function TextUpdaterNode({ data, id, selected }: NodeProps) {
    * - Why          : draft 배경을 최우선 적용하고 타이틀·콘텐츠가 같은 연한 톤을 공유한다.
    * - Alternatives : 저장 색상 변경은 입력 종료 후 원래 그래프 색을 복원하기 어렵다.
    * - Trade-offs   : 임시 표현은 생성한 사용자의 이름 입력 중에만 표시된다.
-   * - Edge Case    : 팔레트 밖 색상에도 흰색을 혼합하고 placeholder와 caret도 검정으로 맞춘다.
+   * - Edge Case    : 팔레트 밖 색상에도 흰색을 혼합하고 caret은 검정, placeholder는 연한 회색으로 둔다.
    */
   const draftFill = `color-mix(in srgb, ${baseContentFill} 70%, white)`;
   const contentFill = nodeData.isDraft
