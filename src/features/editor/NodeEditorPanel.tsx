@@ -255,7 +255,7 @@ export function NodeEditorPanel({
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.currentTarget.blur();
               }}
-              className="w-full min-w-0 rounded bg-transparent text-[15px] font-bold outline-none focus-visible:ring-1 focus-visible:ring-main-blue"
+              className="w-full min-w-0 bg-transparent text-[15px] font-bold outline-none"
             />
             {breadcrumb && <p className="mt-1 truncate text-[12px] text-muted" title={breadcrumb}>{breadcrumb}</p>}
           </div>
