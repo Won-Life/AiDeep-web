@@ -251,17 +251,15 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 | 마크다운 붙여넣기 | 클립보드 내용을 Lexical 블록으로 자동 변환 (`MarkdownPastePlugin`) |
 
 #### 파일·이미지 첨부 (UX)
-- 에디터 패널 하단에 **사진** / **파일** 버튼 고정 표시 (pill, `border: 1px solid #E8E8E8`, 12px)
-- **사진 업로드**: `사진` 클릭 → `accept="image/*"` 파일 선택 → `uploadFile(file)` → 이미지 렌더링
-  - 이미지 아래: 캡션 input (11px, center-aligned, 회색 `#999`, transparent bg, placeholder "사진 설명")
-  - hover 시: 이미지 위 우상단에 × 버튼(20×20px, 반투명 검정 배경 `rgba(0,0,0,0.45)`) 표시
-- **파일 업로드**: `파일` 클릭 → 전체 타입 파일 선택 → `uploadFile(file)` → 파일 카드 렌더링
-  - 카드: `background: #FAFAFA`, `border: 1px solid #EBEBEB`, 파일 아이콘 + 이름 + 용량
-  - 클릭 시: `<a href=url download=name>` 동적 생성으로 다운로드
-  - hover 시: 우측 × 버튼(18×18px, `background: #E8E8E8`) 표시
-- `input[type=file]` 사용 후 `value = ""` 초기화 — 같은 파일 재선택 가능
-- 업로드 실패: `catch {}` silent — UI 변화 없음 (사용자에게 에러 피드백 없음)
-- 첨부 state는 에디터 Yjs Doc 외부의 로컬 state — 협업 미동기화, 새로고침 시 초기화
+- 업로드한 파일은 **노드 본문에 링크 문단** `[파일명](url)`으로 들어간다. 클릭하면 새 탭에서 열린다.
+  - 서버 흐름: `POST /upload` → 파일 URL 반환 → 프론트가 URL을 본문에 삽입 → 실시간 서버가 본문을 markdownBody로 저장하면서
+    URL을 찾아 파일을 노드에 연결한다. 본문에 URL이 없으면 파일은 어떤 노드에도 연결되지 않아 24시간 뒤 서버 GC가 지운다.
+  - 이미지도 미리보기 없이 링크로 들어간다. 실시간 서버의 markdown 변환 에디터에 ImageNode/FileNode가 등록돼 있지 않아,
+    본문에 이 노드가 있으면 변환이 실패하고 저장이 깨지기 때문이다(기존 문서의 ImageNode/FileNode는 렌더링만 유지).
+- 진입점: 에디터 패널 하단 첨부 영역의 `파일 올리기`(문서 끝에 추가), 본문 드래그 앤 드롭·툴바·슬래시 메뉴(커서 위치에 추가)
+- 허용 형식: JPG·PNG·WEBP·PDF·MD·DOC·DOCX·HWP, 최대 5MB (첨부 영역 기준, 업로드 전 확장자 검사)
+- 업로드 중에는 첨부 영역에 "업로드 중…" 칩 표시, 실패 시 토스트 안내
+- 회의 진행으로 잠긴 노드(readOnly)에는 첨부 영역을 표시하지 않는다
 
 #### 타이틀 동기화
 - 에디터 첫 줄 텍스트가 노드 title로 동기화 (`onFirstLineChange` → 500ms debounce → REST PATCH)
@@ -387,7 +385,6 @@ Resource (섹션)
 - 노드 복사/붙여넣기, 다중 선택
 - 노드 검색·필터·태그
 - 모바일 대응 (데스크톱 전용)
-- 첨부파일의 협업 동기화 (현재 로컬 state만)
 - 워크스페이스 설정 페이지 (제목 변경, 멤버 권한 변경)
 - 멤버 목록 API — 백엔드 미구현으로 `getWorkspaceMembers` 주석 처리
 - VIEWER 역할의 에디터 쓰기 차단 클라이언트 적용
@@ -415,11 +412,8 @@ REST 실패 시 이미 로컬 state에 반영된 노드/엣지/색상은 롤백�
 ### 에디터 미열림 시 타이틀 변경 경로
 에디터를 열지 않은 유저에게 타이틀 변경은 WS `NODE_UPDATE` 이벤트로만 전달된다. `TitleTrackerPlugin`의 `registerUpdateListener`는 에디터가 마운트된 유저에서만 동작한다.
 
-### 첨부파일 미동기화
-이미지·파일 첨부는 패널 로컬 state에만 존재한다. 다른 유저나 새로고침 시 첨부 목록이 초기화된다.
-
-### 업로드 실패 무음 처리
-파일·이미지 업로드 실패 시 `catch {}` silent. 사용자에게 에러 피드백 없음.
+### 이미지 미리보기 없음
+업로드한 이미지는 본문에 링크로만 보인다. 실시간 서버가 ImageNode를 markdown으로 변환할 수 있게 되기 전까지 유지한다.
 
 ### 뷰포트 가장자리 에디터 패널
 가장자리 노드의 에디터 패널이 캔버스 밖으로 벗어날 수 있다. 자동 재배치 로직 없음 — 사용자가 캔버스 pan으로 직접 조정해야 한다.
