@@ -49,6 +49,7 @@ function FileViewerDialog({ file, onClose }: { file: ViewerFile; onClose: () => 
   // 첫 페인트 전에 모달로 열어 문서 흐름에 잠깐 그려지는 것을 막는다
   useLayoutEffect(() => { dialogRef.current?.showModal(); }, []);
 
+  // 보기 영역: 세로는 위아래 24px만 남기고, 가로는 오른쪽 바깥 × 버튼 자리(양쪽 56px)를 비운다
   return createPortal(
     <dialog
       ref={dialogRef}
@@ -56,31 +57,32 @@ function FileViewerDialog({ file, onClose }: { file: ViewerFile; onClose: () => 
       onClose={onClose}
       onClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
-      className="m-auto h-[85vh] w-[min(960px,calc(100vw-32px))] max-w-none flex-col overflow-hidden rounded-[16px] bg-background p-0 text-foreground backdrop:bg-black/50 open:flex"
+      className="m-auto max-h-none max-w-none overflow-visible bg-transparent p-0 text-foreground backdrop:bg-black/50"
     >
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
-        <p className="min-w-0 flex-1 truncate text-[14px] font-semibold" title={file.name}>{file.name}</p>
-        <button
-          type="button"
-          aria-label="닫기"
-          onClick={() => dialogRef.current?.close()}
-          className="flex size-7 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-surface"
-        >
-          <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-            <path d="M1 1L9 9M9 1L1 9" />
-          </svg>
-        </button>
-      </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-surface">
+      <div className="relative">
         {/* eslint-disable-next-line @next/next/no-img-element -- 외부 S3 원본 표시라 next/image 최적화 대상이 아니다 */}
-        {file.kind === 'image' && <img src={file.url} alt={file.name} className="max-h-full max-w-full object-contain" />}
-        {file.kind === 'frame' && <iframe src={file.url} title={file.name} className="h-full w-full border-0" />}
+        {file.kind === 'image' && <img src={file.url} alt={file.name} className="block max-h-[calc(100dvh-48px)] max-w-[calc(100vw-112px)] rounded-[12px] object-contain" />}
+        {file.kind === 'frame' && (
+          <iframe src={file.url} title={file.name} className="block h-[calc(100dvh-48px)] w-[min(1000px,calc(100vw-112px))] rounded-[12px] border-0 bg-background" />
+        )}
         {file.kind === 'download' && (
-          <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex w-[min(360px,calc(100vw-112px))] flex-col items-center gap-3 rounded-[16px] bg-background px-6 py-8 text-center">
+            <p className="max-w-full truncate text-[14px] font-semibold" title={file.name}>{file.name}</p>
             <p className="text-[13px] text-muted">이 형식은 미리보기를 지원하지 않아요</p>
             <a href={file.url} download={file.name} className="editor-upload-button">다운로드</a>
           </div>
         )}
+        {/* 별도 헤더 바 없이 보기 영역 우측 상단 모서리의 오른쪽 바깥에 둔다 */}
+        <button
+          type="button"
+          aria-label="닫기"
+          onClick={() => dialogRef.current?.close()}
+          className="absolute top-0 left-full ml-3 flex size-9 items-center justify-center rounded-full bg-background text-foreground transition-colors hover:bg-surface"
+        >
+          <svg width="14" height="14" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+            <path d="M1 1L9 9M9 1L1 9" />
+          </svg>
+        </button>
       </div>
     </dialog>,
     document.body,
