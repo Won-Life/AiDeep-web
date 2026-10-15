@@ -85,7 +85,7 @@ import {
 } from '../logic/connection';
 import {
   NODE_WIDTH,
-  EMPTY_SUB_NODE_WIDTH,
+  emptyChildNodeWidth,
   NODE_HEIGHT,
   NODE_PADDING,
   HUB_OFFSET,
@@ -718,7 +718,7 @@ function GraphCanvasInner({
         nodes,
         edges,
         undefined,
-        { width: EMPTY_SUB_NODE_WIDTH } as Node,
+        { width: emptyChildNodeWidth(sourceNode) } as Node,
       );
 
       const colorPair = getGraphColor(sourceNode.id, nodes, edges);
@@ -1702,8 +1702,8 @@ function GraphCanvasInner({
           );
         }
 
-        // source 노드 기준으로 적절한 거리에 위치 조정 — 새 노드는 제목 없는
-        // 서브 노드이므로 실측 대신 근사 폭으로 거리 계산 (#215)
+        // source 노드 기준으로 적절한 거리에 위치 조정 — 새 노드는 아직 렌더 전이라
+        // 실측 대신 빈 노드 최소 폭(타이틀/콘텐츠)으로 거리 계산 (#215)
         const adjustedPosition = adjustPositionRelativeToSource(
           sourceNode,
           originalPosition.y,
@@ -1711,7 +1711,7 @@ function GraphCanvasInner({
           nodes,
           edges,
           undefined,
-          { width: EMPTY_SUB_NODE_WIDTH } as Node,
+          { width: emptyChildNodeWidth(sourceNode) } as Node,
         );
 
         // 생성 위치에 이미 노드가 있으면 아무것도 생성하지 않는다.

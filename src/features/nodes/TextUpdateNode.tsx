@@ -733,10 +733,10 @@ export function TextUpdaterNode({ data, id, selected, width, height }: NodeProps
                 : 'placeholder:text-gray-500'
             }`}
             style={{
-              color: isContent ? '#ffffff' : filledTextColor,
-              borderBottom: isContent ? '1px solid #ffffff' : undefined,
+              // 읽기 상태 라벨과 같은 글자색 — 더블클릭 편집은 연한 배경이라 흰색 고정이면 글자가 안 보인다.
+              color: isContent && isContextMenuOpen ? (titleTextOnDeep(fig?.deep) ?? filledTextColor) : filledTextColor,
+              borderBottom: isContent ? '1px solid currentColor' : undefined,
               borderRadius: 0,
-              caretColor: isContent ? '#ffffff' : undefined,
               fontWeight: labelFontWeight,
               lineHeight: isMain ? '1.4em' : '100%',
               ...(isMain ? { fontSize: '13pt' } : { fontFamily: 'Pretendard, sans-serif', fontSize: isTitle ? 13 : 11, fontWeight: isTitle ? 600 : 700, letterSpacing: 0 }),
