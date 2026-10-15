@@ -20,6 +20,7 @@ import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin';
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { ClickableLinkPlugin } from '@lexical/react/LexicalClickableLinkPlugin';
 import { EditorRefPlugin } from '@lexical/react/LexicalEditorRefPlugin';
+import { FileViewerPlugin } from './FileViewerPlugin';
 import {
   LexicalTypeaheadMenuPlugin,
   useBasicTypeaheadTriggerMatch,
@@ -133,10 +134,10 @@ export interface NotionEditorProps {
  * - Alternatives : ImageNode/FileNode 유지 — 서버에 노드 등록이 필요해 프론트만으로 해결 불가.
  *                  첨부 칩 state 유지 — 저장 경로가 없어 새로고침 시 사라짐.
  * - Trade-offs   : 이미지가 미리보기 대신 링크로 보인다. 서버가 ImageNode를 등록하면 되돌릴 수 있다.
- * - Edge Case    : 에디터 밖(첨부 영역) 버튼은 본문 선택 영역이 없으므로 문서 끝에 붙인다.
+ * - Edge Case    : 에디터 밖(첨부 영역) 버튼은 atEnd로 문서 끝에 붙인다(포커스를 잃어도 이전 선택 영역이 남아 있음).
  *                  기존 문서의 ImageNode/FileNode는 렌더링을 위해 등록을 유지한다.
  */
-export const INSERT_UPLOADED_FILE_COMMAND = createCommand<{ name: string; url: string }>('INSERT_UPLOADED_FILE');
+export const INSERT_UPLOADED_FILE_COMMAND = createCommand<{ name: string; url: string; atEnd?: boolean }>('INSERT_UPLOADED_FILE');
 
 // ─── Image Caption Editor ─────────────────────────────────────────────────────
 
@@ -527,12 +528,14 @@ function MediaPlugin() {
   useEffect(() => {
     return editor.registerCommand(
       INSERT_UPLOADED_FILE_COMMAND,
-      ({ name, url }) => {
+      ({ name, url, atEnd }) => {
+        // 업로드 중 회의 잠금 등으로 편집 불가가 되면 넣지 않는다 — 프로그램 update는 setEditable(false)로 막히지 않음
+        if (!editor.isEditable()) return false;
         editor.update(() => {
           // macOS 파일명은 NFD(자모 분리)로 올 수 있어 NFC로 합친다
           const link = $createLinkNode(url, { target: '_blank', rel: 'noopener noreferrer' });
           const paragraph = $createParagraphNode().append(link.append($createTextNode(name.normalize('NFC'))));
-          if ($isRangeSelection($getSelection())) $insertNodes([paragraph]);
+          if (!atEnd && $isRangeSelection($getSelection())) $insertNodes([paragraph]);
           else $getRoot().append(paragraph);
         });
         return true;
@@ -1343,6 +1346,7 @@ export function NotionEditor({
           <CheckListPlugin />
           <LinkPlugin />
           <ClickableLinkPlugin />
+          <FileViewerPlugin />
           {editorRef && <EditorRefPlugin editorRef={editorRef} />}
           <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
           <MarkdownPastePlugin />
