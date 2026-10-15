@@ -8,13 +8,12 @@ import { getRefreshToken } from '@/api/client';
 
 /*
  * CONTEXT
- * - Problem      : 루트 진입 시 "확인 중..."/"불러오지 못했어요" 텍스트가 떠서 오류처럼 보였다.
- * - Why          : 인증 확인은 내부 사정이므로 캐릭터 스플래시 + dot loader만 보여주고,
- *                  확인 실패는 메시지 없이 /login으로 보낸다 (사용자 지시).
- * - Alternatives : SessionLoadError 유지 → 리디렉션 중에도 오류 문구가 노출되어 기각.
- * - Trade-offs   : 일시적 조회 오류도 로그인 화면으로 떨어진다. 세션이 살아 있으면
- *                  로그인 화면의 자동 복구(기존 refresh queue)가 이어받는다.
- * - Edge Case    : refresh 거절로 세션이 정리된 경우도 동일하게 /login.
+ * - Problem      : 첫 조회가 일시 오류(서버 지연·5xx·네트워크)로 실패하면 바로 /login으로 보냈고,
+ *                  /login이 다시 조회하다 또 실패하면 "로그인 정보를 불러오지 못했어요"가 떠서 스플래시 대신 오류 화면이 보였다.
+ * - Why          : 인증 확인은 내부 사정이므로 캐릭터 스플래시 + dot loader를 유지한 채 일시 오류만 재시도한다.
+ * - Alternatives : 실패 즉시 /login → 일시 오류도 오류 문구로 이어져 기각. 무한 재시도 → 서버 장애 때 무기한 대기.
+ * - Trade-offs   : 서버 장애 시 최대 약 7초(1·2·4초 간격 3회) 더 스플래시에 머문 뒤 /login으로 간다.
+ * - Edge Case    : refresh 거절로 세션이 정리되면(토큰 없음) 재시도 없이 바로 /login.
  */
 export default function Page() {
   const router = useRouter();
@@ -25,10 +24,18 @@ export default function Page() {
       router.replace('/login');
       return;
     }
-    getMe()
-      .then(() => { if (active) router.replace('/workspace'); })
-      .catch(() => { if (active) router.replace('/login'); });
-    return () => { active = false; };
+    let timer: ReturnType<typeof setTimeout>;
+    const check = (attempt: number) => {
+      getMe()
+        .then(() => { if (active) router.replace('/workspace'); })
+        .catch(() => {
+          if (!active) return;
+          if (!getRefreshToken() || attempt >= 3) router.replace('/login');
+          else timer = setTimeout(() => check(attempt + 1), 1000 * 2 ** attempt);
+        });
+    };
+    check(0);
+    return () => { active = false; clearTimeout(timer); };
   }, [router]);
 
   return (
