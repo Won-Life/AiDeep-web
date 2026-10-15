@@ -82,6 +82,7 @@ import {
 import {
   isInvalidConnection,
   resolveConnectionDirection,
+  draggedOutranksHovered,
 } from '../logic/connection';
 import {
   NODE_WIDTH,
@@ -330,11 +331,13 @@ function GraphCanvasInner({
   // 인라인 이름 편집(G5·G7 "이름 바꾸기") 중인 노드 — 해당 노드 제목이 input으로 전환
   /*
    * CONTEXT
-   * - Problem      : 한 개의 draft ID를 blur에서 지우면 이름 없는 연결까지 실선으로 바뀐다.
-   * - Why          : 생성된 ID들을 유지하고 실제 이름의 공백 여부로 각 연결의 임시 상태를 판단한다.
-   * - Alternatives : 편집 여부에 묶으면 Escape나 바깥 클릭만으로 입력 완료로 잘못 처리된다.
-   * - Trade-offs   : 입력 전 노드의 임시 상태는 현재 그래프 세션에서 유지된다.
-   * - Edge Case    : 여러 미입력 노드와 공백 입력은 점선을 유지하며 정상 이름 입력 즉시 해제된다.
+   * - Problem      : draft를 제목 공백 여부로만 판단하면 바깥 클릭·첨부만 한 노드가 새로고침 전까지 점선으로 남는다
+   *                  (draft는 로컬 세션 상태라 새로고침 후엔 전부 실선 — 화면과 새로고침 결과가 어긋남).
+   * - Why          : 생성 직후 인라인 이름 편집이 끝나면(blur·Enter·Esc, 에디터 열기 포함) 해당 ID를 draft에서 뺀다.
+   *                  편집 중에는 기존대로 제목 입력 즉시 실선.
+   * - Alternatives : 본문(첨부) 변경 감지로 해제 — 에디터 오픈 시 이름 input blur로 이미 해제되므로 불필요.
+   * - Trade-offs   : 이름 없이 편집만 빠져나와도 확정 노드로 보인다 (새로고침 결과와 동일).
+   * - Edge Case    : 첫 프로젝트 노드는 이름 편집을 시작하지 않으므로 제목 입력 전까지 점선 유지.
    */
   const [draftNodeIds, setDraftNodeIds] = useState<Set<string>>(() => new Set());
   const [connectingHandle, setConnectingHandle] = useState<{ nodeId: string | null; handleId: string | null } | null>(null);
@@ -679,8 +682,14 @@ function GraphCanvasInner({
     setRenamingNodeId(nodeId);
     setContextMenuNodeId(null);
   }, [isMeetingLocked]);
-  const handleFinishRename = useCallback(() => {
+  const handleFinishRename = useCallback((nodeId: string) => {
     setRenamingNodeId(null);
+    setDraftNodeIds((prev) => {
+      if (!prev.has(nodeId)) return prev;
+      const next = new Set(prev);
+      next.delete(nodeId);
+      return next;
+    });
   }, []);
 
   // G4·C1: 노드 hover "+" 버튼 — source(자식) 방향에 자식 노드 생성 + 엣지 + 색 상속 후
@@ -1795,6 +1804,20 @@ function GraphCanvasInner({
 
           const fromHandleId = fromHandle || `source-${side}`;
           const targetHandleId = `target-${side === 'left' ? 'right' : 'left'}`;
+          // handleAddChild와 동일 — 임시 엣지를 노드와 같은 렌더에 넣어 부모 관계를 즉시 성립시킨다.
+          // 응답 후에 엣지를 넣으면 첫 프레임에 부모 미상이라 콘텐츠 노드가 타이틀 모양으로 깜빡인다.
+          const tempEdgeId = `temp-edge-${nodeId}`;
+          setEdges((prev) => [
+            ...prev,
+            {
+              id: tempEdgeId,
+              source: fromNode.id,
+              target: nodeId,
+              type: 'branch',
+              sourceHandle: fromHandleId,
+              targetHandle: targetHandleId,
+            },
+          ]);
           createEdge(
             workspaceId,
             fromNode.id,
@@ -1803,25 +1826,18 @@ function GraphCanvasInner({
             targetHandleId,
           )
             .then(({ edgeId }) => {
-              setEdges((prev) => [
-                ...prev,
-                {
-                  id: edgeId,
-                  source: fromNode.id,
-                  target: nodeId,
-                  type: 'branch',
-                  sourceHandle: fromHandleId,
-                  targetHandle: targetHandleId,
-                },
-              ]);
+              setEdges((prev) =>
+                prev.map((e) => (e.id === tempEdgeId ? { ...e, id: edgeId } : e)),
+              );
               // 방금 만든 노드는 자손이 없으므로 엣지 목록 없이 depth만 전파
               setNodes((prev) =>
                 applyDepthOnEdgeCreate(prev, [], fromNode.id, nodeId),
               );
             })
-            .catch((err) =>
-              console.error('[onConnectEnd] createEdge failed', err),
-            );
+            .catch((err) => {
+              setEdges((prev) => prev.filter((e) => e.id !== tempEdgeId));
+              console.error('[onConnectEnd] createEdge failed', err);
+            });
         } catch (err) {
           console.error('[onConnectEnd] node creation failed', err);
         }
@@ -1876,13 +1892,16 @@ function GraphCanvasInner({
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
       if (isConnectingRef.current) return;
+      // 빈 캔버스 mousedown은 d3-zoom이 preventDefault해 포커스가 안 옮겨진다 → 이름 input blur가
+      // 발생하지 않으므로 여기서 직접 편집을 종료한다(draft 해제 포함).
+      if (renamingNodeId) handleFinishRename(renamingNodeId);
       if (contextMenuNodeId) {
         setContextMenuNodeId(null);
         return;
       }
       if (event.button !== 0) return;
     },
-    [contextMenuNodeId],
+    [contextMenuNodeId, renamingNodeId, handleFinishRename],
   );
 
   /* =========================
@@ -2564,12 +2583,14 @@ function GraphCanvasInner({
       // hover된 노드가 있으면 연결 생성 (다중 선택 드래그 중에는 hover-snap 비활성화)
       if (hoveredNodeId && !isMultiDragRef.current) {
         const newParent = nodes.find((n) => n.id === hoveredNodeId);
-        const draggedIsMain = draggedNode.data?.isMain === true;
+        // 프로젝트 > 타이틀 > 콘텐츠 격이 높은 쪽이 부모 — 드래그한 쪽이 높으면 hover 대상을 자식으로 편입
+        const draggedIsParent =
+          !!newParent && draggedOutranksHovered(draggedNode.id, newParent.id, nodes, edges);
         if (
           newParent &&
           !isInvalidConnection(
-            draggedIsMain ? draggedNode.id : newParent.id,
-            draggedIsMain ? newParent.id : draggedNode.id,
+            draggedIsParent ? draggedNode.id : newParent.id,
+            draggedIsParent ? newParent.id : draggedNode.id,
             nodes,
             edges,
           )
@@ -2577,8 +2598,8 @@ function GraphCanvasInner({
           didReparent = true;
 
           // source/target 역할 결정: main 노드가 드래그된 경우 항상 source
-          const parentNode = draggedIsMain ? draggedNode : newParent;
-          const childNode = draggedIsMain ? newParent : draggedNode;
+          const parentNode = draggedIsParent ? draggedNode : newParent;
+          const childNode = draggedIsParent ? newParent : draggedNode;
 
           // 1. 기존 부모와의 연결 끊기 (childNode 기준) — filter(전부)인 이유:
           // legacy 데이터에 부모 2개인 노드가 존재해, find(첫 번째)만 끊으면
@@ -2614,7 +2635,7 @@ function GraphCanvasInner({
           );
 
           // draggedNode가 child인 경우에만 finalPosition 갱신
-          if (!draggedIsMain) {
+          if (!draggedIsParent) {
             finalPosition = adjustedPosition;
           }
 
@@ -2672,7 +2693,7 @@ function GraphCanvasInner({
           // 안 잡히므로 종료 시 별도 저장(§10-7). 비메인은 childNode===draggedNode라 불필요.
           // 서브트리 root만 넘긴다 — saveDragPositions가 자손 보정까지 수행하므로
           // 자손을 개별 root로 태우면 자손 수만큼 중복 PATCH가 된다.
-          if (draggedIsMain) incorporatedIds = [childNode.id];
+          if (draggedIsParent) incorporatedIds = [childNode.id];
 
           // 5. 서브트리 대칭 이동이 필요한지 확인 후 실행 (같은 그래프 노드만)
           const childrenIds = getSameGraphDescendantIds(childNode, nodes, edges);
