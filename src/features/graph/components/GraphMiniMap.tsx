@@ -40,12 +40,13 @@ function MiniMapNode({ node, accent }: { node: Node; accent: string }) {
 
 /*
  * CONTEXT
- * - Problem      : 고정 1:4 배율은 줌에 따라 화면 영역이 미니맵보다 커지거나 점처럼 작아져 현재 위치를 가늠하기 어렵다.
- * - Why          : 배율을 현재 화면 영역에 비례시켜, 미니맵이 항상 화면보다 2배 줌 아웃된 주변을 보여준다.
- *                  화면 사각형이 미니맵의 약 절반 크기로 유지돼 "넓은 공간 중 지금 보는 곳"이 일정하게 읽힌다.
- * - Alternatives : 전체 노드 bounds 맞춤은 노드 추가·이동마다 표시 크기가 달라지고 화면 사각형이 점이 될 수 있다.
- * - Trade-offs   : 화면 영역 2배 밖의 먼 노드는 잘린다 — 캔버스를 줌 아웃하면 미니맵 범위도 같이 넓어진다.
- * - Edge Case    : 드래그 중엔 zoom이 고정이라 배율도 고정 — 시작 좌표계를 유지해 이동량이 누적되지 않게 한다.
+ * - Problem      : 미니맵이 화면 중심을 따라가면 사각형이 항상 정가운데·같은 크기라 전체 그래프 중 현재 위치를 알 수 없다.
+ * - Why          : 미니맵 범위를 그래프 중심에 고정하고 배율은 화면 크기(zoom 100%에서 사각형이 미니맵 절반)로 정한다.
+ *                  화면을 이동하면 사각형이 움직이고, 줌 인하면 작아지고 줌 아웃하면 커진다.
+ * - Alternatives : 전체 노드 bounds 맞춤은 노드 추가·이동마다 배율이 바뀌고 그래프가 넓으면 사각형이 점이 된다.
+ * - Trade-offs   : 그래프가 미니맵보다 넓으면 일부만 보인다 — 화면이 범위를 벗어나면 그만큼 범위를 밀어 사각형을 항상 안에 둔다.
+ * - Edge Case    : 사각형은 최소 크기(미니맵의 12%)를 유지하고, 줌 아웃으로 80%를 넘으면 미니맵 배율을 키워 전체를 채우지 않게 한다.
+ *                  드래그 중엔 시작 좌표계를 유지해 범위 이동으로 이동량이 누적되지 않게 한다.
  */
 export default function GraphMiniMap() {
   const nodes = useNodes().filter((node) => !node.hidden);
@@ -53,13 +54,17 @@ export default function GraphMiniMap() {
   const { x, y, zoom } = useViewport();
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
-  const { setCenter, zoomIn, zoomOut, fitView } = useReactFlow();
+  const { setCenter, zoomIn, zoomOut, fitView, getNodesBounds } = useReactFlow();
   const viewport = { x: -x / zoom, y: -y / zoom, width: width / zoom, height: height / zoom };
-  const scale = Math.max(viewport.width / 260, viewport.height / 156) * 2;
+  const scale = Math.max(Math.max(width / 260, height / 156) * 2, viewport.width / 260 / 0.8, viewport.height / 156 / 0.8);
   const viewWidth = scale * 260;
   const viewHeight = scale * 156;
-  const viewLeft = viewport.x + viewport.width / 2 - viewWidth / 2;
-  const viewTop = viewport.y + viewport.height / 2 - viewHeight / 2;
+  const bounds = nodes.length > 0 ? getNodesBounds(nodes) : viewport;
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+  const viewLeft = clamp(bounds.x + bounds.width / 2 - viewWidth / 2, viewport.x + viewport.width - viewWidth, viewport.x);
+  const viewTop = clamp(bounds.y + bounds.height / 2 - viewHeight / 2, viewport.y + viewport.height - viewHeight, viewport.y);
+  const boxWidth = Math.max(viewport.width, viewWidth * 0.12);
+  const boxHeight = Math.max(viewport.height, viewHeight * 0.12);
   const dragOrigin = useRef({ x: viewLeft, y: viewTop });
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const accent = '#7B87FF';
@@ -97,7 +102,7 @@ export default function GraphMiniMap() {
           return <line key={edge.id} x1={source.position.x + (toRight ? sw : 0)} y1={source.position.y + sh / 2} x2={target.position.x + (toRight ? 0 : tw)} y2={target.position.y + th / 2} stroke={accent} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />;
         })}
         {nodes.map((node) => <MiniMapNode key={node.id} node={node} accent={accent} />)}
-        <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} rx={18 * scale} fill={accent} fillOpacity={0.14} stroke="#626FFF" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+        <rect x={viewport.x + (viewport.width - boxWidth) / 2} y={viewport.y + (viewport.height - boxHeight) / 2} width={boxWidth} height={boxHeight} rx={Math.min(18 * scale, boxHeight / 3)} fill={accent} fillOpacity={0.14} stroke="#626FFF" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="flex h-[1.5vw] items-center justify-between border-t px-[0.8vw] text-[0.7vw] text-foreground" style={{ borderColor: accent, backgroundColor: 'color-mix(in srgb, #7B87FF 14%, rgb(var(--background)))' }}>
         <button type="button" aria-label="축소" className="h-full px-[0.4vw]" onClick={() => void zoomOut()}>−</button>
