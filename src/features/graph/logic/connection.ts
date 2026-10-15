@@ -22,12 +22,16 @@ export type ConnectionBlockReason =
   | 'differentColor'
   | 'parentSide';
 
+const SAME_GROUP_MESSAGE =
+  '이미 같은 묶음에 있는 노드끼리는 선으로 이을 수 없어요. 노드를 끌어 다른 노드 위에 놓으면 옮길 수 있어요';
+
 export const CONNECTION_BLOCK_MESSAGES: Record<ConnectionBlockReason, string | null> = {
   self: null,
   bothProjects: '프로젝트끼리는 연결할 수 없어요',
   alreadyConnected: '이미 연결된 노드예요',
-  descendant: '아래쪽에 이어진 노드와는 연결할 수 없어요',
-  sameGroup: '이미 같은 묶음에 있는 노드끼리는 선으로 이을 수 없어요. 노드를 끌어 다른 노드 위에 놓으면 옮길 수 있어요',
+  // 아래 노드에서 위(조상)로 끄는 경우 — 같은 묶음 안이라 같은 안내를 쓴다(방향을 말하면 끄는 쪽에 따라 틀린다)
+  descendant: SAME_GROUP_MESSAGE,
+  sameGroup: SAME_GROUP_MESSAGE,
   differentColor: '색이 다른 노드 묶음끼리는 연결할 수 없어요',
   parentSide: '이 방향으로는 연결할 수 없어요. 노드의 반대쪽 점에서 연결해 주세요',
 };

@@ -52,7 +52,7 @@ WS 핸들러·이벤트 리스너는 마운트 시점의 클로저를 사용한�
 
 ## 연결 차단 안내
 
-핸들 드래그 연결의 차단 규칙은 `getConnectionBlockReason`(logic/connection)이 "이유"로 돌려준다. `isValidConnection`은 이유가 없는지로 판정하고, `onConnectEnd`는 연결점 위 드롭이 막혔을 때(`isValid === false`) 같은 이유의 문구(`CONNECTION_BLOCK_MESSAGES`)를 토스트로 띄운다 — 판정과 안내가 한 함수라 어긋나지 않는다. 규칙을 추가·변경하면 이유 코드와 사용자 문구를 함께 추가한다(문구는 일반 사용자 말로, `logic/connectionBlock.test.ts`가 고정).
+핸들 드래그 연결의 차단 규칙은 `getConnectionBlockReason`(logic/connection)이 "이유"로 돌려준다. `isValidConnection`은 이유가 없는지로 판정하고, `onConnectEnd`는 연결점 위 드롭이 막혔을 때(`isValid === false`) 같은 이유의 문구(`CONNECTION_BLOCK_MESSAGES`)를 토스트로 띄운다 — 판정과 안내가 한 함수라 어긋나지 않는다. 문구가 없는 이유(self — 자기 노드의 숨은 target 핸들 근처 드롭)는 기존 빈 공간 드롭 흐름(새 노드 생성)으로 넘긴다. 규칙을 추가·변경하면 이유 코드와 사용자 문구를 함께 추가한다(문구는 일반 사용자 말로, `logic/connectionBlock.test.ts`가 고정).
 
 ## 엣지 연결 (onConnect)
 

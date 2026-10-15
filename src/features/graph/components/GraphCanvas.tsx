@@ -1589,21 +1589,22 @@ function GraphCanvasInner({
       setConnectingHandle(null);
       // early return도 드래그 플래그를 해제하고 직후 pane 클릭만 한 틱 차단한다.
       setTimeout(() => { isConnectingRef.current = false; }, 0);
-      // 다른 노드의 연결점에 놓았는데 규칙으로 막힌 경우(isValid === false) — 새 노드를 만들지 않고
+      // 다른 노드의 연결점에 놓았는데 그래프 규칙으로 막힌 경우(isValid === false) — 새 노드를 만들지 않고
       // 막힌 이유를 안내한다. isValid는 연결점 근처가 아니면 null이라 빈 공간 드롭과 구분된다.
-      // Loose 모드라 시작 핸들이 target이면 React Flow처럼 source/target을 뒤집어 같은 규칙으로 판정한다.
+      // target 핸들은 모두 isConnectableStart={false}라 드래그는 항상 source 핸들에서 시작한다.
+      // 안내 문구가 없는 경우(자기 노드의 숨은 target 핸들 근처 드롭 'self', 규칙 밖 사유)는
+      // 기존처럼 아래 빈 공간 드롭 흐름(새 노드 생성)으로 넘긴다 — 짧게 끌어 놓아도 노드가 생긴다.
       if (connectionState.isValid === false && connectionState.fromNode && connectionState.toNode && connectionState.toHandle) {
-        const fromIsSource = connectionState.fromHandle?.type === 'source';
         const reason = getConnectionBlockReason(
-          fromIsSource
-            ? { source: connectionState.fromNode.id, target: connectionState.toNode.id, targetHandle: connectionState.toHandle.id }
-            : { source: connectionState.toNode.id, target: connectionState.fromNode.id, targetHandle: connectionState.fromHandle?.id },
+          { source: connectionState.fromNode.id, target: connectionState.toNode.id, targetHandle: connectionState.toHandle.id },
           nodes,
           edges,
         );
         const message = reason ? CONNECTION_BLOCK_MESSAGES[reason] : null;
-        if (message) showToast(message);
-        return;
+        if (message) {
+          showToast(message);
+          return;
+        }
       }
       // 핸들에서 직접 뽑은 엣지가 다른 노드에 연결되지 않았을 때 (엣지를 빈 공간에 드롭) 새 노드 생성하며 연결 생성
       if (!connectionState.isValid) {
