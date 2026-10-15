@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
@@ -127,8 +127,21 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
   // 워크스페이스 + 노드/엣지 + 참여자 목록 — 최초 1회만 fetch (synced 이후 스킵)
   // syncError 중에도 스킵 — L2 "다시 시도"가 setSyncError(false)로 해제해야 재시도된다.
+  /*
+   * CONTEXT
+   * - Problem      : 이 effect가 고른 워크스페이스로 setWorkspaceId를 부르면 workspaceId 의존성 때문에
+   *                  sync 응답 전에 effect가 재실행돼(synced는 아직 false) /workspace/sync가 2번 나갔다.
+   * - Why          : 지금 요청 중인 워크스페이스를 ref에 기록하고, 같은 대상으로 재실행되면 건너뛴다.
+   *                  사이드바 전환(다른 workspaceId + synced=false)은 대상이 달라 그대로 새로 fetch한다.
+   * - Alternatives : workspaceId를 의존성에서 빼면 초기 로드 중 사이드바 전환 시 재fetch가 안 돼
+   *                  이전 워크스페이스 그래프가 새 workspaceId로 표시된다.
+   * - Trade-offs   : ref 하나가 늘지만 요청 수가 절반이 된다(응답 126MB 기준 서버 직렬화·압축 1회 절약).
+   * - Edge Case    : 요청 중 다른 워크스페이스로 전환하면 늦게 온 이전 응답은 대상 불일치로 버린다.
+   */
+  const syncTargetRef = useRef<string | null>(null);
   useEffect(() => {
     if (synced || syncError) return;
+    if (workspaceId && syncTargetRef.current === workspaceId) return;
 
     getWorkspaces()
       .then((list) => {
@@ -150,17 +163,21 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
           const rest = params.toString();
           window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
         }
+        syncTargetRef.current = ws.workspaceId;
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
 
         return Promise.all([
+          ws.workspaceId,
           getNodes(ws.workspaceId),
           // getWorkspaceMembers(ws.workspaceId),
-        ]);
+        ] as const);
       })
       .then((results) => {
         if (!results) return;
-        const [nodeData] = results;
+        const [targetId, nodeData] = results;
+        if (syncTargetRef.current !== targetId) return; // 요청 중 다른 워크스페이스로 전환됨
+        syncTargetRef.current = null;
         const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
           nodeData.nodes ?? [],
           nodeData.edges ?? [],
@@ -177,6 +194,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
           return;
         }
         // 네트워크·서버 실패 → L2 에러 화면. synced는 false로 둬 다시 시도 시 재fetch.
+        syncTargetRef.current = null;
         console.error('[WorkspaceLayout] sync failed', err);
         setSyncError(true);
       });
