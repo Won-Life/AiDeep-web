@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
@@ -127,11 +127,30 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
   // 워크스페이스 + 노드/엣지 + 참여자 목록 — 최초 1회만 fetch (synced 이후 스킵)
   // syncError 중에도 스킵 — L2 "다시 시도"가 setSyncError(false)로 해제해야 재시도된다.
+  /*
+   * CONTEXT
+   * - Problem      : 이 effect가 고른 워크스페이스로 setWorkspaceId를 부르면 workspaceId 의존성 때문에
+   *                  sync 응답 전에 effect가 재실행돼(synced는 아직 false) /workspace/sync가 2번 나갔다.
+   * - Why          : 지금 요청 중인 워크스페이스를 ref에 기록하고, 같은 대상으로 재실행되면 건너뛴다.
+   *                  사이드바 전환(다른 workspaceId + synced=false)은 대상이 달라 그대로 새로 fetch한다.
+   * - Alternatives : workspaceId를 의존성에서 빼면 초기 로드 중 사이드바 전환 시 재fetch가 안 돼
+   *                  이전 워크스페이스 그래프가 새 workspaceId로 표시된다.
+   * - Trade-offs   : ref 하나가 늘지만 요청 수가 절반이 된다(응답 126MB 기준 서버 직렬화·압축 1회 절약).
+   * - Edge Case    : 요청 중 다른 워크스페이스로 전환하면 이전 실행은 실행 번호(syncRunRef)가 낡아
+   *                  응답·실패 모두 버린다 — getWorkspaces 대기 중 전환돼도 이전 그래프가 새 workspaceId로
+   *                  표시되거나, 이전 요청 실패가 진행 중인 요청을 에러 화면으로 덮지 않는다.
+   */
+  const syncTargetRef = useRef<string | null>(null);
+  const syncRunRef = useRef(0);
   useEffect(() => {
     if (synced || syncError) return;
+    if (workspaceId && syncTargetRef.current === workspaceId) return;
+    const runId = ++syncRunRef.current;
+    const isStale = () => runId !== syncRunRef.current;
 
     getWorkspaces()
       .then((list) => {
+        if (isStale()) return;
         if (!list.length) return Promise.reject('no workspace');
         // 우선순위: ① 온보딩 등에서 넘긴 ?workspaceId ② 사이드바 스위처로 전환한 현재 workspaceId
         // ③ 마지막으로 보던 워크스페이스(localStorage — 새로고침 시 첫 번째로 돌아가는 문제 방지) ④ 첫 번째
@@ -150,6 +169,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
           const rest = params.toString();
           window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
         }
+        syncTargetRef.current = ws.workspaceId;
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
 
@@ -159,8 +179,9 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         ]);
       })
       .then((results) => {
-        if (!results) return;
+        if (!results || isStale()) return; // 요청 중 다른 워크스페이스로 전환됨
         const [nodeData] = results;
+        syncTargetRef.current = null;
         const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
           nodeData.nodes ?? [],
           nodeData.edges ?? [],
@@ -171,12 +192,14 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         setSynced(true);
       })
       .catch((err) => {
+        if (isStale()) return;
         if (err === 'no workspace') {
           // 워크스페이스 0개는 에러가 아니라 빈 상태 — 캔버스를 그대로 연다.
           setSynced(true);
           return;
         }
         // 네트워크·서버 실패 → L2 에러 화면. synced는 false로 둬 다시 시도 시 재fetch.
+        syncTargetRef.current = null;
         console.error('[WorkspaceLayout] sync failed', err);
         setSyncError(true);
       });
