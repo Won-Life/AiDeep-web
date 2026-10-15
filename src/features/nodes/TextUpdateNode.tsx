@@ -826,7 +826,7 @@ export function TextUpdaterNode({ data, id, selected, width, height }: NodeProps
          * - Why          : 하단 중앙에 음파 아이콘과 ‘회의 녹음 시작’ 라벨을 배치한다.
          * - Alternatives : margin으로 간격을 만들면 포인터가 버튼으로 이동할 때 hover가 끊긴다.
          * - Trade-offs   : 패딩 래퍼가 노드와 버튼 사이의 hover 영역을 유지한다.
-         * - Edge Case    : 이름 편집 중·회의가 붙었거나 잠긴 타이틀에서는 숨긴다. 커서를 올렸을 때만 보이고,
+         * - Edge Case    : 이름 편집 중·회의가 붙었거나 잠긴 타이틀에서는 숨긴다. 커서를 올리거나 키보드 포커스일 때만 보이고,
          *                  다른 회의가 진행 중이면 회색으로 낮춘다(시작은 막지 않는다 — 서버가 동시 회의를 막지 않음).
          */}
         {nodeData.meeting && (
@@ -839,8 +839,9 @@ export function TextUpdaterNode({ data, id, selected, width, height }: NodeProps
           <MeetingNodePlaceholder placeholder={nodeData.meetingPlaceholder} titleWidth={width} titleHeight={height} />
         )}
         {nodeData.showMeetingLockHint && <MeetingLockHint />}
-        {isTitle && isNodeHovered && !nodeData.meeting && !isRenaming && !isMeetingLocked && (
-          <div className="nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3">
+        {isTitle && !nodeData.meeting && !isRenaming && !isMeetingLocked && (
+          // 키보드 Tab 접근을 위해 항상 마운트하고, hover·포커스일 때만 보이게 한다
+          <div className={`nodrag absolute top-full left-1/2 z-10 -translate-x-1/2 pt-3 transition-opacity focus-within:pointer-events-auto focus-within:opacity-100 ${isNodeHovered ? '' : 'pointer-events-none opacity-0'}`}>
             <button
               type="button"
               aria-label="회의 녹음 시작"
