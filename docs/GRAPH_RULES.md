@@ -91,6 +91,8 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 
 `onConnect`는 드래그 중 `isValidConnection`이 이미 걸러준다는 전제 위에서, 프로그래매틱 연결 대비로 **단일 부모·target 핸들 두 검사만** 이중 방어한다 (색·같은 그래프 재검사는 하지 않음, §3-3).
 
+- [x] **차단 이유 안내**: 핸들 드래그를 다른 노드의 연결점에 놓았는데 위 규칙으로 막히면(`onConnectEnd`의 `isValid === false`) 새 노드를 만들지 않고 이유를 토스트로 띄운다. 규칙과 문구는 `getConnectionBlockReason`/`CONNECTION_BLOCK_MESSAGES`(logic/connection) 한 곳에 있고 `isValidConnection`도 같은 함수로 판정한다. 문구는 내부 용어 대신 화면에 보이는 말(프로젝트·색·묶음·점)로 쓴다. 자기 자신으로의 드롭은 안내하지 않는다. 노드 드래그 편입은 막힌 노드가 hover 후보에서 빠질 뿐 드롭 시점이 따로 없어 안내 대상이 아니다
+
 **노드 드래그 편입·리소스 드롭(`isInvalidConnection`만 사용)에서 차단되는 것:**
 
 - [x] 자기 자신 / 메인 ↔ 메인 / 직접 부모-자식

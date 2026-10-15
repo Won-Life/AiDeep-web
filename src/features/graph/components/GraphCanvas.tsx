@@ -73,7 +73,6 @@ import {
 import {
   getGraphColor,
   getUncoloredGraphAnchorIds,
-  colorOfNodeIn,
   getSameGraphDescendantIds,
   getRecolorTargetIds,
   findCrossColorChildEdges,
@@ -82,6 +81,8 @@ import {
 import {
   isInvalidConnection,
   resolveConnectionDirection,
+  getConnectionBlockReason,
+  CONNECTION_BLOCK_MESSAGES,
 } from '../logic/connection';
 import {
   NODE_WIDTH,
@@ -1304,72 +1305,8 @@ function GraphCanvasInner({
 
       if (!sourceNode || !targetNode) return false;
 
-      // 기존 유효성 체크
-      if (
-        isInvalidConnection(connection.source, connection.target, nodes, edges)
-      ) {
-        return false;
-      }
-
-      // 같은 그래프(같은 depth 0 루트 공유) 내 노드끼리는 연결 불가 (#146 —
-      // 메인 노드 없는 그래프에서도 동작. 루트 ↔ 서브 재연결·조상·형제 연결 차단)
-      const sourceRoot = getRootNodeForSubtree(connection.source, nodes, edges);
-      const targetRoot = getRootNodeForSubtree(connection.target, nodes, edges);
-      if (sourceRoot && targetRoot && sourceRoot.id === targetRoot.id) {
-        return false;
-      }
-
-      /*
-       * CONTEXT
-       * - Problem      : 서로 다른 그래프를 잇는 크로스 그래프 엣지는 이동·색 전파·삭제
-       *                  캐스케이드가 그래프 경계를 넘게 만들고, depth≠0 root 같은
-       *                  데이터 꼬임(Aideep_backend#64)을 낳는다.
-       * - Why          : 크로스 엣지의 유일한 신규 발생 경로가 핸들 드래그(onConnect)라서
-       *                  여기서 색 비교로 원천 차단한다. 색 = 그래프 정체성 (findCross-
-       *                  ColorChildEdges와 동일 기준). 둘 다 엣지를 가진 노드만 검사 —
-       *                  단독 노드는 색이 남아 있어도 그래프 편입(swap 케이스 2) 허용.
-       * - Alternatives : 서버 createEdge 검증 — 그래프 식별 기준(색? root?)을 서버가
-       *                  모르므로 백엔드 논의 필요, 클라 차단 후 후순위 이슈.
-       * - Trade-offs   : 두 그래프를 직접 잇는 기능(#117의 "양쪽 색 유지" 규칙)이 사라진다.
-       *                  같은 색 loose 트리끼리는 같은 그래프 취급이라 여전히 병합 가능.
-       * - Edge Case    : 색 미확정(legacy 무색 main)이면 차단하지 않는다 — 오판 방지,
-       *                  대칭이동 절단과 같은 맹점 (Aideep_backend#52 전까지).
-       */
-      const sourceInGraph = edges.some(
-        (e) => e.source === connection.source || e.target === connection.source,
-      );
-      const targetInGraph = edges.some(
-        (e) => e.source === connection.target || e.target === connection.target,
-      );
-      if (sourceInGraph && targetInGraph) {
-        const colorOf = colorOfNodeIn(nodes);
-        const srcColor = colorOf(connection.source);
-        const tgtColor = colorOf(connection.target);
-        if (
-          srcColor !== undefined &&
-          tgtColor !== undefined &&
-          srcColor !== tgtColor
-        ) {
-          return false;
-        }
-      }
-
-      // 단일 부모 불변식 (#92)은 차단이 아니라 재부모화로 보장한다 —
-      // 실제 자식(swap 이후 targetId)이 이미 부모를 가져도 연결을 허용하고,
-      // onConnect가 기존 부모 엣지를 전부 끊은 뒤 새 연결을 만든다.
-
-      // 부모가 있는 노드의 부모 방향(target-*) 핸들로는 연결 불가 —
-      // 연결은 부모 반대 방향으로만 가능 (docs/GRAPH_RULES.md §3-2).
-      // swap으로 그래프 쪽이 부모가 되는 케이스(단독 노드 편입)도 드롭 지점이
-      // 부모 방향이면 막는다. 부모 없는 노드의 target 핸들 드롭은 허용.
-      if (
-        connection.targetHandle?.startsWith('target-') &&
-        getParentId(connection.target, edges) !== null
-      ) {
-        return false;
-      }
-
-      return true;
+      // 차단 규칙과 안내 문구는 getConnectionBlockReason 한 곳에 있다(onConnectEnd 드롭 안내와 공유)
+      return getConnectionBlockReason(connection, nodes, edges) === null;
     },
     [nodes, edges],
   );
@@ -1652,6 +1589,22 @@ function GraphCanvasInner({
       setConnectingHandle(null);
       // early return도 드래그 플래그를 해제하고 직후 pane 클릭만 한 틱 차단한다.
       setTimeout(() => { isConnectingRef.current = false; }, 0);
+      // 다른 노드의 연결점에 놓았는데 규칙으로 막힌 경우(isValid === false) — 새 노드를 만들지 않고
+      // 막힌 이유를 안내한다. isValid는 연결점 근처가 아니면 null이라 빈 공간 드롭과 구분된다.
+      // Loose 모드라 시작 핸들이 target이면 React Flow처럼 source/target을 뒤집어 같은 규칙으로 판정한다.
+      if (connectionState.isValid === false && connectionState.fromNode && connectionState.toNode && connectionState.toHandle) {
+        const fromIsSource = connectionState.fromHandle?.type === 'source';
+        const reason = getConnectionBlockReason(
+          fromIsSource
+            ? { source: connectionState.fromNode.id, target: connectionState.toNode.id, targetHandle: connectionState.toHandle.id }
+            : { source: connectionState.toNode.id, target: connectionState.fromNode.id, targetHandle: connectionState.fromHandle?.id },
+          nodes,
+          edges,
+        );
+        const message = reason ? CONNECTION_BLOCK_MESSAGES[reason] : null;
+        if (message) showToast(message);
+        return;
+      }
       // 핸들에서 직접 뽑은 엣지가 다른 노드에 연결되지 않았을 때 (엣지를 빈 공간에 드롭) 새 노드 생성하며 연결 생성
       if (!connectionState.isValid) {
         const fromNode = connectionState.fromNode;

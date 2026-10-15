@@ -50,6 +50,10 @@ WS 핸들러·이벤트 리스너는 마운트 시점의 클로저를 사용한�
 - 빈 공간 클릭 → `createMdNode` REST POST → 응답의 `nodeId`로 local state 삽입.
 - 낙관적 삽입(응답 전 삽입) 없음. 실패 시 노드 미생성.
 
+## 연결 차단 안내
+
+핸들 드래그 연결의 차단 규칙은 `getConnectionBlockReason`(logic/connection)이 "이유"로 돌려준다. `isValidConnection`은 이유가 없는지로 판정하고, `onConnectEnd`는 연결점 위 드롭이 막혔을 때(`isValid === false`) 같은 이유의 문구(`CONNECTION_BLOCK_MESSAGES`)를 토스트로 띄운다 — 판정과 안내가 한 함수라 어긋나지 않는다. 규칙을 추가·변경하면 이유 코드와 사용자 문구를 함께 추가한다(문구는 일반 사용자 말로, `logic/connectionBlock.test.ts`가 고정).
+
 ## 엣지 연결 (onConnect)
 
 **크로스 그래프 연결 차단**: 둘 다 엣지를 가진 노드이고 `data.color`가 서로 다르면(= 서로 다른 그래프) `isValidConnection`이 거부한다. #117의 "그래프 ↔ 그래프는 양쪽 색 유지" 규칙은 폐기 — 크로스 그래프 엣지의 유일한 신규 발생 경로였다(Aideep_backend#64 논의). 단독 노드(엣지 0개)는 색이 남아 있어도 그래프 편입 허용. 색 미저장 legacy main은 색 비교 불가로 차단을 통과할 수 있다(대칭이동 절단과 동일 맹점) — Aideep_backend#52(PR #60)로 생성 시 색 필수화 + 백필 마이그레이션 도입, 마이그레이션 적용 후 해소. 서버 `createEdge`(`connectNodes`)는 self-loop·중복·역방향·target=PROJECT·순환(`hasCycle` BFS)은 검증하지만 **크로스 그래프(색)·단일 부모는 검증하지 않는다** — 그래서 이 두 차단은 UI 레벨이다. DB의 기존 크로스 엣지는 legacy 데이터이며 대칭이동 시 절단(`findCrossColorChildEdges`)이 청소 안전망.
