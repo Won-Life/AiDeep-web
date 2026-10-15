@@ -136,15 +136,21 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
    * - Alternatives : workspaceId를 의존성에서 빼면 초기 로드 중 사이드바 전환 시 재fetch가 안 돼
    *                  이전 워크스페이스 그래프가 새 workspaceId로 표시된다.
    * - Trade-offs   : ref 하나가 늘지만 요청 수가 절반이 된다(응답 126MB 기준 서버 직렬화·압축 1회 절약).
-   * - Edge Case    : 요청 중 다른 워크스페이스로 전환하면 늦게 온 이전 응답은 대상 불일치로 버린다.
+   * - Edge Case    : 요청 중 다른 워크스페이스로 전환하면 이전 실행은 실행 번호(syncRunRef)가 낡아
+   *                  응답·실패 모두 버린다 — getWorkspaces 대기 중 전환돼도 이전 그래프가 새 workspaceId로
+   *                  표시되거나, 이전 요청 실패가 진행 중인 요청을 에러 화면으로 덮지 않는다.
    */
   const syncTargetRef = useRef<string | null>(null);
+  const syncRunRef = useRef(0);
   useEffect(() => {
     if (synced || syncError) return;
     if (workspaceId && syncTargetRef.current === workspaceId) return;
+    const runId = ++syncRunRef.current;
+    const isStale = () => runId !== syncRunRef.current;
 
     getWorkspaces()
       .then((list) => {
+        if (isStale()) return;
         if (!list.length) return Promise.reject('no workspace');
         // 우선순위: ① 온보딩 등에서 넘긴 ?workspaceId ② 사이드바 스위처로 전환한 현재 workspaceId
         // ③ 마지막으로 보던 워크스페이스(localStorage — 새로고침 시 첫 번째로 돌아가는 문제 방지) ④ 첫 번째
@@ -168,15 +174,13 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         setWorkspaceRole(ws.role);
 
         return Promise.all([
-          ws.workspaceId,
           getNodes(ws.workspaceId),
           // getWorkspaceMembers(ws.workspaceId),
-        ] as const);
+        ]);
       })
       .then((results) => {
-        if (!results) return;
-        const [targetId, nodeData] = results;
-        if (syncTargetRef.current !== targetId) return; // 요청 중 다른 워크스페이스로 전환됨
+        if (!results || isStale()) return; // 요청 중 다른 워크스페이스로 전환됨
+        const [nodeData] = results;
         syncTargetRef.current = null;
         const { nodes: flowNodes, edges: flowEdges } = convertToReactFlow(
           nodeData.nodes ?? [],
@@ -188,6 +192,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         setSynced(true);
       })
       .catch((err) => {
+        if (isStale()) return;
         if (err === 'no workspace') {
           // 워크스페이스 0개는 에러가 아니라 빈 상태 — 캔버스를 그대로 연다.
           setSynced(true);
