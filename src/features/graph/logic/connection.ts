@@ -152,3 +152,29 @@ export function resolveConnectionDirection(
     bothInGraphs: sourceEdgeCount > 0 && targetEdgeCount > 0,
   };
 }
+
+/*
+ * CONTEXT
+ * - Problem      : 노드 드래그 재부모화는 프로젝트 노드만 "항상 부모"로 취급해, 타이틀을 콘텐츠 위에 놓으면
+ *                  타이틀이 콘텐츠의 자식이 되고 콘텐츠 색으로 재색칠됐다.
+ * - Why          : 계층 격(프로젝트 > 타이틀 > 콘텐츠)으로 부모를 정한다. 타이틀/콘텐츠 판정은
+ *                  렌더의 isContentNode와 같은 기준(부모가 프로젝트인가).
+ * - Alternatives : 드래그 방향 그대로 두고 색만 타이틀 기준 — 타이틀이 콘텐츠 아래로 들어가 계층이 뒤집힌다.
+ * - Trade-offs   : 같은 격끼리는 기존대로 놓인 쪽(hover 대상)이 부모.
+ * - Edge Case    : 부모 없는 단독 노드는 격 비교 대상이 아니다(기존 규칙 유지).
+ */
+/** dragged 노드를 hovered 노드 위에 놓았을 때 dragged가 부모가 되어야 하는가 */
+export function draggedOutranksHovered(
+  draggedId: string,
+  hoveredId: string,
+  nodes: Node[],
+  edges: Edge[],
+): boolean {
+  const isMain = (id: string) => nodes.find((n) => n.id === id)?.data?.isMain === true;
+  if (isMain(draggedId)) return true;
+  const draggedParent = getParentId(draggedId, edges);
+  const hoveredParent = getParentId(hoveredId, edges);
+  const draggedIsTitle = draggedParent != null && isMain(draggedParent);
+  const hoveredIsContent = hoveredParent != null && !isMain(hoveredParent);
+  return draggedIsTitle && hoveredIsContent;
+}
