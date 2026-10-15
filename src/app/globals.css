@@ -378,6 +378,7 @@
   .ne-link {
     color: rgb(var(--ds-main));
     text-decoration: underline;
+    cursor: default; /* 클릭하면 새 탭으로 열리는 링크(첨부 파일 포함) — 텍스트 커서 대신 화살표 */
   }
 
   /* ── Table ── */

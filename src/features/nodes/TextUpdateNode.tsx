@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Position, type NodeProps } from '@xyflow/react';
 import { contentBannerPath } from './contentBannerPath';
 import { GraphHandle as Handle } from './GraphHandle';
-import { NodeEditorPanel, type Attachment } from '@/features/editor/NodeEditorPanel';
+import { NodeEditorPanel } from '@/features/editor/NodeEditorPanel';
 import { useYjsProvider } from '@/hooks/useYjsProvider';
 import { useWorkspaceLayout } from '@/app/workspace/context';
 import { showToast } from '@/components/ui/toastStore';
@@ -101,16 +101,6 @@ export function TextUpdaterNode({ data, id, selected, width, height }: NodeProps
   const { userMe } = useWorkspaceLayout();
   const userName = userMe?.username ?? 'Anonymous';
   const cursorColor = getUserCursorColor(userMe?.userId ?? '');
-
-  /*
-   * CONTEXT
-   * - Problem      : 단일 패널 전환으로 에디터를 unmount하면 패널 내부 첨부 목록이 사라진다.
-   * - Why          : 첨부 UI 상태를 노드가 소유해 다른 노트를 열었다 돌아와도 유지한다.
-   * - Alternatives : 숨겨진 에디터를 계속 마운트하면 단일 패널과 협업 연결 정리가 어긋난다.
-   * - Trade-offs   : 기존 첨부 상태는 현재 그래프 세션 안에서 유지하며 새 저장 형식은 도입하지 않는다.
-   * - Edge Case    : 업로드 중 패널을 전환해도 완료 결과는 원래 노드의 목록에 반영한다.
-   */
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isNodeHovered, setIsNodeHovered] = useState(false);
   const [hoverSide, setHoverSide] = useState<'left' | 'right'>('right');
   const [isContentMenuOpen, setIsContentMenuOpen] = useState(false);
@@ -460,8 +450,6 @@ export function TextUpdaterNode({ data, id, selected, width, height }: NodeProps
           key={id}
           nodeId={id}
           workspaceId={nodeData.workspaceId}
-          attachments={attachments}
-          onAttachmentsChange={setAttachments}
           handleSide={sideRelativeToParent}
           dockIndex={nodeData.dockIndex}
           title={label}
@@ -745,10 +733,10 @@ export function TextUpdaterNode({ data, id, selected, width, height }: NodeProps
                 : 'placeholder:text-gray-500'
             }`}
             style={{
-              color: isContent ? '#ffffff' : filledTextColor,
-              borderBottom: isContent ? '1px solid #ffffff' : undefined,
+              // 읽기 상태 라벨과 같은 글자색 — 더블클릭 편집은 연한 배경이라 흰색 고정이면 글자가 안 보인다.
+              color: isContent && isContextMenuOpen ? (titleTextOnDeep(fig?.deep) ?? filledTextColor) : filledTextColor,
+              borderBottom: isContent ? '1px solid currentColor' : undefined,
               borderRadius: 0,
-              caretColor: isContent ? '#ffffff' : undefined,
               fontWeight: labelFontWeight,
               lineHeight: isMain ? '1.4em' : '100%',
               ...(isMain ? { fontSize: '13pt' } : { fontFamily: 'Pretendard, sans-serif', fontSize: isTitle ? 13 : 11, fontWeight: isTitle ? 600 : 700, letterSpacing: 0 }),

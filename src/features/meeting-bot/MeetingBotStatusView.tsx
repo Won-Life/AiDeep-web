@@ -84,7 +84,7 @@ export function MeetingBotLimitPanel({ onConfirm }: { onConfirm: () => void }) {
       <div aria-hidden="true" className="mx-auto size-[60px] rounded-full bg-[var(--meeting-primary-light)]" />
       <h2 id="meeting-bot-title" className="mt-6 text-lg font-bold">무료 플랜 녹음 시간이 끝났어요</h2>
       <p className="mt-3 text-[13px] leading-5 text-[var(--meeting-muted)]">
-        회의당 최대 5분까지 녹음할 수 있어요.<br />
+        회의당 최대 30분까지 녹음할 수 있어요.<br />
         봇은 회의에서 나갔고, 지금까지의 대화는 노드로 정리됐어요.
       </p>
       <button type="button" onClick={onConfirm} className={`${PRIMARY_BUTTON} mt-8`}>그래프 확인하기</button>

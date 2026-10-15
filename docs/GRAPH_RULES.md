@@ -31,7 +31,8 @@
     - 근처 노드 탐지(`findClosestNodeInRange`)도 y축 범위가 겹치는 노드에 한해 **x축 거리만** 계산한다 (임계값 50px)
 - [x] 자동 배치 상수 (Figma 실측): 부모-자식 수평 빈 간격 `DEFAULT_NODE_DISTANCE = 64px`, 엣지 elbow 수평 거리 `HUB_OFFSET = 25px`, `NODE_WIDTH = 200`, `NODE_HEIGHT = 48`
 - [x] 연결 생성 시 자식 노드 자동 배치 (`adjustPositionRelativeToSource`)
-    - X: 연결 방향(side)으로 부모 노드 끝에서 64px 떨어진 위치 (left 방향이면 자식 실제 너비 반영)
+    - X: 연결 방향(side)으로 부모 노드 끝에서 64px 떨어진 위치. right는 부모 실측 폭, left는 자식 너비만큼 더 물러난다
+    - 신규 자식(hover "+"·핸들 드래그 생성)은 렌더 전이라 실측 폭이 없어 빈 노드 최소 폭을 쓴다(`emptyChildNodeWidth`): 부모가 프로젝트면 타이틀 240px(15em×16px), 아니면 콘텐츠 224px(16em×14px) — `TextUpdateNode` 최소 너비를 바꾸면 함께 갱신
     - Y: 드롭한 Y를 우선 쓰되, **같은 방향(side)의 형제 노드**와 세로 간격 72px(`NODE_HEIGHT 48 + 24`)이 확보될 때까지 위→아래 순으로 최대 20단계 탐색
 - [x] 노드끼리 겹침 방지 — 드래그 중 d3-force `rectCollide` 시뮬레이션이 다른 노드를 밀어냄 (드래그 노드 + 같은 그래프 서브트리는 고정(fx/fy), 나머지가 밀림)
 - [x] 독립 노드 생성 위치가 기존 노드와 겹치면 나선형 탐색(16px 간격 × 8방향 × 반경 12단계)으로 빈 자리를 찾음 (`findNonOverlappingPosition`, 리소스 드롭 경로)
