@@ -64,13 +64,14 @@ export default function GraphMiniMap() {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const accent = '#7B87FF';
 
+  // ponytail: 화면 너비 비례(vw) — 1280px 기준 154px. 모바일에선 그만큼 작아지므로 최소 크기가 필요하면 clamp()로.
   return (
-    <div className="nodrag nopan absolute bottom-4 right-4 z-40 w-[260px] max-w-[calc(100%-32px)] overflow-hidden rounded-[32px] border-2 bg-background" style={{ borderColor: accent }}>
+    <div className="nodrag nopan absolute bottom-[2.6vw] right-[2.6vw] z-40 w-[12vw] overflow-hidden rounded-[1.4vw] border bg-background" style={{ borderColor: accent }}>
       <svg
         aria-label="그래프 미니맵: 클릭하거나 드래그하여 화면 이동"
         role="img"
         viewBox={`${viewLeft} ${viewTop} ${viewWidth} ${viewHeight}`}
-        className="block h-[156px] w-full touch-none cursor-crosshair"
+        className="block aspect-[5/3] w-full touch-none cursor-crosshair"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
           dragOrigin.current = { x: viewLeft, y: viewTop };
@@ -98,10 +99,10 @@ export default function GraphMiniMap() {
         {nodes.map((node) => <MiniMapNode key={node.id} node={node} accent={accent} />)}
         <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} rx={18 * scale} fill={accent} fillOpacity={0.14} stroke="#626FFF" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       </svg>
-      <div className="flex h-8 items-center justify-between border-t-2 px-5 text-foreground" style={{ borderColor: accent, backgroundColor: 'color-mix(in srgb, #7B87FF 14%, rgb(var(--background)))' }}>
-        <button type="button" aria-label="축소" className="h-full px-2 text-lg" onClick={() => void zoomOut()}>−</button>
-        <button type="button" aria-label="그래프 전체 보기" className="h-full px-3 text-sm" onClick={() => void fitView({ padding: 0.2 })}>{Math.round(zoom * 100)}%</button>
-        <button type="button" aria-label="확대" className="h-full px-2 text-lg" onClick={() => void zoomIn()}>+</button>
+      <div className="flex h-[1.5vw] items-center justify-between border-t px-[0.8vw] text-[0.7vw] text-foreground" style={{ borderColor: accent, backgroundColor: 'color-mix(in srgb, #7B87FF 14%, rgb(var(--background)))' }}>
+        <button type="button" aria-label="축소" className="h-full px-[0.4vw]" onClick={() => void zoomOut()}>−</button>
+        <button type="button" aria-label="그래프 전체 보기" className="h-full px-[0.6vw]" onClick={() => void fitView({ padding: 0.2 })}>{Math.round(zoom * 100)}%</button>
+        <button type="button" aria-label="확대" className="h-full px-[0.4vw]" onClick={() => void zoomIn()}>+</button>
       </div>
     </div>
   );
