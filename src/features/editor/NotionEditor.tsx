@@ -529,8 +529,9 @@ function MediaPlugin() {
       INSERT_UPLOADED_FILE_COMMAND,
       ({ name, url }) => {
         editor.update(() => {
+          // macOS 파일명은 NFD(자모 분리)로 올 수 있어 NFC로 합친다
           const link = $createLinkNode(url, { target: '_blank', rel: 'noopener noreferrer' });
-          const paragraph = $createParagraphNode().append(link.append($createTextNode(name)));
+          const paragraph = $createParagraphNode().append(link.append($createTextNode(name.normalize('NFC'))));
           if ($isRangeSelection($getSelection())) $insertNodes([paragraph]);
           else $getRoot().append(paragraph);
         });

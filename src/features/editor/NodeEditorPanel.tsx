@@ -74,9 +74,10 @@ function AttachmentSection({
     const id = generateId();
     setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
-      const { fileUrl, originalName } = await uploadFile(file, workspaceId);
+      // 서버 originalName은 multer가 latin1로 읽어 한글이 깨진다 — 브라우저의 file.name을 쓴다
+      const { fileUrl } = await uploadFile(file, workspaceId);
       // 업로드 중 패널이 닫히면 에디터가 없다 — 본문에 못 넣은 파일은 서버 GC 대상이라 알린다
-      if (editorRef.current) editorRef.current.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: originalName, url: fileUrl });
+      if (editorRef.current) editorRef.current.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url: fileUrl });
       else showToast("에디터가 닫혀 파일을 본문에 넣지 못했어요");
     } catch {
       showToast("파일 업로드에 실패했어요");
