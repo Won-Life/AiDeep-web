@@ -9,9 +9,23 @@ import { isInvalidConnection } from "./connection";
 
 // TODO: 실제 노드 너비로 변경
 export const NODE_WIDTH = 200;
-// 제목 없는 신규 서브 노드의 실측 폭 근사치 — "서브 노드" 플레이스홀더 + 패딩 기준.
-// 엣지 드래그 생성(좌측 방향)에서 NODE_WIDTH(200) 폴백이 거리를 과도하게 벌리는 것 방지 (#215)
-export const EMPTY_SUB_NODE_WIDTH = 90;
+/*
+ * CONTEXT
+ * - Problem      : 신규 자식 노드는 아직 렌더 전이라 실측 폭이 없어 고정 근사치(90px, 옛 "서브 노드" 칩)로
+ *                  위치를 잡았다. 노드 디자인이 바뀌어 빈 타이틀·콘텐츠 노드가 224~240px가 되자, 왼쪽으로
+ *                  생성하면 새 노드가 부모 쪽으로 150px가량 파고들어 간격(64px)이 깨졌다.
+ * - Why          : 빈 노드는 TextUpdateNode의 최소 너비(minimumWidthEm × labelFontSize)로 그려지므로 그 값을 쓴다.
+ *                  자식 종류는 렌더와 같은 규칙 — 부모가 프로젝트면 타이틀, 아니면 콘텐츠.
+ * - Alternatives : 렌더 후 실측해 위치를 보정 — 서버에 위치를 두 번 저장하고 노드가 한 번 튄다.
+ * - Trade-offs   : TextUpdateNode의 최소 너비·글자 크기를 바꾸면 여기도 함께 바꿔야 한다.
+ * - Edge Case    : 오른쪽 생성은 부모 실측 폭만 쓰므로 이 값과 무관하다. 템플릿으로 생성된 콘텐츠도 제목이 비어 최소 너비다.
+ */
+export const EMPTY_TITLE_NODE_WIDTH = 15 * 16; // TextUpdateNode: 타이틀 최소 15em × 16px
+export const EMPTY_CONTENT_NODE_WIDTH = 16 * 14; // TextUpdateNode: 콘텐츠 최소 16em × 14px
+
+export function emptyChildNodeWidth(parent: Node): number {
+  return parent.data?.isMain ? EMPTY_TITLE_NODE_WIDTH : EMPTY_CONTENT_NODE_WIDTH;
+}
 export const NODE_HEIGHT = 48;
 export const NODE_PADDING = 0; // 완전히 부딪힐 때만 충돌
 export const HUB_OFFSET = 25; // Figma 메인 화면 디자인 실측: 엣지 elbow 수평 거리 25px

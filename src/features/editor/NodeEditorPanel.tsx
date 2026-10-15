@@ -1,23 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useState, useRef, useEffect, type RefObject } from "react";
+import type { LexicalEditor } from "lexical";
 import { createPortal } from "react-dom";
-import { NotionEditor, ToolbarPlugin } from "./NotionEditor";
+import { NotionEditor, ToolbarPlugin, INSERT_UPLOADED_FILE_COMMAND } from "./NotionEditor";
 import type { SocketIoYjsProvider } from "@/lib/SocketIoYjsProvider";
 import { uploadFile } from "@/api/upload";
 import { showToast } from "@/components/ui/toastStore";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type ImageAttachment = { id: string; type: "image"; src: string; caption: string };
-type FileAttachment = { id: string; type: "file"; name: string; size: number; url: string };
-export type Attachment = ImageAttachment | FileAttachment;
-
-function formatSize(bytes: number): string {
-  return bytes < 1024 * 1024
-    ? `${Math.round(bytes / 1024)}kb`
-    : `${(bytes / 1024 / 1024).toFixed(1)}mb`;
-}
 
 /*
  * CONTEXT
@@ -58,110 +47,56 @@ function CloseIcon() {
 
 // ─── Attachment Section ───────────────────────────────────────────────────────
 
+// 업로드한 파일은 본문에 링크로 들어간다(INSERT_UPLOADED_FILE_COMMAND 주석 참고). 이 영역은 업로드 버튼만 둔다.
 function AttachmentSection({
-  attachments,
-  onAddImage,
-  onAddFile,
-  onRemove,
+  editorRef,
   workspaceId,
 }: {
-  attachments: Attachment[];
-  onAddImage: (src: string) => void;
-  onAddFile: (name: string, size: number, dataUrl: string) => void;
-  onCaptionChange: (id: string, caption: string) => void;
-  onRemove: (id: string) => void;
+  editorRef: RefObject<LexicalEditor | null>;
   workspaceId: string;
 }) {
-  const imageRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  // C4: 업로드 중 파일 — 완료 전까지 "업로드 중…" 칩으로 즉시 표시(기존엔 완료 후에야 나타남)
+  // C4: 업로드 중 파일 — 완료 전까지 "업로드 중…" 칩으로 즉시 표시
   const [uploading, setUploading] = useState<{ id: string; name: string }[]>([]);
 
-  const handleImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    if (!hasAllowedExtension(file, IMAGE_EXTENSIONS)) {
-      showToast("JPG, PNG, WEBP 이미지만 첨부할 수 있어요");
-      e.target.value = "";
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      showToast("최대 5MB 파일까지 첨부할 수 있어요");
-      e.target.value = "";
-      return;
-    }
-    const id = generateId();
-    setUploading((prev) => [...prev, { id, name: file.name }]);
-    try {
-      const { fileUrl } = await uploadFile(file, workspaceId);
-      onAddImage(fileUrl);
-    } catch {
-      showToast("사진 업로드에 실패했어요");
-    }
-    setUploading((prev) => prev.filter((u) => u.id !== id));
     e.target.value = "";
-  }, [onAddImage, workspaceId]);
-
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
     if (!file) return;
     if (!hasAllowedExtension(file, FILE_EXTENSIONS)) {
       showToast("이미지(JPG·PNG·WEBP), PDF, MD, DOC·DOCX, HWP 파일만 첨부할 수 있어요");
-      e.target.value = "";
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
       showToast("최대 5MB 파일까지 첨부할 수 있어요");
-      e.target.value = "";
       return;
     }
     const id = generateId();
     setUploading((prev) => [...prev, { id, name: file.name }]);
     try {
-      const { fileUrl, originalName, size } = await uploadFile(file, workspaceId);
-      onAddFile(originalName, size, fileUrl);
+      // 서버 originalName은 multer가 latin1로 읽어 한글이 깨진다 — 브라우저의 file.name을 쓴다
+      const { fileUrl } = await uploadFile(file, workspaceId);
+      // 업로드 중 패널이 닫히면 에디터의 명령 핸들러가 해제돼 dispatch가 false — 본문에 없는 파일은 서버 GC 대상이라 알린다
+      // (노드 잠김은 핸들러가 직접 안내한다)
+      const inserted = editorRef.current?.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url: fileUrl, atEnd: true });
+      if (!inserted) showToast("에디터가 닫혀 파일을 본문에 넣지 못했어요");
     } catch {
       showToast("파일 업로드에 실패했어요");
     }
     setUploading((prev) => prev.filter((u) => u.id !== id));
-    e.target.value = "";
-  }, [onAddFile, workspaceId]);
+  };
 
   return (
     <section className="editor-attachments" aria-label="첨부 파일">
-      <input ref={imageRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden" onChange={handleImageChange} />
       <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.md,.doc,.docx,.hwp" className="hidden" onChange={handleFileChange} />
-      <h3 className="flex items-center gap-3 text-[14px] font-semibold">
-        첨부 <span className="text-[12px] font-normal text-muted">{attachments.length}</span>
-      </h3>
-      <div className="mt-2 flex flex-wrap gap-2" aria-live="polite">
-        {attachments.map((att) => (
-          <div key={att.id} className="group relative max-w-full">
-            <a
-              href={att.type === "image" ? att.src : att.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              download={att.type === "file" ? att.name : undefined}
-              title={att.type === "file" ? `${att.name} · ${formatSize(att.size)}` : att.caption || "사진"}
-              className="editor-attachment-chip"
-            >
-              <svg width="13" height="14" viewBox="0 0 11 13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
-                <path d="M9.5 5.5L4.5 10.5a2.5 2.5 0 01-3.535-3.536L5.5 2.43a1.5 1.5 0 012.121 2.121L3.086 9.086a.5.5 0 01-.707-.707L7 3.76" />
-              </svg>
-              <span className="truncate">{att.type === "file" ? att.name : att.caption || "사진"}</span>
-            </a>
-            <button
-              type="button"
-              aria-label={`${att.type === "file" ? att.name : "사진"} 첨부 제거`}
-              onClick={() => onRemove(att.id)}
-              className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-border bg-background text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-            ><CloseIcon /></button>
-          </div>
-        ))}
-        {uploading.map((file) => (
-          <span key={file.id} className="editor-attachment-chip opacity-60">{file.name} · 업로드 중…</span>
-        ))}
-      </div>
+      <h3 className="text-[14px] font-semibold">첨부</h3>
+      {uploading.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2" aria-live="polite">
+          {uploading.map((file) => (
+            <span key={file.id} className="editor-attachment-chip opacity-60">{file.name} · 업로드 중…</span>
+          ))}
+        </div>
+      )}
       <button type="button" onClick={() => fileRef.current?.click()} className="editor-upload-button">파일 올리기</button>
       <p className="mt-1 text-[9px] text-muted">이미지 · PDF · MD · DOC · HWP · 최대 5MB</p>
     </section>
@@ -172,8 +107,6 @@ function AttachmentSection({
 
 interface NodeEditorPanelProps {
   nodeId: string;
-  attachments?: Attachment[];
-  onAttachmentsChange?: Dispatch<SetStateAction<Attachment[]>>;
   fullscreen?: boolean;
   inline?: boolean;
   /** 우측 단일 도크 모드. 숫자가 지정되면 같은 고정 위치에 렌더링한다. */
@@ -202,8 +135,6 @@ interface NodeEditorPanelProps {
 
 export function NodeEditorPanel({
   nodeId,
-  attachments: nodeAttachments,
-  onAttachmentsChange,
   fullscreen = false,
   inline = false,
   dockIndex,
@@ -224,9 +155,7 @@ export function NodeEditorPanel({
   workspaceId = "",
   readOnly = false,
 }: NodeEditorPanelProps) {
-  const [localAttachments, setLocalAttachments] = useState<Attachment[]>([]);
-  const attachments = nodeAttachments ?? localAttachments;
-  const setAttachments = onAttachmentsChange ?? setLocalAttachments;
+  const editorRef = useRef<LexicalEditor | null>(null);
 
   /*
    * CONTEXT
@@ -269,22 +198,6 @@ export function NodeEditorPanel({
     return () => cancelAnimationFrame(raf);
   }, [handleSide]);
   const effectiveSide = sideOverride ?? handleSide;
-
-  const handleAddImage = useCallback((src: string) => {
-    setAttachments((prev) => [...prev, { id: generateId(), type: "image", src, caption: "" }]);
-  }, [setAttachments]);
-
-  const handleAddFile = useCallback((name: string, size: number, url: string) => {
-    setAttachments((prev) => [...prev, { id: generateId(), type: "file", name, size, url }]);
-  }, [setAttachments]);
-
-  const handleCaptionChange = useCallback((id: string, caption: string) => {
-    setAttachments((prev) => prev.map((a) => a.id === id && a.type === "image" ? { ...a, caption } : a));
-  }, [setAttachments]);
-
-  const handleRemove = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
-  }, [setAttachments]);
 
   // ── 우측 도크 모드 (C3/C4 — 콘텐츠 노드 클릭 → 캔버스 우측 내용 패널) ──────────
   /*
@@ -343,7 +256,7 @@ export function NodeEditorPanel({
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.currentTarget.blur();
               }}
-              className="w-full min-w-0 rounded bg-transparent text-[15px] font-bold outline-none focus-visible:ring-1 focus-visible:ring-main-blue"
+              className="w-full min-w-0 bg-transparent text-[15px] font-bold outline-none"
             />
             {breadcrumb && <p className="mt-1 truncate text-[12px] text-muted" title={breadcrumb}>{breadcrumb}</p>}
           </div>
@@ -393,15 +306,9 @@ export function NodeEditorPanel({
               autoGrow
               minHeight={398}
               readOnly={readOnly}
+              editorRef={editorRef}
             />
-            <AttachmentSection
-              attachments={attachments}
-              onAddImage={handleAddImage}
-              onAddFile={handleAddFile}
-              onCaptionChange={handleCaptionChange}
-              onRemove={handleRemove}
-              workspaceId={workspaceId}
-            />
+            {!readOnly && <AttachmentSection editorRef={editorRef} workspaceId={workspaceId} />}
             {updatedAt && (
               <div className="shrink-0 border-t border-gray-900 px-4 py-2 text-[12px] text-gray-500">
                 최종 수정일:{" "}
@@ -451,18 +358,12 @@ export function NodeEditorPanel({
           onContentChange={onContentChange}
           noMediaDrop
           autoGrow
-          minHeight={attachments.length > 0 ? 80 : 150}
+          minHeight={150}
           readOnly={readOnly}
+          editorRef={editorRef}
         />
 
-        <AttachmentSection
-          attachments={attachments}
-          onAddImage={handleAddImage}
-          onAddFile={handleAddFile}
-          onCaptionChange={handleCaptionChange}
-          onRemove={handleRemove}
-          workspaceId={workspaceId}
-        />
+        {!readOnly && <AttachmentSection editorRef={editorRef} workspaceId={workspaceId} />}
 
         {updatedAt && (
           <div className="shrink-0 px-3 py-2 border-t border-gray-900 text-[12px] text-gray-500">

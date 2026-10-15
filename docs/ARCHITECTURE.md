@@ -348,26 +348,28 @@ node_position_live 수신 (별도, 50ms throttle)
 
 ### 14. 파일/이미지 첨부 흐름
 ```
-[이미지] 사진 버튼 클릭 → imageRef.current.click()
-  → <input accept="image/*"> onChange → handleImageChange
-  → uploadFile(file) → { url }
-  → setAttachments(prev => [...prev, { id, type:'image', src:url, caption:'' }])
-  → input.value = ''  (재선택 허용)
-  → 업로드 실패: catch {} — silent
+[첨부 영역] 파일 올리기 클릭 → fileRef.current.click()
+  → onChange → 확장자·5MB 검사 (실패 시 토스트)
+  → uploadFile(file, workspaceId) → { fileUrl, originalName }
+  → editorRef.current.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name, url, atEnd: true })
+     → false(패널 닫힘 — 핸들러 해제)면 토스트
+     (editorRef는 NotionEditor의 EditorRefPlugin이 채운다 — 첨부 영역은 LexicalComposer 밖에 있음)
 
-[파일] 파일 버튼 클릭 → fileRef.current.click()
-  → <input type="file"> onChange → handleFileChange
-  → uploadFile(file) → { url, originalName, size }
-  → setAttachments(prev => [...prev, { id, type:'file', name:originalName, size, url }])
-  → 클릭: document.createElement('a') → href=url, download=name → a.click()
-  → input.value = ''
-  → 업로드 실패: catch {} — silent
+[본문] 드래그 앤 드롭 / 툴바 / 슬래시 메뉴
+  → uploadMedia(file, workspaceId) → fileUrl
+  → editor.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name, url })
 
-[캡션 변경] onCaptionChange(id, caption)
-  → setAttachments map → 해당 attachment.caption 업데이트
+[INSERT_UPLOADED_FILE_COMMAND] (MediaPlugin)
+  → 문단 + LinkNode(url, target=_blank) + 파일명 텍스트 생성
+  → 편집 불가(isEditable false)면 넣지 않고 토스트 (모든 업로드 경로 공통)
+  → atEnd면 문서 끝, 아니면 선택 영역(커서) 위치, 선택 영역이 없으면 문서 끝에 추가
+  → Yjs로 실시간 서버에 전달 → markdownBody에 [파일명](url) 저장 → 서버가 URL로 파일을 노드에 연결
 
-[제거] onRemove(id)
-  → setAttachments filter out
+[링크 클릭] FileViewerPlugin (에디터 root 캡처 단계 click 리스너 — ClickableLinkPlugin보다 먼저)
+  → fileKindOf(href): S3 업로드 URL이면 확장자로 image / frame(pdf) / download(md·doc·docx·hwp), 그 외 null(일반 링크)
+  → null·Ctrl/Cmd 클릭·링크 글자 드래그 선택 → 가로채지 않음 (ClickableLinkPlugin이 새 탭으로 열기)
+  → 그 외 → preventDefault + stopImmediatePropagation → <dialog>.showModal()로 딤 오버레이 표시
+     (body로 포털 — React Flow 노드로 DOM 이벤트 전파 차단, × 버튼·Escape로 닫기)
 ```
 
 ---

@@ -18,6 +18,9 @@ import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPl
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin';
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
+import { ClickableLinkPlugin } from '@lexical/react/LexicalClickableLinkPlugin';
+import { EditorRefPlugin } from '@lexical/react/LexicalEditorRefPlugin';
+import { FileViewerPlugin } from './FileViewerPlugin';
 import {
   LexicalTypeaheadMenuPlugin,
   useBasicTypeaheadTriggerMatch,
@@ -71,7 +74,7 @@ import {
   $createCodeNode,
   $isCodeNode,
 } from '@lexical/code';
-import { LinkNode, AutoLinkNode } from '@lexical/link';
+import { LinkNode, AutoLinkNode, $createLinkNode } from '@lexical/link';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { TableNode, TableRowNode, TableCellNode, INSERT_TABLE_COMMAND } from '@lexical/table';
 import { TRANSFORMERS, $convertToMarkdownString } from '@lexical/markdown';
@@ -115,12 +118,26 @@ export interface NotionEditorProps {
   compactTop?: boolean; // 캔버스 미니 패널 — 본문 상단 패딩 축소 (pt-3 → pt-1)
   workspaceId?: string; // 본문 이미지/파일 S3 업로드 시 서버가 요구
   readOnly?: boolean; // 진행 중인 회의가 붙은 노드 — 내용 확인만 가능(편집 잠금)
+  editorRef?: RefObject<LexicalEditor | null>; // 에디터 밖 첨부 버튼이 업로드 링크를 본문에 넣을 때 사용
 }
 
 // ─── Media Commands ───────────────────────────────────────────────────────────
 
-const INSERT_IMAGE_COMMAND = createCommand<{ src: string; caption?: string }>('INSERT_IMAGE');
-const INSERT_FILE_COMMAND = createCommand<{ name: string; size: number; dataUrl: string }>('INSERT_FILE');
+/*
+ * CONTEXT
+ * - Problem      : 업로드한 파일 URL이 노드 content(markdownBody)에 남지 않아 서버가 파일을 노드에
+ *                  연결하지 못하고 24시간 뒤 GC로 지웠다. 첨부 칩은 로컬 state라 새로고침 시 사라졌고,
+ *                  본문 ImageNode/FileNode는 실시간 서버(Aideep_websocket)의 헤드리스 에디터에 등록돼
+ *                  있지 않아 markdown 변환이 "Node image is not registered"로 실패해 저장 자체가 깨졌다.
+ * - Why          : 업로드 결과를 본문에 링크 문단 `[파일명](url)`으로 넣는다. 서버는 LinkNode를
+ *                  등록하고 있어 markdownBody에 URL이 남고, 그 URL을 정규식으로 찾아 파일을 노드에 연결한다.
+ * - Alternatives : ImageNode/FileNode 유지 — 서버에 노드 등록이 필요해 프론트만으로 해결 불가.
+ *                  첨부 칩 state 유지 — 저장 경로가 없어 새로고침 시 사라짐.
+ * - Trade-offs   : 이미지가 미리보기 대신 링크로 보인다. 서버가 ImageNode를 등록하면 되돌릴 수 있다.
+ * - Edge Case    : 에디터 밖(첨부 영역) 버튼은 atEnd로 문서 끝에 붙인다(포커스를 잃어도 이전 선택 영역이 남아 있음).
+ *                  기존 문서의 ImageNode/FileNode는 렌더링을 위해 등록을 유지한다.
+ */
+export const INSERT_UPLOADED_FILE_COMMAND = createCommand<{ name: string; url: string; atEnd?: boolean }>('INSERT_UPLOADED_FILE');
 
 // ─── Image Caption Editor ─────────────────────────────────────────────────────
 
@@ -509,27 +526,25 @@ function MediaPlugin() {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    return mergeRegister(
-      editor.registerCommand(
-        INSERT_IMAGE_COMMAND,
-        ({ src, caption = '' }) => {
-          editor.update(() => {
-            $insertNodes([new ImageNode(src, caption)]);
-          });
+    return editor.registerCommand(
+      INSERT_UPLOADED_FILE_COMMAND,
+      ({ name, url, atEnd }) => {
+        // 업로드 중 회의 잠금 등으로 편집 불가가 되면 넣지 않는다 — 프로그램 update는 setEditable(false)로 막히지 않음.
+        // 모든 업로드 경로(첨부 영역·드롭·툴바·슬래시)가 여기를 지나므로 안내도 여기서 한다(본문에 없는 파일은 서버 GC 대상).
+        if (!editor.isEditable()) {
+          showToast('노드가 잠겨 파일을 본문에 넣지 못했어요');
           return true;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
-      editor.registerCommand(
-        INSERT_FILE_COMMAND,
-        ({ name, size, dataUrl }) => {
-          editor.update(() => {
-            $insertNodes([new FileNode(name, size, dataUrl)]);
-          });
-          return true;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
+        }
+        editor.update(() => {
+          // macOS 파일명은 NFD(자모 분리)로 올 수 있어 NFC로 합친다
+          const link = $createLinkNode(url, { target: '_blank', rel: 'noopener noreferrer' });
+          const paragraph = $createParagraphNode().append(link.append($createTextNode(name.normalize('NFC'))));
+          if (!atEnd && $isRangeSelection($getSelection())) $insertNodes([paragraph]);
+          else $getRoot().append(paragraph);
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
     );
   }, [editor]);
 
@@ -558,11 +573,7 @@ function DragDropPlugin({ workspaceId }: { workspaceId?: string }) {
       de.stopPropagation();
       const url = await uploadMedia(file, workspaceId);
       if (!url) return;
-      if (file.type.startsWith('image/')) {
-        editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src: url });
-      } else {
-        editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl: url });
-      }
+      editor.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url });
     };
 
     return editor.registerRootListener((root, prev) => {
@@ -703,7 +714,7 @@ export function ToolbarPlugin({ workspaceId }: { workspaceId?: string } = {}) {
     const file = e.target.files?.[0];
     if (!file) return;
     const src = await uploadMedia(file, workspaceId);
-    if (src) editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
+    if (src) editor.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url: src });
     e.target.value = '';
   };
 
@@ -711,7 +722,7 @@ export function ToolbarPlugin({ workspaceId }: { workspaceId?: string } = {}) {
     const file = e.target.files?.[0];
     if (!file) return;
     const dataUrl = await uploadMedia(file, workspaceId);
-    if (dataUrl) editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+    if (dataUrl) editor.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url: dataUrl });
     e.target.value = '';
   };
 
@@ -1052,7 +1063,7 @@ function SlashCommandPlugin({
     const file = e.target.files?.[0];
     if (!file) return;
     const src = await uploadMedia(file, workspaceId);
-    if (src) editor.dispatchCommand(INSERT_IMAGE_COMMAND, { src });
+    if (src) editor.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url: src });
     e.target.value = '';
   };
 
@@ -1060,7 +1071,7 @@ function SlashCommandPlugin({
     const file = e.target.files?.[0];
     if (!file) return;
     const dataUrl = await uploadMedia(file, workspaceId);
-    if (dataUrl) editor.dispatchCommand(INSERT_FILE_COMMAND, { name: file.name, size: file.size, dataUrl });
+    if (dataUrl) editor.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url: dataUrl });
     e.target.value = '';
   };
 
@@ -1237,6 +1248,7 @@ export function NotionEditor({
   compactTop = false,
   workspaceId,
   readOnly = false,
+  editorRef,
 }: NotionEditorProps) {
   // 슬래시 메뉴 표시 여부 — 메뉴가 떠있는 동안 TitleTracker의 제목 반영을 멈춘다.
   // 상태(닫힘 시 재반영 트리거)와 동기 ref(첫 '/' 깜빡임 방지) 이중 채널.
@@ -1337,6 +1349,9 @@ export function NotionEditor({
           <ListPlugin />
           <CheckListPlugin />
           <LinkPlugin />
+          <ClickableLinkPlugin />
+          <FileViewerPlugin />
+          {editorRef && <EditorRefPlugin editorRef={editorRef} />}
           <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
           <MarkdownPastePlugin />
           <MediaPlugin />
