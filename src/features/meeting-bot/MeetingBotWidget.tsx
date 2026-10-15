@@ -228,7 +228,7 @@ function MeetingBotAddModal({ view, target, failureMessage, onClose, onRequest, 
           {error ? (
             <p id="meeting-bot-url-error" role="alert" className="mt-2 text-xs text-[var(--meeting-error)]">{error}</p>
           ) : (
-            <p className="mt-2 text-xs text-[var(--meeting-muted)]/70">무료 플랜: 회의당 최대 5분 녹음</p>
+            <p className="mt-2 text-xs text-[var(--meeting-muted)]/70">무료 플랜: 회의당 최대 30분 녹음</p>
           )}
           {view === "form" ? (
             <>
