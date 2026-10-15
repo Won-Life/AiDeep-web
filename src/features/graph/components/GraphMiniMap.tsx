@@ -40,11 +40,12 @@ function MiniMapNode({ node, accent }: { node: Node; accent: string }) {
 
 /*
  * CONTEXT
- * - Problem      : 전체 그래프를 맞추면 멀리 떨어진 노드 때문에 모든 실루엣이 작아진다.
- * - Why          : 고정 1:4 배율로 현재 화면 중심 주변을 표시해 200px 노드를 50px로 유지한다.
- * - Alternatives : 전체 bounds 기준 확대는 노드 추가·이동마다 표시 크기가 달라진다.
- * - Trade-offs   : 먼 노드는 미니맵 밖으로 잘리지만 현재 작업 주변의 모양은 더 잘 보인다.
- * - Edge Case    : 드래그 시작 좌표계를 유지해 화면 중심 추적으로 이동량이 누적되지 않게 한다.
+ * - Problem      : 고정 1:4 배율은 줌에 따라 화면 영역이 미니맵보다 커지거나 점처럼 작아져 현재 위치를 가늠하기 어렵다.
+ * - Why          : 배율을 현재 화면 영역에 비례시켜, 미니맵이 항상 화면보다 2배 줌 아웃된 주변을 보여준다.
+ *                  화면 사각형이 미니맵의 약 절반 크기로 유지돼 "넓은 공간 중 지금 보는 곳"이 일정하게 읽힌다.
+ * - Alternatives : 전체 노드 bounds 맞춤은 노드 추가·이동마다 표시 크기가 달라지고 화면 사각형이 점이 될 수 있다.
+ * - Trade-offs   : 화면 영역 2배 밖의 먼 노드는 잘린다 — 캔버스를 줌 아웃하면 미니맵 범위도 같이 넓어진다.
+ * - Edge Case    : 드래그 중엔 zoom이 고정이라 배율도 고정 — 시작 좌표계를 유지해 이동량이 누적되지 않게 한다.
  */
 export default function GraphMiniMap() {
   const nodes = useNodes().filter((node) => !node.hidden);
@@ -54,7 +55,7 @@ export default function GraphMiniMap() {
   const height = useStore((state) => state.height);
   const { setCenter, zoomIn, zoomOut, fitView } = useReactFlow();
   const viewport = { x: -x / zoom, y: -y / zoom, width: width / zoom, height: height / zoom };
-  const scale = 4;
+  const scale = Math.max(viewport.width / 260, viewport.height / 156) * 2;
   const viewWidth = scale * 260;
   const viewHeight = scale * 156;
   const viewLeft = viewport.x + viewport.width / 2 - viewWidth / 2;
