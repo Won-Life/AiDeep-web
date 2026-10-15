@@ -529,8 +529,12 @@ function MediaPlugin() {
     return editor.registerCommand(
       INSERT_UPLOADED_FILE_COMMAND,
       ({ name, url, atEnd }) => {
-        // 업로드 중 회의 잠금 등으로 편집 불가가 되면 넣지 않는다 — 프로그램 update는 setEditable(false)로 막히지 않음
-        if (!editor.isEditable()) return false;
+        // 업로드 중 회의 잠금 등으로 편집 불가가 되면 넣지 않는다 — 프로그램 update는 setEditable(false)로 막히지 않음.
+        // 모든 업로드 경로(첨부 영역·드롭·툴바·슬래시)가 여기를 지나므로 안내도 여기서 한다(본문에 없는 파일은 서버 GC 대상).
+        if (!editor.isEditable()) {
+          showToast('노드가 잠겨 파일을 본문에 넣지 못했어요');
+          return true;
+        }
         editor.update(() => {
           // macOS 파일명은 NFD(자모 분리)로 올 수 있어 NFC로 합친다
           const link = $createLinkNode(url, { target: '_blank', rel: 'noopener noreferrer' });

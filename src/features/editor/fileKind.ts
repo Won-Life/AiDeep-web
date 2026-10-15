@@ -1,5 +1,6 @@
-// 업로드 허용 형식(서버 ALLOWED_MIME_TYPES, NodeEditorPanel FILE_EXTENSIONS)과 같은 확장자만 뷰어로 연다.
-// 서버 S3 키는 `${folder}/${uuid}${ext}`라 URL 끝 확장자로 형식을 판별할 수 있다.
+// 서버 업로드 URL(`https://{bucket}.s3.{region}.amazonaws.com/{folder}/{uuid}{ext}`, Aideep_backend s3.service
+// getPublicUrl)만 뷰어로 연다 — 일반 웹 링크의 .pdf 등은 iframe 임베드가 막힐 수 있어 새 탭으로 둔다.
+// 확장자는 업로드 허용 형식(서버 ALLOWED_MIME_TYPES, NodeEditorPanel FILE_EXTENSIONS)과 같다.
 export type FileKind = 'image' | 'frame' | 'download';
 
 const KIND_BY_EXTENSION: Record<string, FileKind> = {
@@ -14,14 +15,16 @@ const KIND_BY_EXTENSION: Record<string, FileKind> = {
   hwp: 'download',
 };
 
-/** 업로드 파일 링크면 보여줄 방식을, 일반 웹 링크면 null을 돌려준다. */
+/** 서버 업로드 파일 링크면 보여줄 방식을, 그 외 링크면 null을 돌려준다. */
 export function fileKindOf(url: string): FileKind | null {
-  let pathname: string;
+  let parsed: URL;
   try {
-    pathname = new URL(url).pathname;
+    parsed = new URL(url);
   } catch {
     return null;
   }
+  const { hostname, pathname } = parsed;
+  if (!hostname.endsWith('.amazonaws.com') || !hostname.includes('.s3.')) return null;
   const extension = pathname.split('.').pop()?.toLowerCase() ?? '';
   return pathname.includes('.') ? KIND_BY_EXTENSION[extension] ?? null : null;
 }

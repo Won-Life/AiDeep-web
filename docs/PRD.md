@@ -255,7 +255,7 @@ getMe() → getWorkspaces() → list[0] 선택 → getNodes(workspaceId)
 - 첨부 링크를 클릭하면 새 탭이 아니라 앱 위 딤 오버레이(`FileViewerPlugin`, 네이티브 `<dialog>` 모달)로 연다.
   - 이미지는 원본, PDF는 iframe 미리보기, MD·DOC·DOCX·HWP는 미리보기 불가 안내 + 다운로드 버튼
   - 우상단 × 또는 Escape로 닫는다. 딤 배경은 클릭해도 반응하지 않는다.
-  - 일반 웹 링크·Ctrl/Cmd 클릭은 기존처럼 새 탭으로 연다.
+  - 서버 S3 업로드 URL만 대상. 일반 웹 링크(.pdf 포함)·Ctrl/Cmd 클릭은 기존처럼 새 탭으로 연다.
   - 서버 흐름: `POST /upload` → 파일 URL 반환 → 프론트가 URL을 본문에 삽입 → 실시간 서버가 본문을 markdownBody로 저장하면서
     URL을 찾아 파일을 노드에 연결한다. 본문에 URL이 없으면 파일은 어떤 노드에도 연결되지 않아 24시간 뒤 서버 GC가 지운다.
   - 이미지도 미리보기 없이 링크로 들어간다. 실시간 서버의 markdown 변환 에디터에 ImageNode/FileNode가 등록돼 있지 않아,
