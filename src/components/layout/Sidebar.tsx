@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -26,6 +27,8 @@ import { createProjectNode } from '@/features/graph/api/nodes';
 import { getRandomColorPair } from '@/features/graph/constants/colors';
 import type { WorkspaceListItem } from '@/api/types';
 import { SHOW_TEMP_HIDDEN_UI } from '@/lib/uiFlags';
+import { useElapsedLabel } from '@/features/meeting-bot/meetingTime';
+import { pickSidebarMeeting, type SidebarMeeting } from '@/features/meeting-bot/sidebarMeeting';
 
 /*
  * CONTEXT
@@ -229,21 +232,15 @@ function useProjectTree(query: string): TreeProject[] {
 
 // ─── 회의 진행 중 배너 (X5) ───────────────────────────────────────────────────
 
-/** 회의 기능(별도 담당)이 제공할 상태 계약 — 확정 전까지 호출부에서 null 고정 */
-export interface ActiveMeeting {
-  titleNodeId: string;
-  titleName: string;
-  source: string; // 예: 'Zoom'
-  elapsedLabel: string; // 예: '03:12'
-}
-
 function MeetingBanner({
   meeting,
   onClick,
 }: {
-  meeting: ActiveMeeting | null;
+  meeting: SidebarMeeting | null;
   onClick: (titleNodeId: string) => void;
 }) {
+  // 녹음이 시작된 뒤에만 경과 시간이 흐른다. 그 전에는 "입장 중"으로 보인다.
+  const elapsed = useElapsedLabel(meeting?.since ?? '', Boolean(meeting?.since));
   if (!meeting) return null;
   return (
     <button
@@ -256,7 +253,7 @@ function MeetingBanner({
           <span className="text-[9px]">●</span> 회의 진행 중
         </span>
         <span className="mt-0.5 block truncate text-[11.5px] text-muted">
-          {meeting.titleName} · {meeting.source} · {meeting.elapsedLabel}
+          {meeting.titleName} · {meeting.since ? elapsed : '입장 중'}
         </span>
       </span>
       <span className="text-[12px] text-muted">›</span>
@@ -1187,7 +1184,10 @@ export default function Sidebar({
     setFocusedNodeId,
     nodes,
     edges,
+    meetings,
   } = useWorkspaceLayout();
+
+  const sidebarMeeting = useMemo(() => pickSidebarMeeting(meetings, nodes), [meetings, nodes]);
 
   const [query, setQuery] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -1378,11 +1378,6 @@ export default function Sidebar({
             </div>
           </div>
 
-          {/* 회의 진행 중 배너 (X5) — 회의 기능이 상태를 주기 전까지 숨김(null) */}
-          <div className="shrink-0 px-3 empty:hidden">
-            <MeetingBanner meeting={null} onClick={focusNode} />
-          </div>
-
           {/* 노드 검색 (⌘K) */}
           <div className="sidebar-search-wrap shrink-0">
             <div className="sidebar-search flex items-center">
@@ -1399,6 +1394,11 @@ export default function Sidebar({
               />
 
             </div>
+          </div>
+
+          {/* 회의 진행 중 카드 (Figma X9 · S1) — 검색창 바로 아래, 진행 중인 회의가 없으면 숨김 */}
+          <div className="shrink-0 px-3 pb-1 empty:hidden">
+            <MeetingBanner meeting={sidebarMeeting} onClick={focusNode} />
           </div>
 
           <ProjectTreeSection
