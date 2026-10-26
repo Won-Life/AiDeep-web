@@ -302,7 +302,6 @@ export function NodeEditorPanel({
               username={username}
               cursorColor={cursorColor}
               onContentChange={onContentChange}
-              noMediaDrop
               autoGrow
               minHeight={398}
               readOnly={readOnly}
@@ -356,7 +355,6 @@ export function NodeEditorPanel({
           cursorColor={cursorColor}
           onFirstLineChange={onFirstLineChange}
           onContentChange={onContentChange}
-          noMediaDrop
           autoGrow
           minHeight={150}
           readOnly={readOnly}

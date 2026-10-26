@@ -21,6 +21,7 @@ import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { ClickableLinkPlugin } from '@lexical/react/LexicalClickableLinkPlugin';
 import { EditorRefPlugin } from '@lexical/react/LexicalEditorRefPlugin';
 import { FileViewerPlugin } from './FileViewerPlugin';
+import { blockLockedFileDrop } from './fileDropGuard';
 import {
   LexicalTypeaheadMenuPlugin,
   useBasicTypeaheadTriggerMatch,
@@ -44,6 +45,9 @@ import {
   $createParagraphNode,
   COMMAND_PRIORITY_LOW,
   COMMAND_PRIORITY_NORMAL,
+  COMMAND_PRIORITY_HIGH,
+  DRAGOVER_COMMAND,
+  DROP_COMMAND,
   DecoratorNode,
   createCommand,
   type LexicalEditor,
@@ -133,7 +137,7 @@ export interface NotionEditorProps {
  *                  등록하고 있어 markdownBody에 URL이 남고, 그 URL을 정규식으로 찾아 파일을 노드에 연결한다.
  * - Alternatives : ImageNode/FileNode 유지 — 서버에 노드 등록이 필요해 프론트만으로 해결 불가.
  *                  첨부 칩 state 유지 — 저장 경로가 없어 새로고침 시 사라짐.
- * - Trade-offs   : 이미지가 미리보기 대신 링크로 보인다. 서버가 ImageNode를 등록하면 되돌릴 수 있다.
+ * - Trade-offs   : 문서에는 LinkNode만 저장하고 AttachmentPreviewPlugin이 편집 DOM 바깥에서 본문 미리보기를 표시한다.
  * - Edge Case    : 에디터 밖(첨부 영역) 버튼은 atEnd로 문서 끝에 붙인다(포커스를 잃어도 이전 선택 영역이 남아 있음).
  *                  기존 문서의 ImageNode/FileNode는 렌더링을 위해 등록을 유지한다.
  */
@@ -553,35 +557,53 @@ function MediaPlugin() {
 
 // ─── Drag Drop Plugin ─────────────────────────────────────────────────────────
 
+/*
+ * CONTEXT
+ * - Problem      : 도크·인라인 본문에서 기존 파일 드롭이 비활성화되어 첨부 버튼만 쓸 수 있었다.
+ * - Why          : 기존 서버 업로드와 링크 삽입 명령을 그대로 사용해 저장 형식을 유지한다.
+ * - Alternatives : 이미지 전용 노드 도입은 서버 문서 변환과 협업 저장 계약 변경이 필요하다.
+ * - Trade-offs   : 현재는 첫 파일 한 개만 처리하고 본문 표시 방식은 첨부 미리보기 플러그인에 맡긴다.
+ * - Edge Case    : 편집 잠금 상태에서는 업로드를 막고 본문·미리보기 드롭 모두 같은 Lexical 명령으로 처리한다.
+ */
 function DragDropPlugin({ workspaceId }: { workspaceId?: string }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    const handleDragOver = (e: Event) => {
-      const de = e as DragEvent;
+    const handleDragOver = (de: DragEvent) => {
       if (de.dataTransfer?.types.includes('Files')) {
         de.preventDefault();
-        if (de.dataTransfer) de.dataTransfer.dropEffect = 'copy';
+        if (de.dataTransfer) de.dataTransfer.dropEffect = editor.isEditable() ? 'copy' : 'none';
+        return true;
       }
+      return false;
     };
 
-    const handleDrop = async (e: Event) => {
-      const de = e as DragEvent;
+    const handleDrop = (de: DragEvent) => {
       const file = de.dataTransfer?.files[0];
-      if (!file) return;
+      if (!file) return false;
       de.preventDefault();
       de.stopPropagation();
-      const url = await uploadMedia(file, workspaceId);
-      if (!url) return;
-      editor.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url });
+      // 잠긴 노드에 파일을 놓아도 브라우저 이동은 막고 서버 업로드는 시작하지 않는다.
+      if (editor.isEditable()) {
+        void uploadMedia(file, workspaceId).then((url) => {
+          // 업로드 응답 시점에 새로 선택한 본문을 교체하지 않고 문서 끝에 안전하게 추가한다.
+          if (url) editor.dispatchCommand(INSERT_UPLOADED_FILE_COMMAND, { name: file.name, url, atEnd: true });
+        });
+      }
+      return true;
     };
 
-    return editor.registerRootListener((root, prev) => {
-      prev?.removeEventListener('dragover', handleDragOver);
-      prev?.removeEventListener('drop', handleDrop);
-      root?.addEventListener('dragover', handleDragOver);
-      root?.addEventListener('drop', handleDrop);
-    });
+    return mergeRegister(
+      editor.registerRootListener((root) => {
+        if (!root) return;
+        const guard = (event: DragEvent) => { blockLockedFileDrop(event, editor.isEditable()); };
+        root.addEventListener('dragover', guard, true);
+        root.addEventListener('drop', guard, true);
+        return () => { root.removeEventListener('dragover', guard, true); root.removeEventListener('drop', guard, true); };
+      }),
+      editor.registerCommand(DRAGOVER_COMMAND, handleDragOver, COMMAND_PRIORITY_HIGH),
+      editor.registerCommand(DROP_COMMAND, handleDrop, COMMAND_PRIORITY_HIGH),
+    );
   }, [editor, workspaceId]);
 
   return null;

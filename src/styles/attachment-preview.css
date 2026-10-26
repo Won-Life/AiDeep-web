@@ -1,0 +1,18 @@
+/* 링크 내용은 Lexical이 관리하고 미리보기는 contenteditable 바깥 형제 슬롯에 표시한다. */
+.ne-root a.ne-attachment-link {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: calc(var(--attachment-preview-height, 0px) + 12px);
+  padding: 12px 42px 12px 12px;
+  border: 1px solid var(--onnode-border);
+  border-radius: 12px 12px 0 0;
+  background: var(--onnode-surface);
+  color: var(--onnode-text);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.ne-root a.ne-attachment-link[data-attachment-display="file"] { border-radius: 12px; }
+.ne-attachment-preview-host { position: absolute; display: block; }
+.ne-root a.ne-attachment-link:focus-visible { outline: 2px solid var(--onnode-primary); outline-offset: 2px; }

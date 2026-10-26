@@ -3,6 +3,8 @@
 import { useRef } from 'react';
 import { useEdges, useNodes, useReactFlow, useStore, useViewport } from '@xyflow/react';
 import type { Node } from '@xyflow/react';
+import { getMiniMapBounds } from '../logic/minimap';
+import { branchPath } from '@/features/edge/BranchEdge';
 
 /*
  * CONTEXT
@@ -40,13 +42,11 @@ function MiniMapNode({ node, accent }: { node: Node; accent: string }) {
 
 /*
  * CONTEXT
- * - Problem      : 미니맵이 화면 중심을 따라가면 사각형이 항상 정가운데·같은 크기라 전체 그래프 중 현재 위치를 알 수 없다.
- * - Why          : 미니맵 범위를 그래프 중심에 고정하고 배율은 화면 크기(zoom 100%에서 사각형이 미니맵 절반)로 정한다.
- *                  화면을 이동하면 사각형이 움직이고, 줌 인하면 작아지고 줌 아웃하면 커진다.
- * - Alternatives : 전체 노드 bounds 맞춤은 노드 추가·이동마다 배율이 바뀌고 그래프가 넓으면 사각형이 점이 된다.
- * - Trade-offs   : 그래프가 미니맵보다 넓으면 일부만 보인다 — 화면이 범위를 벗어나면 그만큼 범위를 밀어 사각형을 항상 안에 둔다.
- * - Edge Case    : 사각형은 최소 크기(미니맵의 12%)를 유지하고, 줌 아웃으로 80%를 넘으면 미니맵 배율을 키워 전체를 채우지 않게 한다.
- *                  드래그 중엔 시작 좌표계를 유지해 범위 이동으로 이동량이 누적되지 않게 한다.
+ * - Problem      : 화면 기준 미니맵 범위에서는 멀리 떨어진 노드가 잘린다.
+ * - Why          : 표시 노드 전체 크기 + 사방 100px을 담는 정사각형에 실제 뷰포트를 겹친다.
+ * - Alternatives : 뷰포트 중심 이동·최소 사각형 보정은 그래프 전체 크기와 현재 화면 비율을 왜곡한다.
+ * - Trade-offs   : 캔버스 이동은 제한하지 않으므로 뷰포트가 미니맵 밖으로 나가면 잘릴 수 있다.
+ * - Edge Case    : 측정 전 크기는 실루엣과 같은 폴백을 사용하고 드래그 시작 좌표계 전체를 고정한다.
  */
 export default function GraphMiniMap() {
   const nodes = useNodes().filter((node) => !node.hidden);
@@ -54,18 +54,16 @@ export default function GraphMiniMap() {
   const { x, y, zoom } = useViewport();
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
-  const { setCenter, zoomIn, zoomOut, fitView, getNodesBounds } = useReactFlow();
+  const nodeLookup = useStore((state) => state.nodeLookup);
+  const { setCenter, zoomIn, zoomOut, fitView } = useReactFlow();
   const viewport = { x: -x / zoom, y: -y / zoom, width: width / zoom, height: height / zoom };
-  const scale = Math.max(Math.max(width / 260, height / 156) * 2, viewport.width / 260 / 0.8, viewport.height / 156 / 0.8);
-  const viewWidth = scale * 260;
-  const viewHeight = scale * 156;
-  const bounds = nodes.length > 0 ? getNodesBounds(nodes) : viewport;
-  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-  const viewLeft = clamp(bounds.x + bounds.width / 2 - viewWidth / 2, viewport.x + viewport.width - viewWidth, viewport.x);
-  const viewTop = clamp(bounds.y + bounds.height / 2 - viewHeight / 2, viewport.y + viewport.height - viewHeight, viewport.y);
-  const boxWidth = Math.max(viewport.width, viewWidth * 0.12);
-  const boxHeight = Math.max(viewport.height, viewHeight * 0.12);
-  const dragOrigin = useRef({ x: viewLeft, y: viewTop });
+  const bounds = getMiniMapBounds(nodes.map((node) => ({
+    ...node.position,
+    width: node.measured?.width ?? node.width ?? 200,
+    height: node.measured?.height ?? node.height ?? (node.data.isMain ? 140 : 40),
+  })));
+  const scale = bounds.width / 260;
+  const dragOrigin = useRef(bounds);
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const accent = '#7B87FF';
 
@@ -75,18 +73,18 @@ export default function GraphMiniMap() {
       <svg
         aria-label="그래프 미니맵: 클릭하거나 드래그하여 화면 이동"
         role="img"
-        viewBox={`${viewLeft} ${viewTop} ${viewWidth} ${viewHeight}`}
-        className="block aspect-[5/3] w-full touch-none cursor-crosshair"
+        viewBox={`${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`}
+        className="block aspect-square w-full touch-none cursor-crosshair"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
-          dragOrigin.current = { x: viewLeft, y: viewTop };
+          dragOrigin.current = bounds;
           const rect = event.currentTarget.getBoundingClientRect();
-          void setCenter(dragOrigin.current.x + (event.clientX - rect.left) / rect.width * viewWidth, dragOrigin.current.y + (event.clientY - rect.top) / rect.height * viewHeight, { zoom });
+          void setCenter(dragOrigin.current.x + (event.clientX - rect.left) / rect.width * dragOrigin.current.width, dragOrigin.current.y + (event.clientY - rect.top) / rect.height * dragOrigin.current.height, { zoom });
         }}
         onPointerMove={(event) => {
           if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
           const rect = event.currentTarget.getBoundingClientRect();
-          void setCenter(dragOrigin.current.x + (event.clientX - rect.left) / rect.width * viewWidth, dragOrigin.current.y + (event.clientY - rect.top) / rect.height * viewHeight, { zoom });
+          void setCenter(dragOrigin.current.x + (event.clientX - rect.left) / rect.width * dragOrigin.current.width, dragOrigin.current.y + (event.clientY - rect.top) / rect.height * dragOrigin.current.height, { zoom });
         }}
         onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
       >
@@ -98,11 +96,31 @@ export default function GraphMiniMap() {
           const tw = target.measured?.width ?? target.width ?? 200;
           const sh = source.measured?.height ?? source.height ?? (source.data.isMain ? 140 : 40);
           const th = target.measured?.height ?? target.height ?? (target.data.isMain ? 140 : 40);
-          const toRight = target.position.x > source.position.x;
-          return <line key={edge.id} x1={source.position.x + (toRight ? sw : 0)} y1={source.position.y + sh / 2} x2={target.position.x + (toRight ? 0 : tw)} y2={target.position.y + th / 2} stroke={accent} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />;
+          /*
+           * CONTEXT
+           * - Problem      : 직선은 실제 그래프의 분기 위치와 좌우 방향을 반영하지 못한다.
+           * - Why          : 실측 핸들 중심과 hubX로 BranchEdge와 같은 경로를 그린다.
+           * - Alternatives : 위치만으로 좌우를 추정하면 드래그 중 고정된 핸들과 어긋난다.
+           * - Trade-offs   : 축소 표시에서는 그림자를 생략하고 선 두께를 화면 기준으로 고정한다.
+           * - Edge Case    : 실측 전에는 핸들 방향과 노드 중앙 좌표를 대신 사용한다.
+           */
+          const sourceInternal = nodeLookup.get(source.id);
+          const targetInternal = nodeLookup.get(target.id);
+          const sourceHandle = sourceInternal?.internals.handleBounds?.source?.find((handle) => handle.id === edge.sourceHandle);
+          const targetHandle = targetInternal?.internals.handleBounds?.target?.find((handle) => handle.id === edge.targetHandle);
+          const toRight = edge.sourceHandle ? edge.sourceHandle.endsWith('right') : target.position.x > source.position.x;
+          const targetOnLeft = edge.targetHandle ? edge.targetHandle.endsWith('left') : toRight;
+          const sp = sourceInternal?.internals.positionAbsolute ?? source.position;
+          const tp = targetInternal?.internals.positionAbsolute ?? target.position;
+          const sx = sp.x + (sourceHandle ? sourceHandle.x + sourceHandle.width / 2 : toRight ? sw : 0);
+          const sy = sp.y + (sourceHandle ? sourceHandle.y + sourceHandle.height / 2 : sh / 2);
+          const tx = tp.x + (targetHandle ? targetHandle.x + targetHandle.width / 2 : targetOnLeft ? 0 : tw);
+          const ty = tp.y + (targetHandle ? targetHandle.y + targetHandle.height / 2 : th / 2);
+          const hubX = typeof edge.data?.hubX === 'number' ? edge.data.hubX : (sx + tx) / 2;
+          return <path key={edge.id} d={branchPath(sx, sy, hubX, tx, ty)} fill="none" stroke={edge.style?.stroke ?? accent} strokeDasharray={edge.style?.strokeDasharray} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />;
         })}
         {nodes.map((node) => <MiniMapNode key={node.id} node={node} accent={accent} />)}
-        <rect x={viewport.x + (viewport.width - boxWidth) / 2} y={viewport.y + (viewport.height - boxHeight) / 2} width={boxWidth} height={boxHeight} rx={Math.min(18 * scale, boxHeight / 3)} fill={accent} fillOpacity={0.14} stroke="#626FFF" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+        <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} rx={Math.min(8 * scale, viewport.width / 2, viewport.height / 2)} fill={accent} fillOpacity={0.14} stroke="#626FFF" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="flex h-[1.5vw] items-center justify-between border-t px-[0.8vw] text-[0.7vw] text-foreground" style={{ borderColor: accent, backgroundColor: 'color-mix(in srgb, #7B87FF 14%, rgb(var(--background)))' }}>
         <button type="button" aria-label="축소" className="h-full px-[0.4vw]" onClick={() => void zoomOut()}>−</button>
