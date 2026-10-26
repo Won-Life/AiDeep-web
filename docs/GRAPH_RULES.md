@@ -225,6 +225,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 
 ## 8. 엣지 표현 규칙
 
+- [x] 미니맵도 실제 그래프의 `branchPath` 경로를 재사용한다. 실측 핸들 중심·좌우 핸들·hubX를 반영하고 그림자는 생략하며 선 두께는 화면 기준 1.5px로 유지한다.
 - [x] 형태: 꺾인선 (`branch` 타입, 허브(elbow)에서 꺾임 — 허브는 source 핸들에서 side 방향 25px)
 - [x] 핸들 위치: 부모 기준 왼쪽 자식 → 부모의 `source-left` ↔ 자식의 `target-right`, 오른쪽 자식은 반대 (§0-7)
 - [x] 노드가 루트(depth 0) 노드 축을 넘어가면 핸들도 반대편으로 대칭 이동 (§5-2)
@@ -233,6 +234,7 @@ MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProject
 
 ## 9. 기타 캔버스 동작
 
+- [x] 미니맵: 표시 중인 노드의 위치·크기 전체 경계에 사방 100px(그래프 좌표) 여백을 더하고 긴 변 기준 정사각형으로 표시한다. 노드 이동·추가·삭제·크기 변경·접기에 따라 갱신하며 현재 뷰포트는 실제 비율로 겹친다. 캔버스 이동은 제한하지 않아 뷰포트가 범위 밖이면 미니맵에서 잘릴 수 있다. 빈 그래프는 원점 중심 200px 정사각형, 미니맵 클릭·드래그 이동과 확대·축소·전체 보기는 유지한다.
 - [x] 노드 클릭 → 에디터 패널 열기/포커스 이동, 여러 패널 동시 오픈 가능, "에디터 모두 닫기" 버튼
 - [x] 노드 우클릭 → 컨텍스트 메뉴 (노드 타입 토글 · 삭제) — 노드 타입(일반↔프로젝트) 토글은 송신·수신 모두 구현. **송신**: `handleToggleNodeType`이 낙관적으로 로컬 반영 후 `updateNodeContent(...{ nodeType })` PATCH로 저장하고, 실패 시 토글 전 값으로 롤백(`isMain`은 색·연결 방향 등 그래프 규칙의 입력이라 무롤백인 색/제목 PATCH와 달리 되돌린다). **수신**: 서버 `updateNodeMeta` PATCH가 nodeType을 WS `NODE_UPDATE(patch.nodeType)`로 broadcast하고, 클라 수신 핸들러(`useWorkspaceWS` `handleNodeUpdate`)가 `isMain`을 파생 반영
 - [x] 칩 버튼 클릭 → 해당 그래프가 화면 중심으로 오며 줌 (`setCenter`, zoom 1, 800ms)
