@@ -3,6 +3,16 @@
 @import "../styles/title-node-font.css";
 @import "../styles/attachment-preview.css";
 
+/*
+ * CONTEXT
+ * - Problem      : 기기의 다크 설정이 개인 설정 기본값과 무관하게 그래프에 적용된다.
+ * - Why          : 공식 라이트 디자인을 기본으로 하고 다크 토큰과 변형은 명시적 선택에만 적용한다.
+ * - Alternatives : 기기 설정 자동 반영은 비공식 다크 디자인을 기본 화면에 노출한다.
+ * - Trade-offs   : 기기 테마 자동 반영 대신 추후 전역 선택값 연결이 필요하다.
+ * - Edge Case    : Tailwind dark 변형도 같은 선택자를 사용해 그림자만 다크로 남지 않게 한다.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* 커서 공유 활성화 시 기본 커서 숨김 */
 .cursor-none,
 .cursor-none * {
@@ -109,20 +119,18 @@
   }
 
   /* =========================
-     Dark (token swap only)
+     Dark (explicit selection only)
      ========================= */
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
+  :root[data-theme="dark"] {
+    color-scheme: dark;
 
-      --background: var(--ds-black);
-      --foreground: var(--ds-white);
-      --surface: var(--ds-gray-100);
-      --surface-hover: var(--ds-gray-200);
-      --surface-active: var(--ds-gray-300);
-      --border: var(--ds-gray-200);
-      --muted: var(--ds-gray-600);
-    }
+    --background: var(--ds-black);
+    --foreground: var(--ds-white);
+    --surface: var(--ds-gray-100);
+    --surface-hover: var(--ds-gray-200);
+    --surface-active: var(--ds-gray-300);
+    --border: var(--ds-gray-200);
+    --muted: var(--ds-gray-600);
   }
 }
 
