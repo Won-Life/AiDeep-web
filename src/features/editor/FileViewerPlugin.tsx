@@ -5,8 +5,9 @@ import { createPortal } from 'react-dom';
 import { $getSelection, $isRangeSelection } from 'lexical';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { fileKindOf, type FileKind } from './fileKind';
+import { AttachmentPreviewPlugin } from './AttachmentPreviewPlugin';
 
-type ViewerFile = { url: string; name: string; kind: FileKind };
+export type ViewerFile = { url: string; name: string; kind: FileKind };
 
 /*
  * CONTEXT
@@ -41,7 +42,10 @@ export function FileViewerPlugin() {
     return () => root.removeEventListener('click', onClick, true);
   }), [editor]);
 
-  return file ? <FileViewerDialog file={file} onClose={() => setFile(null)} /> : null;
+  return <>
+    <AttachmentPreviewPlugin onOpen={setFile} />
+    {file && <FileViewerDialog file={file} onClose={() => setFile(null)} />}
+  </>;
 }
 
 function FileViewerDialog({ file, onClose }: { file: ViewerFile; onClose: () => void }) {
