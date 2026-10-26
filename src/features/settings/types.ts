@@ -47,9 +47,17 @@ export interface SettingsApi {
   deleteAccount?: () => Promise<void>;
   saveGeneral?: (settings: GeneralSettings) => Promise<GeneralSettings>;
 }
+/*
+ * CONTEXT
+ * - Problem      : 다크 디자인이 공식 확정되지 않은 상태에서 기기 설정에 따라 적용된다.
+ * - Why          : 설정 초기값은 공식 라이트 디자인을 사용한다.
+ * - Alternatives : 시스템 기본값은 기기의 다크 설정을 자동으로 반영한다.
+ * - Trade-offs   : 기본값에서는 기기의 테마 설정을 따르지 않는다.
+ * - Edge Case    : 추후 서버에서 불러오는 명시적인 테마 선택은 그대로 유지한다.
+ */
 export const defaultGeneralSettings: GeneralSettings = {
   language: 'ko',
-  theme: 'system',
+  theme: 'light',
   startView: 'overview',
   emailNotifications: false,
 };
