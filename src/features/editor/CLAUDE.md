@@ -6,10 +6,12 @@
 |------|-------|---------|
 | 우측 도크 (C3/C4) | `dockIndex` (number) | 캔버스 우측에 `fixed` 도크. React Flow 뷰포트 transform 안에서 fixed가 안 먹어 `createPortal`로 document.body에 렌더. 헤더에 경로(`프로젝트 > 타이틀`)+제목. **portal의 React 합성 이벤트는 React 트리로 버블하므로 컨테이너에 `onClick stopPropagation` 필수** — 없으면 패널 클릭이 `onNodeClick`을 재발화해 방금 닫은 패널이 다시 열린다. 본문·첨부는 인라인 모드와 동일. TextUpdateNode가 열린 에디터에 `dockIndex`(순번)를 넘겨 캔버스 에디터는 이 모드로 뜬다. |
 | 기본 (캔버스 패널) | 기본값(dockIndex 없음) | `absolute top:100%`, `mouseDown stopPropagation`. dockIndex 도입 후 캔버스에선 미사용(폴백으로 유지). |
-| 인라인 (사이드바) | `inline=true` | `noMediaDrop`, 최종 수정일(클라이언트 시각) 표시 |
+| 인라인 (사이드바) | `inline=true` | 본문 파일 드래그·드롭 업로드, 최종 수정일(클라이언트 시각) 표시 |
 | 전체화면 | `fullscreen=true` | `w-[62.5%] min-w-[300px]`, ToolbarPlugin 포함 |
 
 ## collabProvider null 처리 (필수)
+
+- 도크·인라인·전체화면의 편집 가능한 본문에서 기존 `DragDropPlugin`을 사용한다. 현재 한 번에 첫 파일 1개를 업로드하고 문서 끝에 링크로 삽입한다(응답 대기 중 선택한 본문을 대체하지 않음). 잠긴 노드에서는 native capture 단계에서 기본 동작과 상위 drop 전파를 막되 업로드하지 않으며 업로드 도중 잠기면 `MediaPlugin`이 삽입을 차단한다.
 
 provider가 null인 상태(소켓 연결 전)를 반드시 처리한다.
 
@@ -18,6 +20,14 @@ provider가 null인 상태(소켓 연결 전)를 반드시 처리한다.
 | 기본 | "워크스페이스를 불러오는 중..." (panel 높이 내 중앙) |
 | 전체화면 | `w-full h-full` "워크스페이스를 불러오는 중..." |
 | 인라인 | null 그대로 NotionEditor에 전달 (에디터 내부 처리) |
+
+## 본문 첨부 미리보기
+
+- 서버 업로드 URL로 인식되는 단독 링크 문단만 `AttachmentPreviewPlugin`이 확장한다. 일반 인라인 웹 링크는 기존 동작을 유지한다.
+- 이미지·PDF는 기본 미리보기, DOC·DOCX·HWP·MD는 파일 카드로 표시한다. 우클릭 또는 `⋯` 메뉴에서 `미리보기로 표시 / 파일로 표시 / 크게 보기`를 제공한다. PDF iframe 내부 우클릭은 브라우저 영역이므로 첨부 헤더 또는 옵션 버튼을 사용한다.
+- 저장 노드는 표준 `LinkNode`를 유지한다. 미리보기 DOM은 contenteditable 바깥 형제 포털에만 있고 링크 아래 여백·좌표를 `useAttachmentPreviews`에서 관측한다. 전용 ImageNode/FileNode를 새로 삽입하지 않는다(원격 웹소켓 마크다운 등록 노드에 없음).
+- 표시 선택은 링크 `title`의 `onnode-attachment:v1:file:` 메타데이터로 보존한다. 기존 제목은 인코딩해 보관하고 미리보기로 복귀하면 복원한다. URL을 변경하거나 파일을 재업로드하지 않는다.
+- 읽기 전용 상태에서는 표시 변경을 차단하되 보기·다운로드는 유지한다. 이미지 로딩 실패 안내와 기존 모달 뷰어를 재사용한다.
 
 ## Yjs Provider 생명주기 (`useYjsProvider`)
 
