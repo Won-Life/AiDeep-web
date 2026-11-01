@@ -1,6 +1,6 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import LandingButton from '../LandingButton';
+import LandingLogo from '../LandingLogo';
 import { LOGIN_PATH, NAV_ITEMS } from '../landingNav';
 
 export default function LandingNav() {
@@ -8,7 +8,7 @@ export default function LandingNav() {
     <header className="sticky top-0 z-50 bg-white">
       <div className="mx-auto flex h-[92px] w-full max-w-[1440px] items-center pr-[161px] pl-[73px]">
         <Link href="/" aria-label="On:Node 처음으로">
-          <Image src="/onnode/auth/imgGroup268.svg" alt="On:Node" width={110} height={21} priority />
+          <LandingLogo />
         </Link>
         <nav aria-label="랜딩 메뉴" className="ml-[298px] flex items-center gap-10 text-[15px] leading-[1.5] text-[var(--landing-text-muted)]">
           {NAV_ITEMS.map(({ label, targetId }) => (

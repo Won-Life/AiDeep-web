@@ -22,7 +22,7 @@ export default function PainPointCard({ point }: { point: PainPoint }) {
           {title}
         </h3>
         <p
-          className="absolute w-[226px] text-[16px] leading-[1.5] text-black"
+          className="absolute w-[226px] text-[16px] leading-[1.5] whitespace-nowrap text-black"
           style={{ left: bodyPos.left, top: bodyPos.top }}
         >
           {lines.map((line) => (
