@@ -22,6 +22,8 @@
   --landing-danger-bg: #fdecec;
   --landing-menu-border: #718bfe;
   --landing-menu-active: #e8edff;
+  --landing-surface-pale: #f1f3ff;
+  --landing-card-shadow: 0 3px 12px rgb(28 32 36 / 0.22);
 
   --onnode-primary: var(--landing-primary);
   --onnode-primary-500: var(--landing-primary-deep);

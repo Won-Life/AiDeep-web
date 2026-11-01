@@ -1,9 +1,17 @@
 import LandingSection from '../LandingSection';
+import SectionHeader from '../SectionHeader';
+import TargetCard from '../TargetCard';
+import { TARGETS } from '../targets';
 
 export default function TargetSection() {
   return (
-    <LandingSection id="target" className="border-b border-dashed border-[var(--landing-primary)]/40">
-      <p className="py-16 text-center text-[14px] text-[var(--landing-text-muted)]">08 Target (작업 예정)</p>
+    <LandingSection id="target" className="bg-[var(--landing-surface-pale)] px-6 pt-[100px]">
+      <SectionHeader title="이런 분들께 추천해요" />
+      <div className="mx-auto mt-12 grid max-w-[1149px] grid-cols-2 gap-[53px]">
+        {TARGETS.map((target) => (
+          <TargetCard key={target.id} target={target} />
+        ))}
+      </div>
     </LandingSection>
   );
 }

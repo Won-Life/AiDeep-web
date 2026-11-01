@@ -6,5 +6,10 @@ export const NAV_ITEMS = [
   { label: '추천 대상', targetId: 'target' },
 ] as const;
 
+/** 푸터 '서비스' 열: 상단 메뉴에서 '추천 대상'만 뺀 세 개(시안 기준) */
+export const FOOTER_SERVICE_LINKS = NAV_ITEMS.filter((item) => item.targetId !== 'target');
+
+export const INSTAGRAM_URL = 'https://www.instagram.com/onnode.official';
+
 export const LOGIN_PATH = '/login';
 export const INTRO_ID = 'intro';

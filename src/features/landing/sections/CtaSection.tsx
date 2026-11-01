@@ -1,9 +1,19 @@
-import LandingSection from '../LandingSection';
+import { CtaCharacters, CtaWaves } from '../CtaDecor';
+import LandingButton from '../LandingButton';
+import { LOGIN_PATH } from '../landingNav';
 
 export default function CtaSection() {
   return (
-    <LandingSection id="cta" className="border-b border-dashed border-[var(--landing-primary)]/40">
-      <p className="py-16 text-center text-[14px] text-[var(--landing-text-muted)]">09 CTA (작업 예정)</p>
-    </LandingSection>
+    <section id="cta" className="relative scroll-mt-[92px] overflow-hidden bg-[var(--landing-surface-pale)] pt-[117px] pb-[138px]">
+      <CtaWaves />
+      <div className="relative flex flex-col items-center gap-[17.4px] px-6 text-center">
+        <h2 className="text-[39.1px] leading-[1.5] font-bold text-[var(--landing-primary)]">다음 회의부터, On:Node와 함께해요</h2>
+        <p className="text-[17.4px] leading-[1.5] text-[var(--landing-text-muted)]">지금 바로 시작해 볼까요?</p>
+        <LandingButton href={LOGIN_PATH} size="large">
+          On:Node 시작하기
+        </LandingButton>
+      </div>
+      <CtaCharacters />
+    </section>
   );
 }
