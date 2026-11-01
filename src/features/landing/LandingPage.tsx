@@ -17,8 +17,10 @@ export default function LandingPage() {
       <EntryGate />
       <LandingNav />
       <main>
-        <HeroSection />
-        <PainPointsSection />
+        <div className="bg-[linear-gradient(to_bottom,var(--landing-hero-from)_41.149%,white_108.55%)]">
+          <HeroSection />
+          <PainPointsSection />
+        </div>
         <TransitionSection />
         <FeaturesSection />
         <HowItWorksSection />

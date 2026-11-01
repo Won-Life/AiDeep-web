@@ -18,7 +18,7 @@ const notoSansKr = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
   // 구글은 CJK 글리프를 subset 파라미터와 무관하게 항상 내려준다 — "latin"으로도 한글이 들어온다.
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "500", "700"],
   display: "swap",
 });
 
