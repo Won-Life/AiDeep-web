@@ -1,0 +1,34 @@
+/*
+ * 랜딩 전용 토큰. 앱 화면에는 영향이 없도록 .landing 아래에서만 정의한다.
+ * 시안(Figma UI 디자인 > 랜딩 페이지)의 색을 그대로 옮겼고, 공통 Button이
+ * --onnode-primary를 읽으므로 같은 범위에서 덮어써 시안의 파랑으로 보이게 한다.
+ */
+.landing {
+  --landing-primary: #5d7afd;
+  --landing-primary-border: #748dfd;
+  --landing-primary-deep: #3458bf;
+  --landing-tint: #e9eeff;
+  --landing-hero-from: #eef1ff;
+  --landing-text: #1c2024;
+  --landing-text-muted: #6b7280;
+  --landing-placeholder: #eaedf1;
+  --landing-divider: #d9dde3;
+  --landing-primary-mid: #5679f4;
+  --landing-node-text: #383838;
+  --landing-ink: #111111;
+  --landing-guide-bg: #f7f8fa;
+  --landing-input-placeholder: #9aa0aa;
+  --landing-danger: #d63b3b;
+  --landing-danger-bg: #fdecec;
+  --landing-menu-border: #718bfe;
+  --landing-menu-active: #e8edff;
+  --landing-surface-pale: #f1f3ff;
+  --landing-card-shadow: 0 3px 12px rgb(28 32 36 / 0.22);
+
+  --onnode-primary: var(--landing-primary);
+  --onnode-primary-500: var(--landing-primary-deep);
+
+  scroll-behavior: smooth;
+  font-family: var(--font-noto-sans-kr), var(--font-geist-sans), sans-serif;
+  color: var(--landing-text);
+}
