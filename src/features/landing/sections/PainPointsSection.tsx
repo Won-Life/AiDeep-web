@@ -1,9 +1,18 @@
 import LandingSection from '../LandingSection';
+import PainPointCard from '../PainPointCard';
+import SectionHeader from '../SectionHeader';
+import { INTRO_ID } from '../landingNav';
+import { PAIN_POINTS } from '../painPoints';
 
 export default function PainPointsSection() {
   return (
-    <LandingSection id="intro" className="border-b border-dashed border-[var(--landing-primary)]/40">
-      <p className="py-16 text-center text-[14px] text-[var(--landing-text-muted)]">03 Pain Points (작업 예정)</p>
+    <LandingSection id={INTRO_ID} className="pb-[111px]">
+      <SectionHeader title="회의록, 아직도 이렇게 쓰시나요?" />
+      <div className="mt-[50px] flex gap-10 px-[52px]">
+        {PAIN_POINTS.map((point) => (
+          <PainPointCard key={point.id} point={point} />
+        ))}
+      </div>
     </LandingSection>
   );
 }
