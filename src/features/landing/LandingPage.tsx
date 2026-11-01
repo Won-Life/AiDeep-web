@@ -13,7 +13,7 @@ import LandingFooter from './sections/LandingFooter';
 
 export default function LandingPage() {
   return (
-    <div className="landing min-h-screen bg-white">
+    <div className="landing min-h-screen min-w-[1000px] bg-white">
       <EntryGate />
       <LandingNav />
       <main>
