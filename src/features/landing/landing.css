@@ -13,6 +13,15 @@
   --landing-text-muted: #6b7280;
   --landing-placeholder: #eaedf1;
   --landing-divider: #d9dde3;
+  --landing-primary-mid: #5679f4;
+  --landing-node-text: #383838;
+  --landing-ink: #111111;
+  --landing-guide-bg: #f7f8fa;
+  --landing-input-placeholder: #9aa0aa;
+  --landing-danger: #d63b3b;
+  --landing-danger-bg: #fdecec;
+  --landing-menu-border: #718bfe;
+  --landing-menu-active: #e8edff;
 
   --onnode-primary: var(--landing-primary);
   --onnode-primary-500: var(--landing-primary-deep);
