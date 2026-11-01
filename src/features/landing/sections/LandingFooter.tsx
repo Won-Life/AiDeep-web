@@ -28,13 +28,8 @@ export default function LandingFooter() {
             {FOOTER_COLUMNS.map(({ title, links }) => (
               <div key={title} className="flex flex-col gap-[12.8px]">
                 <p className="font-bold text-[var(--landing-text)]">{title}</p>
-                {links.map(({ label, href, external }) => (
-                  <a
-                    key={label}
-                    href={href}
-                    className={LINK_CLASS}
-                    {...(external && href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                  >
+                {links.map(({ label, href }) => (
+                  <a key={label} href={href} className={LINK_CLASS}>
                     {label}
                   </a>
                 ))}
