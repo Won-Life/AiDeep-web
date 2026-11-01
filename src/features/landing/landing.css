@@ -17,6 +17,8 @@
   --onnode-primary: var(--landing-primary);
   --onnode-primary-500: var(--landing-primary-deep);
 
+  /* 모바일 시안이 나오기 전까지 데스크톱만 지원: 1000px보다 좁으면 가로 스크롤 */
+  min-width: 1000px;
   scroll-behavior: smooth;
   font-family: var(--font-noto-sans-kr), var(--font-geist-sans), sans-serif;
   color: var(--landing-text);

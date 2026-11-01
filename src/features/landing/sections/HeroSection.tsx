@@ -6,7 +6,7 @@ import { INTRO_ID, LOGIN_PATH } from '../landingNav';
 export default function HeroSection() {
   return (
     <LandingSection className="pt-[91px] pb-[176px]">
-      <div className="flex flex-col items-center text-center">
+      <div className="flex flex-col items-center px-6 text-center">
         <p className="rounded-[100px] border border-[var(--landing-primary)] bg-white px-[14px] py-[6px] text-[14px] font-medium leading-[1.5] text-[var(--landing-primary)]">
           AI 회의 구조화 서비스
         </p>
@@ -36,7 +36,7 @@ export default function HeroSection() {
           width={1040}
           height={480}
           priority
-          className="mt-[29px] h-[480px] w-[1040px] max-w-none"
+          className="mt-[29px] h-auto w-full max-w-[1040px]"
         />
       </div>
     </LandingSection>
