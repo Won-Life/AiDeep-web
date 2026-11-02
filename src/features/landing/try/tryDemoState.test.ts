@@ -116,8 +116,10 @@ describe('nextOpenStep', () => {
     expect(nextOpenStep(withTitle, renamed, 0)).toBe(0);
   });
 
-  it('콘텐츠를 끝내도 다음(잠긴 단계)으로 넘어가지 않고 그대로 둔다', () => {
-    const after = applyStepInput(withTitle, 'content', '슬라이드');
-    expect(nextOpenStep(withTitle, after, 2)).toBe(2);
+  it('콘텐츠를 하나 만들었을 때는 3단계에 머물고, 직접 만들 수 있는 만큼 다 만들면 회의 녹음 체험(4단계)을 연다', () => {
+    const one = applyStepInput(withTitle, 'content', '슬라이드');
+    expect(nextOpenStep(withTitle, one, 2)).toBe(2);
+    const two = applyStepInput(one, 'content', '과제');
+    expect(nextOpenStep(one, two, 2)).toBe(3);
   });
 });
