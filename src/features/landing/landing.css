@@ -32,3 +32,26 @@
   font-family: var(--font-noto-sans-kr), var(--font-geist-sans), sans-serif;
   color: var(--landing-text);
 }
+
+/* 직접 체험에서 노드가 새로 놓일 때 살짝 커지며 나타난다 */
+@keyframes landing-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.landing .landing-pop {
+  animation: landing-pop 0.25s ease-out both;
+  transform-origin: left center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .landing-pop {
+    animation: none;
+  }
+}
