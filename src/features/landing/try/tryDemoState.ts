@@ -82,8 +82,13 @@ export function applyStepInput(data: DemoData, step: StepId, raw: string): DemoD
   }
 }
 
-/** 입력 뒤 열어 둘 단계: 새로 끝낸 단계가 있고 다음이 해 볼 수 있는 단계면 다음으로, 아니면 그대로 */
+/**
+ * 입력 뒤 열어 둘 단계: 새로 끝낸 단계가 있고 다음이 입력 단계면 다음으로,
+ * 콘텐츠를 직접 만들 수 있는 만큼 다 만들었으면 회의 녹음 체험으로, 아니면 그대로
+ */
 export function nextOpenStep(before: DemoData, after: DemoData, index: number): number {
+  const filled = after.contents.length >= MAX_CONTENTS && after.contents.length > before.contents.length;
+  if (index === CONTENT_INDEX && filled) return RECORD_INDEX;
   const advanced = completedSteps(after) > completedSteps(before);
   const next = index + 1;
   return advanced && next < INTERACTIVE_STEPS ? next : index;

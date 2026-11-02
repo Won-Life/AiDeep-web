@@ -35,12 +35,13 @@ export function useTryDemo() {
 
   const playing = phase === 'playing';
 
-  /** 입력을 반영했으면 true. 반영되면 다음 단계가 열린다. 재생 중에는 막는다 */
+  /** 입력을 반영했으면 true. 반영되면 다음 단계가 열린다. 재생 중에는 막고, 끝난 뒤 고치면 재생 장면은 거둔다 */
   const submit = (index: number, raw: string) => {
     if (playing) return false;
     const next = applyStepInput(data, STEP_ORDER[index], raw);
     if (next === data) return false;
     setData(next);
+    setPhase('idle');
     setOpenIndex(nextOpenStep(data, next, index));
     setTouched(true);
     return true;
