@@ -31,11 +31,12 @@ export default function HeroSection() {
           Just say it. We&apos;ll node it.
         </p>
         <Image
-          src="/onnode/landing/hero-visual.png"
+          src="/onnode/landing/hero-visual.webp"
           alt="프로젝트, 타이틀, 콘텐츠 노드가 이어진 On:Node 마인드맵 화면"
           width={1040}
           height={480}
           priority
+          unoptimized
           className="mt-[29px] h-auto w-full max-w-[1040px]"
         />
       </div>
