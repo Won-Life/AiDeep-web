@@ -29,5 +29,5 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
     description: '바로 쓰기 또는 템플릿(강의 필기, 회의 메모 등)으로 시작해요.',
     input: { placeholder: '예) 프로세스 스케줄링', actionLabel: '+ 콘텐츠 노드 추가', maxLength: MAX_LABEL.content },
   },
-  { id: 'record', title: '회의 녹음 체험', description: '샘플 회의를 재생하면 노드가 자동으로 만들어져요.' },
+  { id: 'record', title: '회의 녹음 체험', description: '샘플 회의를 재생하면 대사가 자막으로 나오고 노드가 자동으로 만들어져요.' },
 ];

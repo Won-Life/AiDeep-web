@@ -2,17 +2,23 @@
 
 import { useId } from 'react';
 import type { GuideStep } from './tryGuide';
+import TryRecordBody from './TryRecordBody';
 import TryStepForm from './TryStepForm';
-import { MAX_CONTENTS, completedSteps, isStepUnlocked, type DemoData } from './tryDemoState';
+import { MAX_CONTENTS, type DemoData, type StepStatus } from './tryDemoState';
+import type { RecordPhase, RecordingFrame } from './tryRecording';
 
 type TryGuideStepProps = {
   step: GuideStep;
   index: number;
   data: DemoData;
+  status: StepStatus;
   open: boolean;
   touched: boolean;
+  phase: RecordPhase;
+  frame: RecordingFrame | null;
   onToggle: () => void;
   onSubmit: (raw: string) => boolean;
+  onRecord: () => void;
 };
 
 /** 접힌 줄에 보여 줄, 이미 만든 노드 이름 */
@@ -20,6 +26,10 @@ function summaryOf(step: GuideStep, data: DemoData): string {
   if (step.id === 'project') return data.project;
   if (step.id === 'title') return data.title;
   return `${data.contents.length}개`;
+}
+
+function doneText(step: GuideStep, data: DemoData): string {
+  return step.id === 'record' ? '샘플 회의를 재생했어요' : `만든 노드: ${summaryOf(step, data)}`;
 }
 
 function CheckIcon() {
@@ -31,10 +41,10 @@ function CheckIcon() {
 }
 
 /** 안내 한 단계. 제목 줄을 누르면 펼쳐지고, 앞 단계를 끝내기 전에는 잠겨 있다. */
-export default function TryGuideStep({ step, index, data, open, touched, onToggle, onSubmit }: TryGuideStepProps) {
+export default function TryGuideStep({ step, index, data, status, open, touched, phase, frame, onToggle, onSubmit, onRecord }: TryGuideStepProps) {
   const bodyId = useId();
-  const done = index < completedSteps(data);
-  const locked = !isStepUnlocked(data, index);
+  const done = status === 'done';
+  const locked = status === 'locked';
   const { input } = step;
   const full = step.id === 'content' && data.contents.length >= MAX_CONTENTS;
   const initialValue = step.id === 'project' ? data.project : step.id === 'title' ? data.title : '';
@@ -76,6 +86,7 @@ export default function TryGuideStep({ step, index, data, open, touched, onToggl
       {open ? (
         <div id={bodyId} role="region" aria-label={step.title} className="flex flex-col items-start gap-[10px]">
           <p className="w-[280px] text-[13px] leading-[1.5] text-[var(--landing-text-muted)]">{step.description}</p>
+          {step.id === 'record' ? <TryRecordBody phase={phase} frame={frame} onStart={onRecord} /> : null}
           {input ? (
             <TryStepForm
               label={step.title}
@@ -97,7 +108,7 @@ export default function TryGuideStep({ step, index, data, open, touched, onToggl
         </div>
       ) : (
         <p id={bodyId} className="w-[276px] text-[12px] leading-[1.5] text-[var(--landing-text-muted)]">
-          {done ? `만든 노드: ${summaryOf(step, data)}` : step.description}
+          {status === 'skipped' ? '건너뜀' : done ? doneText(step, data) : step.description}
         </p>
       )}
     </div>

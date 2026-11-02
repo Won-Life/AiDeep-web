@@ -2,11 +2,12 @@
 
 import TryGuideStep from './TryGuideStep';
 import { GUIDE_INTRO, GUIDE_STEPS } from './tryGuide';
+import { stepStatus } from './tryDemoState';
 import type { TryDemo } from './useTryDemo';
 
 /** 체험 화면 왼쪽 "따라 해 보세요" 안내. 단계는 순서대로 열리는 아코디언이다. */
 export default function TryGuidePanel({ demo }: { demo: TryDemo }) {
-  const { data, openIndex, touched, submit, toggle, reset } = demo;
+  const { data, openIndex, touched, phase, frame, submit, toggle, startRecording, reset } = demo;
 
   return (
     <aside className="flex h-[600px] w-[360px] flex-col items-start gap-[10px] overflow-hidden rounded-[16px] border border-[var(--landing-divider)] bg-white px-6 py-5">
@@ -30,10 +31,14 @@ export default function TryGuidePanel({ demo }: { demo: TryDemo }) {
           step={step}
           index={index}
           data={data}
+          status={stepStatus(data, phase, index)}
           open={openIndex === index}
           touched={touched}
+          phase={phase}
+          frame={frame}
           onToggle={() => toggle(index)}
           onSubmit={(raw) => submit(index, raw)}
+          onRecord={startRecording}
         />
       ))}
     </aside>

@@ -62,15 +62,24 @@ export function GeneratingNode({ left, top, label, className = '' }: NodeProps) 
   );
 }
 
-/** "회의 녹음 시작" 칩 */
-export function RecordingChip({ left, top, label, className = '' }: NodeProps) {
+/** 녹음 칩. 누를 수 있을 때(onClick 있음)는 샘플 회의 재생을 시작한다 */
+export function RecordingChip({
+  left,
+  top,
+  label,
+  className = '',
+  onClick,
+}: NodeProps & { onClick?: () => void }) {
   return (
-    <div
-      className={`absolute flex items-center gap-[6px] rounded-full border border-[var(--landing-danger)] bg-[var(--landing-danger-bg)] py-[5px] pr-3 pl-[10px] ${className}`}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={`absolute flex items-center gap-[6px] rounded-full border border-[var(--landing-danger)] bg-[var(--landing-danger-bg)] py-[5px] pr-3 pl-[10px] enabled:cursor-pointer enabled:hover:brightness-95 ${className}`}
       style={{ left, top }}
     >
       <TryAsset name="rec-dot.svg" width={10} height={10} />
-      <p className="text-[11px] leading-[1.5] font-medium whitespace-nowrap text-[var(--landing-danger)]">{label}</p>
-    </div>
+      <span className="text-[11px] leading-[1.5] font-medium whitespace-nowrap text-[var(--landing-danger)]">{label}</span>
+    </button>
   );
 }

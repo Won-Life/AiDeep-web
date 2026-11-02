@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONTENT_SLOTS,
   EMPTY_DEMO,
   MAX_CONTENTS,
   MAX_LABEL,
@@ -8,6 +9,7 @@ import {
   isStepUnlocked,
   nextOpenStep,
   normalizeLabel,
+  stepStatus,
   type DemoData,
 } from './tryDemoState';
 
@@ -36,11 +38,29 @@ describe('단계는 앞에서부터 열린다', () => {
     expect(completedSteps({ ...EMPTY_DEMO, title: '제목' })).toBe(0);
   });
 
-  it('바로 앞 단계까지 끝낸 단계만 열 수 있고, 회의 녹음 체험(4번째)은 잠겨 있다', () => {
+  it('바로 앞 단계까지 끝낸 단계만 열 수 있고, 회의 녹음 체험(4번째)은 타이틀만 있으면 열린다', () => {
     expect([0, 1, 2, 3].map((i) => isStepUnlocked(EMPTY_DEMO, i))).toEqual([true, false, false, false]);
     expect([0, 1, 2, 3].map((i) => isStepUnlocked(withProject, i))).toEqual([true, true, false, false]);
-    const done = { ...withTitle, contents: ['슬라이드'] };
-    expect([0, 1, 2, 3].map((i) => isStepUnlocked(done, i))).toEqual([true, true, true, false]);
+    expect([0, 1, 2, 3].map((i) => isStepUnlocked(withTitle, i))).toEqual([true, true, true, true]);
+  });
+});
+
+describe('stepStatus', () => {
+  const withContent = { ...withTitle, contents: ['슬라이드'] };
+
+  it('열 수 없으면 잠김, 끝낸 단계는 끝남, 나머지는 할 차례', () => {
+    expect([0, 1, 2, 3].map((i) => stepStatus(withProject, 'idle', i))).toEqual(['done', 'todo', 'locked', 'locked']);
+    expect([0, 1, 2, 3].map((i) => stepStatus(withContent, 'idle', i))).toEqual(['done', 'done', 'done', 'todo']);
+  });
+
+  it('콘텐츠 없이 녹음을 시작하면 3단계는 건너뜀이고, 콘텐츠가 있으면 끝남 그대로다', () => {
+    expect(stepStatus(withTitle, 'playing', 2)).toBe('skipped');
+    expect(stepStatus(withContent, 'playing', 2)).toBe('done');
+  });
+
+  it('재생이 끝나야 4단계가 끝남이 된다', () => {
+    expect(stepStatus(withTitle, 'playing', 3)).toBe('todo');
+    expect(stepStatus(withTitle, 'done', 3)).toBe('done');
   });
 });
 
@@ -67,7 +87,7 @@ describe('applyStepInput', () => {
     expect(applyStepInput(withTitle, 'content', long).contents[0]).toHaveLength(MAX_LABEL.content);
   });
 
-  it('콘텐츠는 하나씩 더해지고 자리가 차면 더 늘지 않는다', () => {
+  it('콘텐츠는 하나씩 더해지고 직접 만들 수 있는 수가 차면 더 늘지 않는다', () => {
     let data = withTitle;
     for (let i = 0; i < MAX_CONTENTS + 2; i += 1) data = applyStepInput(data, 'content', `내용${i}`);
     expect(data.contents).toHaveLength(MAX_CONTENTS);
@@ -76,6 +96,12 @@ describe('applyStepInput', () => {
 
   it('직접 해 볼 수 없는 단계는 값을 바꾸지 않는다', () => {
     expect(applyStepInput(withTitle, 'record', '샘플')).toBe(withTitle);
+  });
+});
+
+describe('캔버스 칸', () => {
+  it('직접 만든 콘텐츠를 다 채워도 샘플 노드 3개가 들어갈 칸이 남는다', () => {
+    expect(CONTENT_SLOTS).toBe(MAX_CONTENTS + 3);
   });
 });
 
