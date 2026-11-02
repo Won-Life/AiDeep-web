@@ -2,15 +2,18 @@ import TryAsset from './TryAsset';
 
 /* 체험 캔버스에 놓는 노드 그림들. 좌표는 부모(캔버스)에서 준다. */
 
-type Pos = { left: number; top: number };
+type NodeProps = { left: number; top: number; label: string; className?: string };
+
+/* 시안의 노드 가장자리에 번지는 옅은 그림자(흰 노드가 흰 캔버스에서 떠 보이게 한다) */
+const NODE_SHADOW = '[filter:drop-shadow(0_0_4px_rgb(40_50_120/0.22))]';
 
 /** 프로젝트 노드(폴더 모양) */
-export function ProjectNode({ left, top, label }: Pos & { label: string }) {
+export function ProjectNode({ left, top, label, className = '' }: NodeProps) {
   return (
-    <div className="absolute" style={{ left, top, width: 140, height: 107.2 }}>
+    <div className={`absolute ${NODE_SHADOW} ${className}`} style={{ left, top, width: 140, height: 107.2 }}>
       <div className="absolute top-0 left-0 h-[9.655px] w-[52.138px] rounded-tl-[22.4px] rounded-tr-[10.752px] bg-white" />
       <div className="absolute top-[8.69px] left-0 h-[98.483px] w-[140px] overflow-hidden rounded-tr-[8.96px] rounded-br-[8.96px] rounded-bl-[8.96px] bg-white">
-        <p className="absolute top-[32.51px] left-[49.49px] font-[Pretendard] text-[28.672px] leading-[normal] font-bold tracking-[0.5734px] whitespace-nowrap text-[var(--landing-node-text)]">
+        <p className="absolute inset-x-3 top-[32.51px] truncate text-center font-[Pretendard] text-[28.672px] leading-[normal] font-bold tracking-[0.5734px] text-[var(--landing-node-text)]">
           {label}
         </p>
       </div>
@@ -20,12 +23,12 @@ export function ProjectNode({ left, top, label }: Pos & { label: string }) {
 }
 
 /** 타이틀 노드(알약 모양, 양쪽 연결점 포함) */
-export function TitleNode({ left, top, label }: Pos & { label: string }) {
+export function TitleNode({ left, top, label, className = '' }: NodeProps) {
   return (
-    <div className="absolute" style={{ left, top, width: 166.73, height: 52.2 }}>
+    <div className={`absolute ${NODE_SHADOW} ${className}`} style={{ left, top, width: 166.73, height: 52.2 }}>
       <div className="absolute top-[6.62px] left-0 h-[45.573px] w-[166.732px] rounded-[20.857px] border-[4.171px] border-white bg-[rgb(var(--ds-main-blue))]" />
       <div className="absolute top-0 left-[17.14px] h-[10.004px] w-[31.123px] rounded-tl-[8.343px] rounded-tr-[8.343px] bg-white" />
-      <p className="absolute top-[21.69px] left-[44.68px] w-[89.899px] font-[Pretendard] text-[10.846px] leading-[normal] font-semibold text-white">
+      <p className="absolute top-[21.69px] left-[30px] w-[119px] truncate text-center font-[Pretendard] text-[10.846px] leading-[normal] font-semibold text-white">
         {label}
       </p>
       <TryAsset name="handle.svg" width={12.6} height={12.6} className="absolute top-[22.18px] -left-[10.38px]" />
@@ -35,11 +38,11 @@ export function TitleNode({ left, top, label }: Pos & { label: string }) {
 }
 
 /** 콘텐츠 노드(오른쪽이 뾰족한 화살표 모양) */
-export function ContentNode({ left, top, label }: Pos & { label: string }) {
+export function ContentNode({ left, top, label, className = '' }: NodeProps) {
   return (
-    <div className="absolute" style={{ left, top, width: 184, height: 45.3 }}>
+    <div className={`absolute ${NODE_SHADOW} ${className}`} style={{ left, top, width: 184, height: 45.3 }}>
       <TryAsset name="content-node.svg" width={181.783} height={45.3} className="absolute top-0 left-0 h-full w-[98.87%]" />
-      <p className="absolute top-[17px] left-[20.88px] font-[Pretendard] text-[11px] leading-[normal] font-bold whitespace-nowrap text-white">
+      <p className="absolute top-[17px] left-[20.88px] w-[125px] truncate font-[Pretendard] text-[11px] leading-[normal] font-bold text-white">
         {label}
       </p>
     </div>
@@ -47,9 +50,9 @@ export function ContentNode({ left, top, label }: Pos & { label: string }) {
 }
 
 /** 만드는 중인 콘텐츠 노드(점선 + 자물쇠) */
-export function GeneratingNode({ left, top, label }: Pos & { label: string }) {
+export function GeneratingNode({ left, top, label, className = '' }: NodeProps) {
   return (
-    <div className="absolute" style={{ left, top, width: 183.86, height: 45.3 }}>
+    <div className={`absolute ${className}`} style={{ left, top, width: 183.86, height: 45.3 }}>
       <TryAsset name="generating-node.png" width={181.783} height={45.3} className="absolute top-0 left-0 h-full w-[98.87%]" />
       <TryAsset name="lock.svg" width={18} height={18} className="absolute top-[13.63px] left-[135.4px]" />
       <p className="absolute top-[18px] left-[21px] font-[Pretendard] text-[11px] leading-[normal] font-bold whitespace-nowrap text-[rgb(var(--ds-main-blue))]">
@@ -59,15 +62,24 @@ export function GeneratingNode({ left, top, label }: Pos & { label: string }) {
   );
 }
 
-/** "회의 녹음 시작" 칩 */
-export function RecordingChip({ left, top, label }: Pos & { label: string }) {
+/** 녹음 칩. 누를 수 있을 때(onClick 있음)는 샘플 회의 재생을 시작한다 */
+export function RecordingChip({
+  left,
+  top,
+  label,
+  className = '',
+  onClick,
+}: NodeProps & { onClick?: () => void }) {
   return (
-    <div
-      className="absolute flex items-center gap-[6px] rounded-full border border-[var(--landing-danger)] bg-[var(--landing-danger-bg)] py-[5px] pr-3 pl-[10px]"
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={`absolute flex items-center gap-[6px] rounded-full border border-[var(--landing-danger)] bg-[var(--landing-danger-bg)] py-[5px] pr-3 pl-[10px] enabled:cursor-pointer enabled:hover:brightness-95 ${className}`}
       style={{ left, top }}
     >
       <TryAsset name="rec-dot.svg" width={10} height={10} />
-      <p className="text-[11px] leading-[1.5] font-medium whitespace-nowrap text-[var(--landing-danger)]">{label}</p>
-    </div>
+      <span className="text-[11px] leading-[1.5] font-medium whitespace-nowrap text-[var(--landing-danger)]">{label}</span>
+    </button>
   );
 }
