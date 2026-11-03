@@ -319,6 +319,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
       <Sidebar
         isOpen={effectiveSidebarOpen}
         onToggle={handleToggleSidebar}
+        onOpenChat={() => setChatOpen(true)}
+        isChatOpen={isChatOpen}
         onOpenArchive={() => setIsArchiveOpen(true)}
       />
 
