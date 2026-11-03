@@ -41,12 +41,7 @@ src/
 │   └── nodes/TextUpdateNode.tsx # 커스텀 노드 (메인/서브 형태 분기, 핸들 구성, 뷰어 뱃지)
 ├── components/
 │   ├── layout/
-│   │   ├── Sidebar.tsx          # 사이드바 (워크스페이스 헤더·스위처 + 노드 검색 ⌘K + 프로젝트 트리 + 프로필)
-│   │   ├── ChipHeader.tsx       # 상단 헤더 (PROJECT 노드 chip, 협업자, 유저 메뉴, 공유)
-│   │   ├── CollaboratorsList.tsx # presence 기반 접속자 아바타 목록
-│   │   ├── UserMenu.tsx         # 유저 이름/이메일 드롭다운 + 로그아웃
-│   │   ├── ShareButton.tsx      # 워크스페이스 초대 링크 생성 버튼
-│   │   └── MembersModal.tsx     # 멤버 목록 모달 (백엔드 미구현 placeholder)
+│   │   └── Sidebar.tsx          # 사이드바 (워크스페이스 헤더·스위처 + 노드 검색 ⌘K + 프로젝트 트리 + 프로필)
 │   └── ui/
 │       ├── Button.tsx, Input.tsx, DropDown.tsx
 │       └── NodeContextMenu.tsx  # 노드 우클릭 메뉴 (프로젝트 변경 / 아카이브 / 삭제)

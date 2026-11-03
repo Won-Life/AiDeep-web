@@ -18,8 +18,11 @@ function formatNode(node: SyncResponse['nodes'][number]): string {
   return lines.join('\n');
 }
 
-export function buildGraphContext(graph: SyncResponse): string {
-  const selectedNodes = [...graph.nodes]
+/** nodeIds 가 있으면 그 노드만 근거로 쓴다(AI 채팅 범위). 없으면 워크스페이스 전체 */
+export function buildGraphContext(graph: SyncResponse, nodeIds?: readonly string[]): string {
+  const scoped = nodeIds ? new Set(nodeIds) : null;
+  const selectedNodes = graph.nodes
+    .filter((node) => !scoped || scoped.has(node.node_id))
     .sort((left, right) => Number(right.node_type === 'PROJECT') - Number(left.node_type === 'PROJECT'))
     .slice(0, DEMO_CHAT_LIMITS.maxNodes);
   const selectedNodeIds = new Set(selectedNodes.map((node) => node.node_id));

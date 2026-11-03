@@ -1,14 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
+import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/sidebar/Sidebar';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
 import { showToast } from '@/components/ui/toastStore';
-import AiChatPanel, {
-  AI_CHAT_HANDLE_WIDTH,
-  AI_CHAT_PANEL_WIDTH,
-} from '@/features/chat/AiChatPanel';
+import AiChatPanel from '@/features/chat/AiChatPanel';
 import ArchiveModal from '@/components/layout/ArchiveModal';
 import SessionLoadError from '@/features/auth/SessionLoadError';
 import { getMe } from '@/api/user';
@@ -34,6 +31,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     workspaceId,
     setWorkspaceId,
     setWorkspaceRole,
+    setWorkspaceTitle,
     setWorkspaceMembers,
     setCollaborators,
     setNodes,
@@ -172,6 +170,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         syncTargetRef.current = ws.workspaceId;
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
+        setWorkspaceTitle(ws.title);
 
         return Promise.all([
           getNodes(ws.workspaceId),
@@ -203,7 +202,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         console.error('[WorkspaceLayout] sync failed', err);
         setSyncError(true);
       });
-  }, [synced, syncError, workspaceId, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced, setSyncError]);
+  }, [synced, syncError, workspaceId, setWorkspaceId, setWorkspaceRole, setWorkspaceTitle, setNodes, setEdges, setWorkspaceMembers, setSynced, setSyncError]);
 
   // 주기적 재sync: 같은 계정의 다른 세션(예: Meet Scribe 익스텐션)이 만든 노드는
   // WS로 안 온다 — 서버가 발신자 유저룸을 broadcast에서 제외하고(ws.gateway .except),
@@ -301,10 +300,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
-      <div
-        className="absolute inset-y-0 left-0 z-0 transition-[right] duration-200 ease-out"
-        style={{ right: isChatOpen ? AI_CHAT_PANEL_WIDTH : AI_CHAT_HANDLE_WIDTH }}
-      >
+      <div className="absolute inset-0 z-0">
         {children}
       </div>
 
@@ -319,6 +315,8 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
       <Sidebar
         isOpen={effectiveSidebarOpen}
         onToggle={handleToggleSidebar}
+        onOpenChat={() => setChatOpen(true)}
+        isChatOpen={isChatOpen}
         onOpenArchive={() => setIsArchiveOpen(true)}
       />
 
