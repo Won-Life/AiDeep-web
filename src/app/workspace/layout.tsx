@@ -5,10 +5,7 @@ import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/sidebar/
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
 import { showToast } from '@/components/ui/toastStore';
-import AiChatPanel, {
-  AI_CHAT_HANDLE_WIDTH,
-  AI_CHAT_PANEL_WIDTH,
-} from '@/features/chat/AiChatPanel';
+import AiChatPanel from '@/features/chat/AiChatPanel';
 import ArchiveModal from '@/components/layout/ArchiveModal';
 import SessionLoadError from '@/features/auth/SessionLoadError';
 import { getMe } from '@/api/user';
@@ -303,10 +300,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
-      <div
-        className="absolute inset-y-0 left-0 z-0 transition-[right] duration-200 ease-out"
-        style={{ right: isChatOpen ? AI_CHAT_PANEL_WIDTH : AI_CHAT_HANDLE_WIDTH }}
-      >
+      <div className="absolute inset-0 z-0">
         {children}
       </div>
 
