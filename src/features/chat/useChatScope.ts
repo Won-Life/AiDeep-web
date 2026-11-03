@@ -9,6 +9,7 @@ import {
   enclosingProjectScope,
   excludeRecordingIds,
   isScopeInsideRecording,
+  projectIdOf,
   sameScope,
   scopeFromSelection,
   scopeKey,
@@ -33,8 +34,20 @@ export function useChatScope() {
   const [follow, setFollow] = useState(true);
   const [pinned, setPinned] = useState<ChatScope | null>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const [switchedTo, setSwitchedTo] = useState<string | null>(null);
 
   const pinnedAlive = pinned && nodes.some((node) => node.id === pinned.rootId) ? pinned : null;
+
+  // 사이드바에서 다른 프로젝트로 옮기면 범위도 그 프로젝트로 따라간다 — 같은 프로젝트 안의 이동은 아래 안내로만 묻는다
+  if (!follow && pinnedAlive && selectedScope) {
+    const pinnedProject = projectIdOf(pinnedAlive, nodes, edges);
+    const selectedProject = projectIdOf(selectedScope, nodes, edges);
+    if (pinnedProject && selectedProject && pinnedProject !== selectedProject) {
+      setPinned(selectedScope);
+      setDismissedKey(null);
+      setSwitchedTo(summarizeScope(selectedScope, nodes, edges).label);
+    }
+  }
   const current = follow
     ? (selectedScope ?? pinnedAlive ?? defaultScope(nodes))
     : (pinnedAlive ?? selectedScope ?? defaultScope(nodes));
@@ -55,6 +68,7 @@ export function useChatScope() {
   const pick = (scope: ChatScope) => {
     setPinned(scope);
     setFollow(false);
+    setSwitchedTo(null);
   };
   /** 첫 질문을 보낼 때 지금 범위로 고정한다 */
   const lockCurrent = () => {
@@ -71,6 +85,8 @@ export function useChatScope() {
     summary,
     rootTitle: (rootTitle?.data as { title?: string } | undefined)?.title?.trim() || '제목 없음',
     follow,
+    switchedTo,
+    clearSwitchedTo: () => setSwitchedTo(null),
     pendingChange,
     pendingChangeSummary: pendingChange ? summarizeScope(pendingChange, nodes, edges) : null,
     blockedByRecording,

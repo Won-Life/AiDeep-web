@@ -91,7 +91,7 @@ export function summarizeScope(scope: ChatScope, nodes: Node[], edges: Edge[]): 
   return { label: title, chip: `${title} · ${countText}`, detail: `${kindText} · ${countText}`, count };
 }
 
-/** 메뉴에 올릴 후보 — 지금 범위, 그리고 선택한 노드가 속한 타이틀·프로젝트 */
+/** 메뉴에 올릴 후보 — 지금 범위, 선택한 노드가 속한 타이틀·프로젝트, 그리고 모든 프로젝트 */
 export function buildScopeOptions(current: ChatScope | null, selected: ChatScope | null, nodes: Node[], edges: Edge[]): ChatScope[] {
   const options: ChatScope[] = [];
   const add = (scope: ChatScope | null) => {
@@ -104,6 +104,11 @@ export function buildScopeOptions(current: ChatScope | null, selected: ChatScope
     const parentId = getParentId(base.rootId, edges);
     if (parentId) add(scopeForNode(parentId, nodes, edges));
   }
+  // 사이드바와 같은 순서로 모든 프로젝트를 올린다 — 지금 보는 곳 근처만 보이면 다른 프로젝트로 못 옮긴다
+  nodes
+    .filter(isProject)
+    .sort((a, b) => a.position.y - b.position.y)
+    .forEach((project) => add({ rootId: project.id, kind: 'project' }));
   return options;
 }
 
@@ -148,4 +153,10 @@ export function enclosingProjectScope(scope: ChatScope, nodes: Node[], edges: Ed
     cursor = getParentId(cursor, edges);
   }
   return null;
+}
+
+/** 범위가 속한 프로젝트 id — 프로젝트 자신이면 그 id, 프로젝트 밖의 노드면 null */
+export function projectIdOf(scope: ChatScope, nodes: Node[], edges: Edge[]): string | null {
+  if (scope.kind === 'project') return scope.rootId;
+  return enclosingProjectScope(scope, nodes, edges)?.rootId ?? null;
 }

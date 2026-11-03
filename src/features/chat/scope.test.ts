@@ -7,6 +7,7 @@ import {
   enclosingProjectScope,
   excludeRecordingIds,
   isScopeInsideRecording,
+  projectIdOf,
   sameScope,
   scopeForNode,
   scopeFromSelection,
@@ -105,19 +106,22 @@ describe('buildScopeOptions', () => {
   it('타이틀을 고르면 타이틀과 그 프로젝트를 후보로 올린다', () => {
     const selected = { rootId: 't1', kind: 'title' as const };
     const options = buildScopeOptions(null, selected, nodes, edges);
-    expect(options).toEqual([selected, { rootId: 'p', kind: 'project' }]);
+    expect(options.slice(0, 2)).toEqual([selected, { rootId: 'p', kind: 'project' }]);
   });
 
   it('고정된 범위가 선택과 다르면 둘 다 보여 주고 중복은 한 번만', () => {
     const pinned = { rootId: 't2', kind: 'title' as const };
     const selected = { rootId: 't1', kind: 'title' as const };
     const options = buildScopeOptions(pinned, selected, nodes, edges);
-    expect(options.map((option) => option.rootId)).toEqual(['t2', 't1', 'p']);
-    expect(buildScopeOptions(selected, selected, nodes, edges)).toHaveLength(2);
+    expect(options.map((option) => option.rootId)).toEqual(['t2', 't1', 'p', 'p2']);
+    expect(buildScopeOptions(selected, selected, nodes, edges)).toHaveLength(3);
   });
 
-  it('범위가 없으면 빈 목록', () => {
-    expect(buildScopeOptions(null, null, nodes, edges)).toEqual([]);
+  it('범위가 없어도 모든 프로젝트를 사이드바 순서(위에서 아래)로 올린다', () => {
+    expect(buildScopeOptions(null, null, nodes, edges)).toEqual([
+      { rootId: 'p2', kind: 'project' },
+      { rootId: 'p', kind: 'project' },
+    ]);
   });
 });
 
@@ -163,5 +167,16 @@ describe('enclosingProjectScope', () => {
   it('프로젝트 자신이거나 프로젝트 밖이면 null', () => {
     expect(enclosingProjectScope({ rootId: 'p', kind: 'project' }, nodes, edges)).toBeNull();
     expect(enclosingProjectScope({ rootId: 'loose-child', kind: 'node' }, nodes, edges)).toBeNull();
+  });
+});
+
+describe('projectIdOf', () => {
+  it('프로젝트 · 그 안의 타이틀은 같은 프로젝트 id', () => {
+    expect(projectIdOf({ rootId: 'p', kind: 'project' }, nodes, edges)).toBe('p');
+    expect(projectIdOf({ rootId: 't1', kind: 'title' }, nodes, edges)).toBe('p');
+  });
+
+  it('프로젝트 밖의 노드는 null', () => {
+    expect(projectIdOf({ rootId: 'loose-child', kind: 'node' }, nodes, edges)).toBeNull();
   });
 });

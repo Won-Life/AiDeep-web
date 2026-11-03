@@ -78,6 +78,7 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
     const question = text.trim();
     if (!question || sending || scope.blockedByRecording || !scope.current) return;
     scope.lockCurrent();
+    scope.clearSwitchedTo();
     void sendMessage(question, scope.nodeIdsToAsk);
     setInput('');
   };
@@ -128,6 +129,9 @@ export default function AiChatPanel({ isOpen, onToggle }: AiChatPanelProps) {
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 pt-3">
+              {scope.switchedTo && (
+                <p role="status" className="text-center text-[11px] text-[#A6A6A6]">&apos;{scope.switchedTo}&apos; 범위로 바뀌었어요</p>
+              )}
               {scope.pendingChange && scope.pendingChangeSummary && scope.summary && (
                 <ScopeChangeNotice
                   pinnedTitle={scope.rootTitle}
