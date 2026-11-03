@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/Sidebar';
+import Sidebar, { SIDEBAR_WIDTH, RAIL_WIDTH } from '@/components/layout/sidebar/Sidebar';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ToastHost from '@/components/ui/ToastHost';
 import { showToast } from '@/components/ui/toastStore';

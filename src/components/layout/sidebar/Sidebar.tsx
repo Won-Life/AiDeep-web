@@ -6,20 +6,16 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import localFont from 'next/font/local';
-import Image from 'next/image';
-import type { Node } from '@xyflow/react';
 import { useWorkspaceLayout } from '@/app/workspace/context';
 import { getWorkspaces } from '@/api/workspace';
 import NewWorkspaceModal from '@/features/workspace/NewWorkspaceModal';
 import WorkspaceSettingsModal from '@/features/workspace/WorkspaceSettingsModal';
+import ProjectTreeSection from '@/features/workspace/ProjectTreeSection';
+import { useProjectTree, type NodeData } from '@/features/workspace/useProjectTree';
 import { logout } from '@/api/auth';
-import { createMdNode, EMPTY_LEXICAL_JSON } from '@/features/graph/api/nodes';
-import { createEdge } from '@/features/graph/api/edges';
-import { applyDepthOnEdgeCreate, getDescendantIds } from '@/features/graph/logic/traversal';
+import { getDescendantIds } from '@/features/graph/logic/traversal';
 import { createProjectNode } from '@/features/graph/api/nodes';
 import { getRandomColorPair } from '@/features/graph/constants/colors';
 import { figmaNodeColorOf } from '@/features/graph/constants/colors';
@@ -28,6 +24,7 @@ import { SHOW_TEMP_HIDDEN_UI } from '@/lib/uiFlags';
 import { useElapsedLabel } from '@/features/meeting-bot/meetingTime';
 import { pickSidebarMeeting, type SidebarMeeting } from '@/features/meeting-bot/sidebarMeeting';
 import LetterChip from '@/components/ui/LetterChip';
+import { Avatar, MenuItem, OnNodeLogo, OnNodeMark, SidebarIcon, sidebarFont } from './SidebarParts';
 import GraphOnboardingModal from '@/components/ui/GraphOnboardingModal';
 import { BugReportModal } from '@/components/layout/BugReportButton';
 import { TERMS_URL, PRIVACY_URL } from '@/lib/legalLinks';
@@ -55,156 +52,6 @@ import { TERMS_URL, PRIVACY_URL } from '@/lib/legalLinks';
 
 export const SIDEBAR_WIDTH = 240;
 export const RAIL_WIDTH = 72; // Figma X4 레일 폭
-
-// ─── 공통 소품 ────────────────────────────────────────────────────────────────
-
-/*
- * CONTEXT
- * - Problem      : Figma 08 X1/X4 시안은 상단에 On:Node 브랜드 로고(파란 음파 마크 +
- *                  워드마크)를 둔다. 앱에는 이 애셋이 없어 사이드바에 로고 행이 비어 있었다.
- * - Why          : 브랜드 마크를 별도 파일(png/svg) 대신 인라인 SVG로 둔다 — 색을 디자인
- *                  토큰(--ds-main-blue)에 묶어 테마/리브랜딩에 자동 추종하고, 레일(24~28px)과
- *                  헤더(24px) 양쪽에서 size prop만으로 재사용한다.
- * - Alternatives : public/*.svg 파일 임포트 — 색이 하드코딩돼 토큰과 어긋나고, 레일/헤더
- *                  크기 변형마다 파일이 늘어 기각.
- * - Trade-offs   : 로고 형상이 코드에 박혀 디자이너가 직접 못 바꾼다. MVP 단계라 수용.
- * - Edge Case    : 음파 막대는 좌우 대칭(가운데가 가장 큼)으로 viewBox 비율 고정 — size가
- *                  바뀌어도 막대 비율이 일정하게 유지된다.
- */
-
-/** On:Node 브랜드 마크 — 파란 라운드 사각형(레일에서는 원형) + 흰 이퀄라이저(음파) 막대 */
-function OnNodeMark({ size = 28, round = false }: { size?: number; round?: boolean }) {
-  return (
-    <span
-      className="flex shrink-0 items-center justify-center"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: round ? '50%' : Math.round(size * 0.3),
-        backgroundColor: round ? '#607AFF' : 'rgb(var(--ds-main-blue))',
-      }}
-      aria-hidden="true"
-    >
-      <svg width={size * 0.58} height={size * 0.58} viewBox="0 0 20 20" fill="#fff">
-        <rect x="1" y="6.5" width="2.6" height="7" rx="1.3" />
-        <rect x="5" y="4.5" width="2.6" height="11" rx="1.3" />
-        <rect x="8.7" y="2.5" width="2.6" height="15" rx="1.3" />
-        <rect x="12.4" y="4.5" width="2.6" height="11" rx="1.3" />
-        <rect x="16.4" y="6.5" width="2.6" height="7" rx="1.3" />
-      </svg>
-    </span>
-  );
-}
-
-const sidebarFont = localFont({
-  src: '../../../public/onnode/fonts/PretendardVariable.woff2',
-  display: 'swap', weight: '100 900',
-});
-
-/*
- * CONTEXT
- * - Problem      : X1 이미지와 현재 사이드바의 로고·간격·프로필 형태가 다르다.
- * - Why          : 기존 로고 SVG와 로컬 Pretendard를 사용하고 240px 시안의 치수를 적용한다.
- * - Alternatives : 캡처를 배경으로 사용하면 실제 데이터와 검색·선택 동작이 사라진다.
- * - Trade-offs   : 디자인은 시안을 따르지만 이름과 회의 보유 상태는 실제 데이터를 따른다.
- * - Edge Case    : 긴 이름·이메일은 말줄임하며 접힌 레일과 드롭다운 동작은 유지한다.
- */
-function OnNodeLogo() {
-  return <span role="img" aria-label="On:Node" className="sidebar-logo" />;
-}
-
-
-function Avatar({ name, size = 28 }: { name: string; size?: number }) {
-  return (
-    <span className="sidebar-avatar" role="img" aria-label={`${name || '사용자'} 프로필`} style={{ width: size, height: size }}>
-      <svg width="100%" height="100%" viewBox="0 0 32 32" aria-hidden="true">
-        <circle cx="16" cy="16" r="16" fill="#C3CDFF" />
-        <ellipse cx="11.5" cy="16" rx="1.7" ry="3" fill="#111111" />
-        <ellipse cx="20.5" cy="16" rx="1.7" ry="3" fill="#111111" />
-      </svg>
-    </span>
-  );
-}
-
-function MenuItem({
-  children,
-  onClick,
-  disabled,
-  title,
-  className = 'text-foreground',
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  title?: string;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition-colors hover:bg-surface disabled:opacity-50 disabled:hover:bg-transparent ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ─── 트리 유도 ────────────────────────────────────────────────────────────────
-
-type NodeData = { title?: string; isMain?: boolean };
-
-interface TreeTitle {
-  id: string;
-  title: string;
-  hasMeeting: boolean;
-}
-
-interface TreeProject {
-  id: string;
-  title: string;
-  titles: TreeTitle[];
-  count: number;
-  color?: string;
-}
-
-function nodeTitle(n: Node): string {
-  return ((n.data as NodeData)?.title ?? '').trim();
-}
-
-/** context의 nodes·edges에서 프로젝트 → 타이틀(직계 자식) 2단 트리를 유도 */
-function useProjectTree(query: string): TreeProject[] {
-  const { nodes, edges } = useWorkspaceLayout();
-
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const projects = nodes
-    .filter((n) => (n.data as NodeData)?.isMain)
-    .sort((a, b) => a.position.y - b.position.y)
-    .map((p) => {
-      const titles = edges
-        .filter((e) => e.source === p.id)
-        .map((e) => byId.get(e.target))
-        .filter((n): n is Node => Boolean(n))
-        .sort((a, b) => a.position.y - b.position.y)
-        .map((n) => ({
-          id: n.id, title: nodeTitle(n) || '제목 없음',
-          hasMeeting: edges.some((edge) => edge.source === n.id && byId.get(edge.target)?.data.autoGenerated === true),
-        }));
-      return { id: p.id, title: nodeTitle(p) || '제목 없음', titles, count: titles.length, color: p.data.color as string | undefined };
-    });
-
-  const q = query.trim().toLowerCase();
-  if (!q) return projects;
-  return projects
-    .map((p) => {
-      if (p.title.toLowerCase().includes(q)) return p; // 프로젝트 매칭 → 자식 전체 유지
-      const titles = p.titles.filter((t) => t.title.toLowerCase().includes(q));
-      return { ...p, titles };
-    })
-    .filter((p) => p.title.toLowerCase().includes(q) || p.titles.length > 0);
-}
 
 // ─── 회의 진행 중 배너 (X5) ───────────────────────────────────────────────────
 
@@ -458,51 +305,7 @@ function ProfileRow({ collapsed, onOpenArchive }: { collapsed?: boolean; onOpenA
   );
 }
 
-// ─── 프로젝트 트리 (X1) ──────────────────────────────────────────────────────
-
-function ProjectTreeSection({ query, onAddProject, onFocusNode }: {
-  query: string;
-  onAddProject: () => void;
-  onFocusNode: (id: string) => void;
-  onAddTitle: (id: string) => void;
-}) {
-  const tree = useProjectTree(query);
-  const { focusedNodeId, nodes, edges } = useWorkspaceLayout();
-  const selectedNodeId = focusedNodeId ?? nodes.find((node) => node.selected)?.id ?? null;
-
-  return (
-    <div className="sidebar-tree min-h-0 flex-1 overflow-y-auto pb-2">
-      <div className="sidebar-tree-heading flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-[#727272]">프로젝트</span>
-        <button type="button" onClick={onAddProject} aria-label="새 프로젝트 노드" className="px-1 text-[20px] leading-none text-[#3f62e0]">+</button>
-      </div>
-      {tree.length === 0 && <p className="px-5 py-2 text-xs text-muted">{query.trim() ? '검색 결과가 없어요' : '아직 프로젝트가 없어요'}</p>}
-      {tree.map((project) => {
-        const selected = selectedNodeId !== null && (project.id === selectedNodeId || getDescendantIds(project.id, edges).has(selectedNodeId));
-        const color = figmaNodeColorOf(project.color)?.deep ?? project.color ?? 'rgb(var(--ds-main-blue))';
-        return (
-          <button key={project.id} type="button" onClick={() => onFocusNode(project.id)} aria-current={selected ? 'true' : undefined}
-            className={`sidebar-project-row flex w-full items-center gap-3 text-left ${selected ? 'sidebar-selected' : 'hover:bg-surface'}`}>
-            <LetterChip text={project.title} size={selected ? 34 : 32} fontSize={11.2} background={color} />
-            <span className={`min-w-0 flex-1 truncate text-[13px] ${selected ? 'font-bold text-main-blue-deep' : 'font-semibold text-[#4d4d4d]'}`}>{project.title}</span>
-            <span className={`text-[11.2px] ${selected ? 'text-[#748dfd]' : 'text-[#727272]'}`}>{project.count}</span>
-          </button>
-        );
-      })}
-      <button type="button" onClick={onAddProject} className="mx-5 mt-2 flex items-center gap-2 text-[11.2px] text-[#748dfd]">
-        <span className="flex size-[30px] items-center justify-center rounded-[10px] border border-dashed border-[#748dfd] text-base">+</span>
-        프로젝트 노드 추가
-      </button>
-    </div>
-  );
-}
-
 // ─── 접힘 레일 (X4) ──────────────────────────────────────────────────────────
-
-function SidebarIcon({ name, width, height = width, className }: { name: 'search' | 'ai-chat' | 'help'; width: number; height?: number; className?: string }) {
-  return <Image src={`/onnode/sidebar/${name}.svg`} alt="" width={width} height={height} unoptimized aria-hidden className={`shrink-0 ${className ?? ''}`} />;
-}
-
 const APP_VERSION_LABEL = 'On:Node v1.0';
 
 /*
@@ -733,7 +536,6 @@ export default function Sidebar({
     setSynced,
     setFocusedNodeId,
     nodes,
-    edges,
     meetings,
   } = useWorkspaceLayout();
 
@@ -839,35 +641,6 @@ export default function Sidebar({
     }
   }, [workspaceId, nodes, setNodes, setFocusedNodeId]);
 
-  /*
-   * CONTEXT
-   * - Problem      : 시안의 프로젝트 행 + 버튼이 타이틀 생성 동작을 필요로 한다.
-   * - Why          : 기존 API와 부모 색을 사용해 노드·엣지를 생성하고 REST 응답으로 상태를 반영한다.
-   * - Alternatives : 캔버스 콜백을 전역 context에 추가하면 UI 전용 상태 계약이 늘어난다.
-   * - Trade-offs   : 사이드바 생성은 오른쪽 배치를 기본으로 하며 캔버스에서 위치를 변경할 수 있다.
-   * - Edge Case    : 워크스페이스나 부모가 없으면 중단하고 API 실패는 기존 로그 경로로 알린다.
-   */
-  const addTitleNode = async (parentId: string) => {
-    if (!workspaceId) return;
-    const parent = nodes.find((node) => node.id === parentId);
-    if (!parent) return;
-    const colorPair = getRandomColorPair();
-    const color = (parent.data.color as string) || colorPair.bg;
-    const textColor = (parent.data.textColor as string) || colorPair.text;
-    const siblings = edges.filter((edge) => edge.source === parentId);
-    const position = { x: parent.position.x + (parent.measured?.width ?? 200) + 100, y: parent.position.y + siblings.length * 70 };
-    try {
-      const { nodeId } = await createMdNode(workspaceId, '', position, { markdownBody: '', jsonBody: EMPTY_LEXICAL_JSON, color, textColor });
-      setNodes((prev) => [...prev, { id: nodeId, type: 'textUpdater', position, data: { title: '', isMain: false, color, textColor, handleSide: 'right' } }]);
-      const { edgeId } = await createEdge(workspaceId, parentId, nodeId, 'source-right', 'target-left');
-      setEdges((prev) => [...prev, { id: edgeId, source: parentId, target: nodeId, type: 'branch', sourceHandle: 'source-right', targetHandle: 'target-left' }]);
-      setNodes((prev) => applyDepthOnEdgeCreate(prev, [], parentId, nodeId));
-      setFocusedNodeId(nodeId);
-    } catch (error) {
-      console.error('[Sidebar] createTitleNode failed', error);
-    }
-  };
-
   const focusNode = useCallback(
     (id: string) => {
       setNodes((previous) => previous.map((node) => ({ ...node, selected: node.id === id })));
@@ -960,7 +733,6 @@ export default function Sidebar({
             query={query}
             onAddProject={addProjectNode}
             onFocusNode={focusNode}
-            onAddTitle={addTitleNode}
           />
 
           <SidebarHelp />
