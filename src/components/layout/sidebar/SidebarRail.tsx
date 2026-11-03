@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useWorkspaceLayout } from '@/app/workspace/context';
-import { getDescendantIds } from '@/features/graph/logic/traversal';
 import { figmaNodeColorOf } from '@/features/graph/constants/colors';
 import { useProjectTree } from '@/features/workspace/useProjectTree';
 import type { SidebarMeeting } from '@/features/meeting-bot/sidebarMeeting';
@@ -81,8 +79,6 @@ export function CollapsedRail({ onExpand, onExpandToSearch, onOpenArchive, onOpe
 }) {
   const [hoverY, setHoverY] = useState<number | null>(null);
   const tree = useProjectTree('');
-  const { nodes, edges, focusedNodeId } = useWorkspaceLayout();
-  const selectedNodeId = focusedNodeId ?? nodes.find((node) => node.selected)?.id ?? null;
   return (
     <div className="relative flex h-full flex-col" onMouseLeave={() => setHoverY(null)} onMouseMove={(event) => setHoverY(clampHoverY(event.clientY))}>
       <button type="button" onClick={onExpand} aria-label="사이드바 펼치기" className="mx-auto mt-5"><OnNodeMark size={40} round /></button>
@@ -96,7 +92,7 @@ export function CollapsedRail({ onExpand, onExpandToSearch, onOpenArchive, onOpe
       <div className="mx-3 my-2 border-t border-main-blue-pale" />
       <div className="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto pt-2">
         {tree.map((project) => {
-          const selected = selectedNodeId !== null && (project.id === selectedNodeId || getDescendantIds(project.id, edges).has(selectedNodeId));
+          const { selected } = project;
           const color = figmaNodeColorOf(project.color)?.deep ?? project.color ?? 'rgb(var(--ds-main-blue))';
           return <button key={project.id} type="button" onClick={() => onFocusNode(project.id)} title={`${project.title} · 타이틀 ${project.count}개`} aria-label={project.title} aria-current={selected ? 'true' : undefined} className="shrink-0 rounded-[10px]" style={{ outline: selected ? '2px solid rgb(var(--ds-main-blue-deep))' : undefined }}><LetterChip text={project.title} size={32} fontSize={11.2} background={color} /></button>;
         })}

@@ -1,7 +1,5 @@
 'use client';
 
-import { useWorkspaceLayout } from '@/app/workspace/context';
-import { getDescendantIds } from '@/features/graph/logic/traversal';
 import { figmaNodeColorOf } from '@/features/graph/constants/colors';
 import LetterChip from '@/components/ui/LetterChip';
 import { useProjectTree } from './useProjectTree';
@@ -12,8 +10,6 @@ export default function ProjectTreeSection({ query, onAddProject, onFocusNode }:
   onFocusNode: (id: string) => void;
 }) {
   const tree = useProjectTree(query);
-  const { focusedNodeId, nodes, edges } = useWorkspaceLayout();
-  const selectedNodeId = focusedNodeId ?? nodes.find((node) => node.selected)?.id ?? null;
 
   return (
     <div className="sidebar-tree min-h-0 flex-1 overflow-y-auto pb-2">
@@ -23,7 +19,7 @@ export default function ProjectTreeSection({ query, onAddProject, onFocusNode }:
       </div>
       {tree.length === 0 && <p className="px-5 py-2 text-xs text-muted">{query.trim() ? '검색 결과가 없어요' : '아직 프로젝트가 없어요'}</p>}
       {tree.map((project) => {
-        const selected = selectedNodeId !== null && (project.id === selectedNodeId || getDescendantIds(project.id, edges).has(selectedNodeId));
+        const { selected } = project;
         const color = figmaNodeColorOf(project.color)?.deep ?? project.color ?? 'rgb(var(--ds-main-blue))';
         return (
           <button key={project.id} type="button" onClick={() => onFocusNode(project.id)} aria-current={selected ? 'true' : undefined}
