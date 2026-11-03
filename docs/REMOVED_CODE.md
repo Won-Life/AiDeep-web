@@ -44,3 +44,28 @@ git checkout archive/chipheader-family -- src/components/layout/ShareButton.tsx
 - `ChipHeader`가 레이아웃에서 빠진 뒤 사이드바 폭·도크 에디터 레이아웃이 바뀌었으므로, 다시 붙이려면 `app/workspace/layout.tsx`의 배치부터 다시 맞춰야 한다.
 - 사이드바 프로필(`ProfileRow`)과 같은 기능이 있었던 `UserMenu`는 되살리지 말고 `ProfileRow`로 합치는 편이 낫다.
 - `docs/ARCHITECTURE.md`·`docs/PRD.md`·`docs/ADR.md`(ADR-015)의 ChipHeader 설명은 과거 기록으로 남겨 두었다. 파일 트리 목록에서만 뺐다.
+
+---
+
+## 2026-11-04 · 사이드바 `addTitleNode` 와 `onAddTitle` prop
+
+| 대상 | 위치(삭제 전) | 하던 일 |
+|---|---|---|
+| `addTitleNode(parentId)` | `src/components/layout/Sidebar.tsx` | 프로젝트 행의 `+` 버튼으로 오른쪽에 타이틀 노드를 만들고 엣지를 이은 뒤 포커스 이동(약 20줄) |
+| `onAddTitle` prop | `ProjectTreeSection` | 위 함수를 행 `+` 버튼에 전달 |
+
+### 왜 지웠나
+- 시안(X1)에서 프로젝트 행의 `+` 버튼이 빠지면서 호출하는 곳이 없어졌다. 함수와 prop 만 남아 있었다.
+- 함께 쓰이지 않게 된 import(`createMdNode`, `createEdge`, `applyDepthOnEdgeCreate`, `EMPTY_LEXICAL_JSON`)도 정리했다.
+
+### 마지막으로 있던 커밋
+`189467b` (파일 경로는 `src/components/layout/Sidebar.tsx`, 이후 `components/layout/sidebar/` 로 이동).
+
+### 되살리는 방법
+삭제 전 파일에서 함수만 꺼내 본다.
+
+```bash
+git show 189467b:src/components/layout/Sidebar.tsx
+```
+
+`addTitleNode` 를 `Sidebar` 본체에 붙이고, `ProjectTreeSection` 에 `onAddTitle` prop 과 행 `+` 버튼을 다시 달면 된다.
