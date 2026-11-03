@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getWorkspaces } from '@/api/workspace';
 import type { WorkspaceListItem } from '@/api/types';
 import LetterChip from '@/components/ui/LetterChip';
+import { useDismissable } from '@/hooks/useDismissable';
 
 /*
  * CONTEXT
@@ -40,15 +41,14 @@ export default function WorkspaceSwitcher({
       });
   }, [open]);
 
+  useDismissable({ open, onClose });
+
   if (!open) return null;
 
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div id="workspace-switcher-menu" role="menu" aria-label="워크스페이스" className="sidebar-workspace-menu absolute top-full -left-[5px] z-50 mt-4 w-[303px] max-w-[calc(100vw-22px)] overflow-hidden rounded-[21px] border border-[#7A89FF] bg-background shadow-[0_3px_2px_rgba(53,62,112,0.16)]"
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
-        }}>
+      <div id="workspace-switcher-menu" role="menu" aria-label="워크스페이스" className="sidebar-workspace-menu absolute top-full -left-[5px] z-50 mt-4 w-[303px] max-w-[calc(100vw-22px)] overflow-hidden rounded-[21px] border border-[#7A89FF] bg-background shadow-[0_3px_2px_rgba(53,62,112,0.16)]">
 
         <p className="flex h-[30px] items-center px-[13px] text-[10px] text-[#7A89FF]">
           워크스페이스

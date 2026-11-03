@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useDismissable } from '@/hooks/useDismissable';
 import GraphOnboardingModal from '@/components/ui/GraphOnboardingModal';
 import { BugReportModal } from '@/components/layout/BugReportButton';
 import { TERMS_URL, PRIVACY_URL } from '@/lib/legalLinks';
@@ -23,24 +24,7 @@ export default function SidebarHelp({ collapsed = false }: { collapsed?: boolean
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-    const onPointer = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as globalThis.Node)) setOpen(false);
-    };
-    document.addEventListener('keydown', onKey, true);
-    document.addEventListener('mousedown', onPointer);
-    return () => {
-      document.removeEventListener('keydown', onKey, true);
-      document.removeEventListener('mousedown', onPointer);
-    };
-  }, [open]);
+  useDismissable({ open, onClose: () => setOpen(false), rootRef, restoreFocusRef: triggerRef });
 
   const choose = (action: () => void) => () => { setOpen(false); action(); };
   const itemClass = 'block w-full text-left outline-none focus-visible:underline';

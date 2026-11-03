@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useWorkspaceLayout } from '@/app/workspace/context';
 import { logout } from '@/api/auth';
 import { SHOW_TEMP_HIDDEN_UI } from '@/lib/uiFlags';
+import { useDismissable } from '@/hooks/useDismissable';
 import { Avatar, MenuItem } from './SidebarParts';
 
 // X2 프로필 메뉴 아이콘
@@ -37,6 +38,7 @@ export default function ProfileRow({ collapsed, onOpenArchive }: { collapsed?: b
   const { userMe } = useWorkspaceLayout();
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  useDismissable({ open: menuOpen, onClose: () => setMenuOpen(false), restoreFocusRef: triggerRef });
   const name = userMe?.username ?? '';
   const email = userMe?.email ?? '';
 
@@ -48,14 +50,7 @@ export default function ProfileRow({ collapsed, onOpenArchive }: { collapsed?: b
   };
 
   return (
-    <div className={`relative shrink-0 ${collapsed ? 'px-3 pt-3 pb-8' : 'sidebar-profile-wrap'}`}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          setMenuOpen(false);
-          triggerRef.current?.focus();
-        }
-      }}>
-
+    <div className={`relative shrink-0 ${collapsed ? 'px-3 pt-3 pb-8' : 'sidebar-profile-wrap'}`}>
       <button
         ref={triggerRef}
         type="button"
