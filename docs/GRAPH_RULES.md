@@ -41,6 +41,8 @@
 
 MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `insertProjectNode`(`features/graph/api/insertProjectNode.ts`, 내부에서 `createProjectNode` REST POST) → 응답의 `nodeId`로 로컬 삽입. 사이드바 `+`와 캔버스 우클릭 생성이 같은 헬퍼를 쓴다. 낙관적 삽입 없음, 실패 시 노드 미생성(콘솔 로그만).
 
+AI 채팅의 "노드로 저장"은 여섯 번째 진입점이다. `insertChildMdNode`(`features/graph/api/insertChildMdNode.ts`)가 `handleAddChild`와 같은 규칙(방향 · 겹침 회피 위치 · 그래프 색 상속 · 임시 엣지 → `createEdge` · depth 갱신)으로 답변 범위의 루트 노드 아래에 자식 MD 노드를 만든다. 규칙을 바꾸면 두 곳을 함께 고친다.
+
 | 경로 | 트리거 | 연결 | 색상 |
 |------|--------|------|------|
 | 빈 공간 더블클릭 (`onPaneDoubleClick`) | 캔버스 빈 공간 더블클릭 | 없음 (독립 MD 노드) | 랜덤 색 (`getRandomColorPair`) |

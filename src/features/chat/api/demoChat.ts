@@ -22,6 +22,7 @@ function hasAnswer(body: DemoChatResponse): body is { answer: string } {
 export async function requestDemoChat(
   workspaceId: string,
   message: string,
+  nodeIds?: readonly string[],
 ): Promise<string> {
   const trimmedMessage = message.trim();
   if (!trimmedMessage || trimmedMessage.length > DEMO_CHAT_LIMITS.maxMessageChars) {
@@ -34,7 +35,7 @@ export async function requestDemoChat(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message: trimmedMessage,
-      graphContext: buildGraphContext(graph),
+      graphContext: buildGraphContext(graph, nodeIds),
     }),
   });
 

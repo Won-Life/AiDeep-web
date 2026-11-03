@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react';
 import { useWorkspaceLayout } from '@/app/workspace/context';
 import { getDescendantIds } from '@/features/graph/logic/traversal';
+import { useSelectedNodeId } from './useSelectedNodeId';
 
 export type NodeData = { title?: string; isMain?: boolean };
 
@@ -26,8 +27,8 @@ function nodeTitle(n: Node): string {
 
 /** context의 nodes·edges에서 프로젝트 → 타이틀(직계 자식) 2단 트리를 유도 */
 export function useProjectTree(query: string): TreeProject[] {
-  const { nodes, edges, focusedNodeId } = useWorkspaceLayout();
-  const selectedNodeId = focusedNodeId ?? nodes.find((node) => node.selected)?.id ?? null;
+  const { nodes, edges } = useWorkspaceLayout();
+  const selectedNodeId = useSelectedNodeId();
 
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const projects = nodes
