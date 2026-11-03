@@ -2,7 +2,7 @@
  * CONTEXT
  * - Problem      : 보관(soft delete)된 노드를 확인·복원할 수단이 없어 사용자가
  *                  데이터가 영구 삭제된 것으로 오해함 (#203, 피드백 5).
- * - Why          : UserMenu에서 여는 보관함 모달. GET /node/archived로 목록을 읽고
+ * - Why          : 사이드바 프로필 메뉴에서 여는 보관함 모달. GET /node/archived로 목록을 읽고
  *                  PATCH /node/:id/restore로 복원한 뒤 캔버스 state에 즉시 삽입한다.
  *                  본인 변경은 REST 응답으로 local state 반영(프로젝트 규칙),
  *                  협업자는 서버의 NODE_CREATE broadcast로 수신한다.
