@@ -22,6 +22,8 @@ export default function Modal({ isOpen, onClose, children, labelledBy, size = 'm
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
     dialog.showModal();
+    // showModal 이 첫 포커스 가능 요소(닫기 버튼)로 포커스를 옮기므로, 입력창 등은 표시로 직접 지정한다
+    dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
     document.body.style.overflow = 'hidden';
     return () => {
       dialog.close();

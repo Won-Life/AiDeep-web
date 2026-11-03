@@ -34,6 +34,9 @@ interface WorkspaceLayoutContextValue {
   setWorkspaceId: Dispatch<SetStateAction<string | null>>;
   workspaceRole: WorkspaceRole | null;
   setWorkspaceRole: Dispatch<SetStateAction<WorkspaceRole | null>>;
+  /** 현재 워크스페이스 이름 — 목록 조회로 알게 된 시점에 채운다(그 전엔 null) */
+  workspaceTitle: string | null;
+  setWorkspaceTitle: Dispatch<SetStateAction<string | null>>;
   // 워크스페이스 참여자 (DB 전체 목록 — 초기화 시 fetch)
   workspaceMembers: WorkspaceMember[];
   setWorkspaceMembers: Dispatch<SetStateAction<WorkspaceMember[]>>;
@@ -66,6 +69,7 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(0);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | null>(null);
+  const [workspaceTitle, setWorkspaceTitle] = useState<string | null>(null);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
   const [collaborators, setCollaborators] = useState<PresenceMember[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -88,6 +92,7 @@ export function WorkspaceLayoutProvider({ children }: { children: ReactNode }) {
         sidebarWidth, setSidebarWidth,
         workspaceId, setWorkspaceId,
         workspaceRole, setWorkspaceRole,
+        workspaceTitle, setWorkspaceTitle,
         workspaceMembers, setWorkspaceMembers,
         collaborators, setCollaborators,
         nodes, setNodes,

@@ -39,7 +39,7 @@
 
 ## 2. 노드 생성 (5경로)
 
-MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `createProjectNode` REST POST → 응답의 `nodeId`로 로컬 삽입. 낙관적 삽입 없음, 실패 시 노드 미생성(콘솔 로그만).
+MD 노드 경로는 `createMdNode`, 프로젝트 노드 경로는 `insertProjectNode`(`features/graph/api/insertProjectNode.ts`, 내부에서 `createProjectNode` REST POST) → 응답의 `nodeId`로 로컬 삽입. 사이드바 `+`와 캔버스 우클릭 생성이 같은 헬퍼를 쓴다. 낙관적 삽입 없음, 실패 시 노드 미생성(콘솔 로그만).
 
 | 경로 | 트리거 | 연결 | 색상 |
 |------|--------|------|------|
