@@ -27,6 +27,7 @@ import type { WorkspaceListItem } from '@/api/types';
 import { SHOW_TEMP_HIDDEN_UI } from '@/lib/uiFlags';
 import { useElapsedLabel } from '@/features/meeting-bot/meetingTime';
 import { pickSidebarMeeting, type SidebarMeeting } from '@/features/meeting-bot/sidebarMeeting';
+import LetterChip from '@/components/ui/LetterChip';
 import GraphOnboardingModal from '@/components/ui/GraphOnboardingModal';
 import { BugReportModal } from '@/components/layout/BugReportButton';
 import { TERMS_URL, PRIVACY_URL } from '@/lib/legalLinks';
@@ -112,34 +113,6 @@ function OnNodeLogo() {
   return <span role="img" aria-label="On:Node" className="sidebar-logo" />;
 }
 
-/** 워크스페이스 아이콘 — 이름 첫 글자를 색 사각형에 표시.
- *  기본(현재 워크스페이스)은 Main Blue, muted(목록의 다른 워크스페이스)는 연한 파랑 (Figma X1·X6). */
-function WorkspaceIcon({
-  name,
-  size = 24,
-  muted = false,
-}: {
-  name: string;
-  size?: number;
-  muted?: boolean;
-}) {
-  return (
-    <span
-      className="flex shrink-0 items-center justify-center rounded-[6px] font-semibold"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size * 0.5,
-        backgroundColor: muted
-          ? 'rgb(var(--ds-main-blue-pale))'
-          : 'rgb(var(--ds-main-blue))',
-        color: muted ? 'rgb(var(--ds-main-blue-deep))' : '#ffffff',
-      }}
-    >
-      {name.trim().charAt(0) || 'W'}
-    </span>
-  );
-}
 
 function Avatar({ name, size = 28 }: { name: string; size?: number }) {
   return (
@@ -334,9 +307,7 @@ function WorkspaceSwitcher({
                   isCurrent ? 'bg-[#E9EDFF] font-semibold text-[#3454C3]' : 'text-[#A9B9FF] hover:bg-[#F3F5FF]'
                 }`}
               >
-                <span aria-hidden="true" className={`flex size-[29px] shrink-0 items-center justify-center rounded-[6px] text-[12px] font-semibold text-white ${isCurrent ? 'bg-[#3454C3]' : 'bg-[#C3CDFF]'}`}>
-                  {ws.title.trim().charAt(0) || 'W'}
-                </span>
+                <LetterChip text={ws.title} fallback="W" size={29} radius={6} background={isCurrent ? 'rgb(var(--ds-main-blue-deep))' : '#C3CDFF'} />
                 <span className="min-w-0 flex-1 truncate">{ws.title}</span>
               </button>
             );
@@ -512,7 +483,7 @@ function ProjectTreeSection({ query, onAddProject, onFocusNode }: {
         return (
           <button key={project.id} type="button" onClick={() => onFocusNode(project.id)} aria-current={selected ? 'true' : undefined}
             className={`sidebar-project-row flex w-full items-center gap-3 text-left ${selected ? 'sidebar-selected' : 'hover:bg-surface'}`}>
-            <span className={`flex shrink-0 items-center justify-center rounded-[10px] text-[11.2px] font-semibold text-white ${selected ? 'size-[34px]' : 'size-[32px]'}`} style={{ backgroundColor: color }}>{project.title.charAt(0)}</span>
+            <LetterChip text={project.title} size={selected ? 34 : 32} fontSize={11.2} background={color} />
             <span className={`min-w-0 flex-1 truncate text-[13px] ${selected ? 'font-bold text-main-blue-deep' : 'font-semibold text-[#4d4d4d]'}`}>{project.title}</span>
             <span className={`text-[11.2px] ${selected ? 'text-[#748dfd]' : 'text-[#727272]'}`}>{project.count}</span>
           </button>
@@ -689,7 +660,7 @@ function CollapsedRail({ onExpand, onExpandToSearch, onOpenArchive, onOpenChat, 
   return (
     <div className="relative flex h-full flex-col" onMouseLeave={() => setHoverY(null)} onMouseMove={(event) => setHoverY(clampHoverY(event.clientY))}>
       <button type="button" onClick={onExpand} aria-label="사이드바 펼치기" className="mx-auto mt-5"><OnNodeMark size={40} round /></button>
-      <button type="button" onClick={onExpand} title={workspaceTitle} aria-label="워크스페이스 열기" className="mx-auto mt-4"><WorkspaceIcon name={workspaceTitle} size={38} /></button>
+      <button type="button" onClick={onExpand} title={workspaceTitle} aria-label="워크스페이스 열기" className="mx-auto mt-4"><LetterChip text={workspaceTitle} fallback="W" size={38} background="rgb(var(--ds-main-blue-deep))" fontSize={14} /></button>
       <button type="button" onClick={onExpandToSearch} aria-label="검색" title="검색" className="mx-auto mt-4 flex size-10 items-center justify-center"><SidebarIcon name="search" width={27} /></button>
       <button type="button" onClick={onOpenChat} aria-label="AI 질문" aria-pressed={isChatOpen} title="AI 질문" className={`relative flex h-12 w-full items-center justify-center ${isChatOpen ? 'bg-main-blue-pale' : ''}`}>
         {isChatOpen && <span aria-hidden className="absolute top-1/2 left-0 h-[30px] w-[5px] -translate-y-1/2 rounded-r-[3px] bg-[#748dfd]" />}
@@ -701,7 +672,7 @@ function CollapsedRail({ onExpand, onExpandToSearch, onOpenArchive, onOpenChat, 
         {tree.map((project) => {
           const selected = selectedNodeId !== null && (project.id === selectedNodeId || getDescendantIds(project.id, edges).has(selectedNodeId));
           const color = figmaNodeColorOf(project.color)?.deep ?? project.color ?? 'rgb(var(--ds-main-blue))';
-          return <button key={project.id} type="button" onClick={() => onFocusNode(project.id)} title={`${project.title} · 타이틀 ${project.count}개`} aria-label={project.title} aria-current={selected ? 'true' : undefined} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white" style={{ backgroundColor: color, outline: selected ? '2px solid rgb(var(--ds-main-blue-deep))' : undefined }}>{project.title.charAt(0)}</button>;
+          return <button key={project.id} type="button" onClick={() => onFocusNode(project.id)} title={`${project.title} · 타이틀 ${project.count}개`} aria-label={project.title} aria-current={selected ? 'true' : undefined} className="shrink-0 rounded-[10px]" style={{ outline: selected ? '2px solid rgb(var(--ds-main-blue-deep))' : undefined }}><LetterChip text={project.title} size={32} fontSize={11.2} background={color} /></button>;
         })}
         <button type="button" onClick={onAddProject} aria-label="프로젝트 노드 추가" title="프로젝트 노드 추가" className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-dashed border-main-blue text-main-blue">+</button>
       </div>
@@ -943,7 +914,7 @@ export default function Sidebar({
                 aria-controls={switcherOpen ? "workspace-switcher-menu" : undefined}
                 className="sidebar-workspace flex w-full min-w-0 items-center text-left"
               >
-                <WorkspaceIcon name={workspaceTitle} size={42} />
+                <LetterChip text={workspaceTitle} fallback="W" size={42} background="rgb(var(--ds-main-blue-deep))" />
                 <span className="min-w-0 truncate text-[16px] font-bold text-main-blue-deep">
                   {workspaceTitle}
                 </span>

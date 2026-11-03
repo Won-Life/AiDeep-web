@@ -4,6 +4,7 @@ import { useId, type FormEvent, type ReactNode } from 'react';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import LetterChip from '@/components/ui/LetterChip';
 
 /*
  * CONTEXT
@@ -73,7 +74,7 @@ export function WorkspaceNameField({ value, onChange, placeholder }: { value: st
     <div>
       <p className="mb-1.5 text-[11px] font-semibold text-foreground">이름</p>
       <div className="flex items-center gap-2">
-        <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-main-blue-deep text-[14px] font-semibold text-white">{value.trim().charAt(0) || '새'}</span>
+        <LetterChip text={value} fallback="새" size={44} fontSize={14} background="rgb(var(--ds-main-blue-deep))" />
         <Input data-autofocus value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} aria-label="워크스페이스 이름" autoComplete="off" className="min-w-0 flex-1 !h-9 !rounded-full !px-4 !text-[12px]" />
       </div>
       <p className="mt-1.5 pl-[52px] text-[10px] text-gray-500">아이콘은 이름 첫 글자로 자동 생성돼요.</p>
