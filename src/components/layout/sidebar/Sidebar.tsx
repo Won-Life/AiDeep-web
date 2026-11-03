@@ -2,7 +2,6 @@
 
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -67,6 +66,8 @@ export default function Sidebar({
     workspaceId,
     setWorkspaceId,
     setWorkspaceRole,
+    workspaceTitle: contextTitle,
+    setWorkspaceTitle,
     setNodes,
     setEdges,
     setSynced,
@@ -75,25 +76,14 @@ export default function Sidebar({
     meetings,
   } = useWorkspaceLayout();
 
+  const workspaceTitle = contextTitle ?? '워크스페이스';
   const sidebarMeeting = useMemo(() => pickSidebarMeeting(meetings, nodes), [meetings, nodes]);
 
   const [query, setQuery] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [newWsOpen, setNewWsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [workspaceTitle, setWorkspaceTitle] = useState('워크스페이스');
   const { searchInputRef, expandToSearch } = useSidebarShortcuts({ isOpen, onToggle });
-
-  // 현재 워크스페이스 이름 — 목록 조회 결과에서 1회 확보
-  useEffect(() => {
-    if (!workspaceId) return;
-    getWorkspaces()
-      .then((list) => {
-        const ws = list.find((w) => w.workspaceId === workspaceId);
-        if (ws) setWorkspaceTitle(ws.title);
-      })
-      .catch(() => {});
-  }, [workspaceId]);
 
   const switchWorkspace = useCallback(
     (ws: Pick<WorkspaceListItem, 'workspaceId' | 'title' | 'role'>) => {
@@ -106,7 +96,7 @@ export default function Sidebar({
       setWorkspaceTitle(ws.title);
       setSynced(false);
     },
-    [setNodes, setEdges, setFocusedNodeId, setWorkspaceId, setWorkspaceRole, setSynced],
+    [setNodes, setEdges, setFocusedNodeId, setWorkspaceId, setWorkspaceRole, setWorkspaceTitle, setSynced],
   );
 
   const addProjectNode = useCallback(async () => {

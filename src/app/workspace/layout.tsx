@@ -34,6 +34,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
     workspaceId,
     setWorkspaceId,
     setWorkspaceRole,
+    setWorkspaceTitle,
     setWorkspaceMembers,
     setCollaborators,
     setNodes,
@@ -172,6 +173,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         syncTargetRef.current = ws.workspaceId;
         setWorkspaceId(ws.workspaceId);
         setWorkspaceRole(ws.role);
+        setWorkspaceTitle(ws.title);
 
         return Promise.all([
           getNodes(ws.workspaceId),
@@ -203,7 +205,7 @@ function WorkspaceLayoutInner({ children }: { children: ReactNode }) {
         console.error('[WorkspaceLayout] sync failed', err);
         setSyncError(true);
       });
-  }, [synced, syncError, workspaceId, setWorkspaceId, setWorkspaceRole, setNodes, setEdges, setWorkspaceMembers, setSynced, setSyncError]);
+  }, [synced, syncError, workspaceId, setWorkspaceId, setWorkspaceRole, setWorkspaceTitle, setNodes, setEdges, setWorkspaceMembers, setSynced, setSyncError]);
 
   // 주기적 재sync: 같은 계정의 다른 세션(예: Meet Scribe 익스텐션)이 만든 노드는
   // WS로 안 온다 — 서버가 발신자 유저룸을 broadcast에서 제외하고(ws.gateway .except),
