@@ -51,6 +51,13 @@ const graph: SyncResponse = {
 };
 
 describe('buildGraphContext', () => {
+  it('nodeIds 를 주면 그 노드와 그 사이 연결만 담는다', () => {
+    const scoped = buildGraphContext(graph, ['marketing']);
+    expect(scoped).toContain('제목: 마케팅 회의');
+    expect(scoped).not.toContain('제목: 도당체 행사');
+    expect(scoped).not.toContain('→');
+  });
+
   it('노드의 제목·유형·본문과 제목 기반 연결을 직렬화한다', () => {
     expect(buildGraphContext(graph)).toContain('제목: 도당체 행사');
     expect(buildGraphContext(graph)).toContain('유형: PROJECT');

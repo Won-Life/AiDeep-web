@@ -25,7 +25,7 @@ export interface ScopeSummary {
   chip: string;
   /** 메뉴 둘째 줄 — "타이틀 · 노드 5개" */
   detail: string;
-  /** 루트를 뺀 하위 노드 수 */
+  /** 루트를 포함해 답변이 읽는 노드 수 */
   count: number;
 }
 
@@ -81,7 +81,7 @@ export function sameScope(a: ChatScope, b: ChatScope): boolean {
 export function summarizeScope(scope: ChatScope, nodes: Node[], edges: Edge[]): ScopeSummary {
   const root = nodes.find((node) => node.id === scope.rootId);
   const title = nodeTitleOf(root);
-  const count = getDescendantIds(scope.rootId, edges).size;
+  const count = getDescendantIds(scope.rootId, edges).size + 1;
   const countText = `노드 ${count}개`;
   if (scope.kind === 'project') {
     const meetings = edges.filter((edge) => edge.source === scope.rootId).length;
@@ -107,8 +107,45 @@ export function buildScopeOptions(current: ChatScope | null, selected: ChatScope
   return options;
 }
 
-/** 범위 안에 녹음 중인 회의가 있으면 true — 노드가 계속 생겨 답이 부정확하다(Figma Q6) */
-export function isScopeRecording(scope: ChatScope, edges: Edge[], meetings: MeetingMap): boolean {
-  const ids = new Set(scopeNodeIds(scope, edges));
-  return Object.values(meetings).some((info) => ids.has(info.nodeId) && toBotStatus(info.status) === 'recording');
+function recordingNodeIds(meetings: MeetingMap): string[] {
+  return Object.values(meetings)
+    .filter((info) => toBotStatus(info.status) === 'recording')
+    .map((info) => info.nodeId);
+}
+
+/** 범위의 루트가 녹음 중인 회의 안(회의 노드 자신 포함)이면 true — 이때만 질문을 막는다(Figma Q6) */
+export function isScopeInsideRecording(scope: ChatScope, edges: Edge[], meetings: MeetingMap): boolean {
+  const recording = new Set(recordingNodeIds(meetings));
+  const seen = new Set<string>();
+  let cursor: string | null = scope.rootId;
+  while (cursor && !seen.has(cursor)) {
+    if (recording.has(cursor)) return true;
+    seen.add(cursor);
+    cursor = getParentId(cursor, edges);
+  }
+  return false;
+}
+
+/** 범위의 노드에서 녹음 중인 회의와 그 하위를 뺀다 — 더 넓은 범위로 물을 때 만들어지는 중인 노드를 근거에서 제외 */
+export function excludeRecordingIds(ids: string[], edges: Edge[], meetings: MeetingMap): string[] {
+  const excluded = new Set<string>();
+  for (const nodeId of recordingNodeIds(meetings)) {
+    excluded.add(nodeId);
+    getDescendantIds(nodeId, edges).forEach((id) => excluded.add(id));
+  }
+  return ids.filter((id) => !excluded.has(id));
+}
+
+/** 범위를 품은 가장 가까운 프로젝트 범위. 프로젝트 자신이거나 프로젝트 밖이면 null */
+export function enclosingProjectScope(scope: ChatScope, nodes: Node[], edges: Edge[]): ChatScope | null {
+  if (scope.kind === 'project') return null;
+  const seen = new Set<string>();
+  let cursor = getParentId(scope.rootId, edges);
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const node = nodes.find((item) => item.id === cursor);
+    if (isProject(node)) return { rootId: cursor, kind: 'project' };
+    cursor = getParentId(cursor, edges);
+  }
+  return null;
 }

@@ -4,7 +4,9 @@ import type { MeetingMap } from '@/features/meeting-bot/meetingState';
 import {
   buildScopeOptions,
   defaultScope,
-  isScopeRecording,
+  enclosingProjectScope,
+  excludeRecordingIds,
+  isScopeInsideRecording,
   sameScope,
   scopeForNode,
   scopeFromSelection,
@@ -86,16 +88,16 @@ describe('scopeNodeIds · summarizeScope', () => {
     const summary = summarizeScope({ rootId: 't1', kind: 'title' }, nodes, edges);
     expect(summary).toEqual({
       label: '261026 주간 회의',
-      chip: '261026 주간 회의 · 노드 2개',
-      detail: '타이틀 · 노드 2개',
-      count: 2,
+      chip: '261026 주간 회의 · 노드 3개',
+      detail: '타이틀 · 노드 3개',
+      count: 3,
     });
   });
 
   it('프로젝트 범위는 회의 수와 노드 수를 함께 보여 준다', () => {
     const summary = summarizeScope({ rootId: 'p', kind: 'project' }, nodes, edges);
     expect(summary.label).toBe('온노드 마케팅 전체');
-    expect(summary.detail).toBe('프로젝트 · 회의 2개 · 노드 4개');
+    expect(summary.detail).toBe('프로젝트 · 회의 2개 · 노드 5개');
   });
 });
 
@@ -126,19 +128,40 @@ describe('sameScope', () => {
   });
 });
 
-describe('isScopeRecording', () => {
-  const meetings = (status: string): MeetingMap => ({
-    t1: { meetingId: 'm', nodeId: 't1', status, statusSubCode: null, occurredAt: '2026-11-04T00:00:00Z', recordingStartedAt: null },
+describe('isScopeInsideRecording', () => {
+  const recording = {
+    t1: { meetingId: 'm', nodeId: 't1', status: 'RECORDING', statusSubCode: null, occurredAt: '2026-11-04T00:00:00Z', recordingStartedAt: null },
+  };
+
+  it('녹음 중인 회의 자신이거나 그 안이면 true', () => {
+    expect(isScopeInsideRecording({ rootId: 't1', kind: 'title' }, edges, recording)).toBe(true);
+    expect(isScopeInsideRecording({ rootId: 'c1', kind: 'node' }, edges, recording)).toBe(true);
   });
 
-  it('범위 안 회의가 녹음 중이면 true', () => {
-    expect(isScopeRecording({ rootId: 'p', kind: 'project' }, edges, meetings('RECORDING'))).toBe(true);
-    expect(isScopeRecording({ rootId: 't1', kind: 'title' }, edges, meetings('RECORDING'))).toBe(true);
+  it('회의를 품은 프로젝트나 다른 회의는 막지 않는다', () => {
+    expect(isScopeInsideRecording({ rootId: 'p', kind: 'project' }, edges, recording)).toBe(false);
+    expect(isScopeInsideRecording({ rootId: 't2', kind: 'title' }, edges, recording)).toBe(false);
+  });
+});
+
+describe('excludeRecordingIds', () => {
+  it('녹음 중인 회의와 그 하위를 뺀다', () => {
+    const recording = {
+      t1: { meetingId: 'm', nodeId: 't1', status: 'RECORDING', statusSubCode: null, occurredAt: '2026-11-04T00:00:00Z', recordingStartedAt: null },
+    };
+    const ids = scopeNodeIds({ rootId: 'p', kind: 'project' }, edges);
+    expect(excludeRecordingIds(ids, edges, recording).sort()).toEqual(['p', 't2']);
+    expect(excludeRecordingIds(ids, edges, {})).toEqual(ids);
+  });
+});
+
+describe('enclosingProjectScope', () => {
+  it('타이틀을 품은 프로젝트를 찾는다', () => {
+    expect(enclosingProjectScope({ rootId: 't1', kind: 'title' }, nodes, edges)).toEqual({ rootId: 'p', kind: 'project' });
   });
 
-  it('범위 밖이거나 녹음이 아니면 false', () => {
-    expect(isScopeRecording({ rootId: 't2', kind: 'title' }, edges, meetings('RECORDING'))).toBe(false);
-    expect(isScopeRecording({ rootId: 't1', kind: 'title' }, edges, meetings('WAITING_ROOM'))).toBe(false);
-    expect(isScopeRecording({ rootId: 't1', kind: 'title' }, edges, {})).toBe(false);
+  it('프로젝트 자신이거나 프로젝트 밖이면 null', () => {
+    expect(enclosingProjectScope({ rootId: 'p', kind: 'project' }, nodes, edges)).toBeNull();
+    expect(enclosingProjectScope({ rootId: 'loose-child', kind: 'node' }, nodes, edges)).toBeNull();
   });
 });
