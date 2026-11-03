@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { useWorkspaceLayout } from '@/app/workspace/context';
@@ -24,6 +23,7 @@ import { OnNodeLogo, OnNodeMark, SidebarIcon, sidebarFont } from './SidebarParts
 import { CollapsedRail, CollapseEdgeStrip } from './SidebarRail';
 import SidebarHelp from './SidebarHelp';
 import ProfileRow from './SidebarProfile';
+import { useSidebarShortcuts } from './useSidebarShortcuts';
 
 /*
  * CONTEXT
@@ -83,8 +83,7 @@ export default function Sidebar({
   const [newWsOpen, setNewWsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [workspaceTitle, setWorkspaceTitle] = useState('워크스페이스');
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const pendingSearchFocusRef = useRef(false);
+  const { searchInputRef, expandToSearch } = useSidebarShortcuts({ isOpen, onToggle });
 
   // 현재 워크스페이스 이름 — 목록 조회 결과에서 1회 확보
   useEffect(() => {
@@ -96,37 +95,6 @@ export default function Sidebar({
       })
       .catch(() => {});
   }, [workspaceId]);
-
-  // ⌘K 검색 포커스 · ⌘\ 토글 — 전역 단축키 훅(#243) 도입 시 그쪽으로 이관.
-  // e.key가 아니라 e.code(물리 키 위치) 비교인 이유: 한글 자판에서는 K 자리의
-  // e.key가 'ㅏ'로 들어와 'k' 비교가 실패한다. IME 조합 중에는 'Process'가 되기도 함.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.code === 'KeyK') {
-        e.preventDefault();
-        if (!isOpen) {
-          pendingSearchFocusRef.current = true;
-          onToggle();
-        } else {
-          searchInputRef.current?.focus();
-        }
-      } else if (e.code === 'Backslash') {
-        e.preventDefault();
-        onToggle();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, onToggle]);
-
-  // 접힘 → ⌘K/검색 아이콘으로 펼친 직후 검색 인풋 포커스
-  useEffect(() => {
-    if (isOpen && pendingSearchFocusRef.current) {
-      pendingSearchFocusRef.current = false;
-      searchInputRef.current?.focus();
-    }
-  }, [isOpen]);
 
   const switchWorkspace = useCallback(
     (ws: Pick<WorkspaceListItem, 'workspaceId' | 'title' | 'role'>) => {
@@ -287,10 +255,7 @@ export default function Sidebar({
           workspaceTitle={workspaceTitle}
           meeting={sidebarMeeting}
           onOpenArchive={onOpenArchive}
-          onExpandToSearch={() => {
-            pendingSearchFocusRef.current = true;
-            onToggle();
-          }}
+          onExpandToSearch={expandToSearch}
         />
       </div>
 
