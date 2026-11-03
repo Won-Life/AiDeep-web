@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { figmaNodeColorOf } from '@/features/graph/constants/colors';
 import { useProjectTree } from '@/features/workspace/useProjectTree';
 import type { SidebarMeeting } from '@/features/meeting-bot/sidebarMeeting';
@@ -51,10 +51,15 @@ function HoverTogglePill({
   );
 }
 
-/** hover한 화면 Y좌표를 필이 화면 밖으로 잘리지 않게 보정 — 레일·사이드바가
+/** hover한 화면 Y좌표를 필이 화면 밖으로 잘리지 않게 보정해 추적 — 레일·사이드바가
  *  화면 최상단(top 0) 고정이라 clientY가 곧 컨테이너 좌표다 */
-function clampHoverY(clientY: number): number {
-  return Math.min(Math.max(clientY, 28), window.innerHeight - 28);
+function useHoverY() {
+  const [hoverY, setHoverY] = useState<number | null>(null);
+  return {
+    hoverY,
+    onMouseMove: (event: MouseEvent) => setHoverY(Math.min(Math.max(event.clientY, 28), window.innerHeight - 28)),
+    onMouseLeave: () => setHoverY(null),
+  };
 }
 
 /*
@@ -77,10 +82,10 @@ export function CollapsedRail({ onExpand, onExpandToSearch, onOpenArchive, onOpe
   workspaceTitle: string;
   meeting: SidebarMeeting | null;
 }) {
-  const [hoverY, setHoverY] = useState<number | null>(null);
+  const { hoverY, onMouseMove, onMouseLeave } = useHoverY();
   const tree = useProjectTree('');
   return (
-    <div className="relative flex h-full flex-col" onMouseLeave={() => setHoverY(null)} onMouseMove={(event) => setHoverY(clampHoverY(event.clientY))}>
+    <div className="relative flex h-full flex-col" onMouseLeave={onMouseLeave} onMouseMove={onMouseMove}>
       <button type="button" onClick={onExpand} aria-label="사이드바 펼치기" className="mx-auto mt-5"><OnNodeMark size={40} round /></button>
       <button type="button" onClick={onExpand} title={workspaceTitle} aria-label="워크스페이스 열기" className="mx-auto mt-4"><LetterChip text={workspaceTitle} fallback="W" size={38} background="rgb(var(--ds-main-blue-deep))" fontSize={14} /></button>
       <button type="button" onClick={onExpandToSearch} aria-label="검색" title="검색" className="mx-auto mt-4 flex size-10 items-center justify-center"><SidebarIcon name="search" width={27} /></button>
@@ -108,17 +113,14 @@ export function CollapsedRail({ onExpand, onExpandToSearch, onOpenArchive, onOpe
 /** 펼친 사이드바 우측 경계의 hover 감지 띠 — hover 위치에 접기 필을 띄운다.
  *  상시 토글 버튼(«)을 대체한다. 띠는 경계에 반씩 걸쳐 트리 스크롤 영역 가림을 최소화. */
 export function CollapseEdgeStrip({ onCollapse }: { onCollapse: () => void }) {
-  const [hoverY, setHoverY] = useState<number | null>(null);
+  const { hoverY, onMouseMove, onMouseLeave } = useHoverY();
 
   return (
     <div
       className="absolute inset-y-0 -right-[5px] z-50 w-[10px]"
-      onMouseLeave={() => setHoverY(null)}
+      onMouseLeave={onMouseLeave}
     >
-      <div
-        className="h-full w-full"
-        onMouseMove={(e) => setHoverY(clampHoverY(e.clientY))}
-      />
+      <div className="h-full w-full" onMouseMove={onMouseMove} />
       {hoverY !== null && (
         <HoverTogglePill
           y={hoverY}
