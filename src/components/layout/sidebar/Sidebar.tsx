@@ -13,8 +13,7 @@ import WorkspaceSettingsModal from '@/features/workspace/WorkspaceSettingsModal'
 import WorkspaceSwitcher from '@/features/workspace/WorkspaceSwitcher';
 import ProjectTreeSection from '@/features/workspace/ProjectTreeSection';
 import type { NodeData } from '@/features/workspace/useProjectTree';
-import { createProjectNode } from '@/features/graph/api/nodes';
-import { getRandomColorPair } from '@/features/graph/constants/colors';
+import { insertProjectNode } from '@/features/graph/api/insertProjectNode';
 import type { WorkspaceListItem } from '@/api/types';
 import MeetingBanner from '@/features/meeting-bot/MeetingBanner';
 import { pickSidebarMeeting } from '@/features/meeting-bot/sidebarMeeting';
@@ -121,25 +120,7 @@ export default function Sidebar({
       y: projectYs.length ? Math.max(...projectYs) + 240 : 0,
     };
     try {
-      const colorPair = getRandomColorPair();
-      const { nodeId } = await createProjectNode(workspaceId, '', position, {
-        color: colorPair.bg,
-        textColor: colorPair.text,
-      });
-      setNodes((prev) => [
-        ...prev,
-        {
-          id: nodeId,
-          type: 'textUpdater',
-          position,
-          data: {
-            title: '',
-            isMain: true,
-            color: colorPair.bg,
-            textColor: colorPair.text,
-          },
-        },
-      ]);
+      const nodeId = await insertProjectNode(workspaceId, position, setNodes);
       setFocusedNodeId(nodeId);
     } catch (err) {
       console.error('[Sidebar] createProjectNode failed', err);

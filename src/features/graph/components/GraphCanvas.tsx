@@ -42,11 +42,11 @@ import GraphOnboardingModal, {
   useGraphOnboardingSeen,
 } from '@/components/ui/GraphOnboardingModal';
 import * as d3 from 'd3';
+import { insertProjectNode } from '../api/insertProjectNode';
 import { nodeTypes } from '@/types/nodeTypes';
 import { edgeTypes } from '@/types/edgeTypes';
 import {
   createMdNode,
-  createProjectNode,
   moveNode,
   deleteNode,
   updateNodeContent,
@@ -1920,28 +1920,7 @@ function GraphCanvasInner({
     async (position: { x: number; y: number }) => {
       const isFirstProject = !nodes.some((node) => node.data.isMain);
       try {
-        // 그래프 색을 생성 시점에 확정한다 — 화면은 TextUpdateNode가 isMain이면
-        // 항상 MAIN_NODE_COLOR(흰색)로 그리므로 표시는 그대로 흰색이다.
-        const colorPair = getRandomColorPair();
-        const { nodeId } = await createProjectNode(workspaceId, '', position, {
-          color: colorPair.bg,
-          textColor: colorPair.text,
-        });
-
-        setNodes((prev) => [
-          ...prev,
-          {
-            id: nodeId,
-            type: 'textUpdater',
-            position,
-            data: {
-              title: '',
-              isMain: true,
-              color: colorPair.bg,
-              textColor: colorPair.text,
-            },
-          },
-        ]);
+        const nodeId = await insertProjectNode(workspaceId, position, setNodes);
         setDraftNodeIds((prev) => new Set(prev).add(nodeId));
         if (!isFirstProject) setRenamingNodeId(nodeId);
       } catch (err) {
