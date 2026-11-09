@@ -21,6 +21,7 @@
     "@lexical/table": "^0.42.0",
     "@lexical/utils": "^0.42.0",
     "@lexical/yjs": "^0.42.0",
+    "@next/third-parties": "^16.4.5",
     "@xyflow/react": "^12.9.3",
     "axios": "^1.13.6",
     "d3": "^7.9.0",
