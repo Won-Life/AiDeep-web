@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
+import { GoogleTagManager } from "@next/third-parties/google";  //GoogleTagManager 컴포넌트 사용을 위해 설치합니다.
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,6 +51,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
+      <GoogleTagManager gtmId="GTM-M8M3HHQF" />  
+      {/*GTM 아이디를 넣는 부분입니다. 현재는 테스트용 ID가 들어가 있습니다.*/}
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${notoSansKr.variable} antialiased`}
       >
